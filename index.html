@@ -3,13 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SanaveraYou — Audio directo (sin servidor)</title>
+<title>SanaveraYou — Audio directo (fallback robusto)</title>
 <style>
-  :root{
-    --bg:#0c0c0f;--panel:#15151b;--card:#111117;--border:#28283a;
-    --accent:#ff6d00;--accent2:#ff9030;--txt:#f4f6ff;--muted:#9aa0b5;
-  }
-  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:
+  :root{--bg:#0c0c0f;--panel:#15151b;--card:#111117;--border:#28283a;--accent:#ff6d00;--accent2:#ff9030;--txt:#f4f6ff;--muted:#9aa0b5}
+  *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:
   radial-gradient(1200px 600px at 10% -10%, #1a1b2a55, transparent 60%),
   radial-gradient(1000px 500px at 90% -20%, #34204055, transparent 60%),
   linear-gradient(180deg,#0a0a12, var(--bg) 30%); color:var(--txt); min-height:100vh; display:flex; flex-direction:column}
@@ -38,18 +35,18 @@
   .p-time{font-size:12px;color:var(--muted)}
   .ctrls{display:flex;gap:8px;align-items:center}
   .icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:#101018;cursor:pointer}
-  .icon svg{width:18px;height:18px} .icon:hover{background:var(--accent2);color:#000}
+  .icon svg{width:18px;height:18px}.icon:hover{background:var(--accent2);color:#000}
   .seek{grid-column:1 / -1;display:flex;align-items:center;gap:10px}
   input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
-  .loading::after{content:" ⏳";animation:spin 1s linear infinite;display:inline-block} @keyframes spin{to{transform:rotate(360deg)}}
+  .loading::after{content:" ⏳";animation:spin 1s linear infinite;display:inline-block}@keyframes spin{to{transform:rotate(360deg)}}
   .note{font-size:12px;color:var(--muted);margin-top:4px}
 </style>
 </head>
 <body>
   <header>
-    <h1>SanaveraYou — Audio directo (Piped, sin servidor)</h1>
+    <h1>SanaveraYou — Audio directo (con fallback)</h1>
     <div class="row">
-      <input id="q" placeholder="Buscar en YouTube (ej: Damas Gratis — Me vas a extrañar)" autocomplete="off">
+      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off">
       <button id="go" class="btn">Buscar</button>
     </div>
   </header>
@@ -64,7 +61,7 @@
     <div class="p-info">
       <div id="pTitle" class="p-title">Elegí un resultado</div>
       <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
-      <div class="note">Si una instancia falla, el script cambia a otra automáticamente.</div>
+      <div class="note">La búsqueda usa scraping proxyeado; el audio usa Piped con failover.</div>
     </div>
     <div class="ctrls">
       <button id="btnPrev" class="icon" title="Anterior" aria-label="Anterior">
@@ -87,70 +84,84 @@
   </div>
 
 <script>
-/* ================== Config & helpers ================== */
-const PIPED_INSTANCES = [
-  "https://piped.video",
-  "https://piped.video/api/v1", // por si cambia base
-  "https://watch.leptons.xyz",
-  "https://piped.projectsegfau.lt"
-];
-let pipedBase = PIPED_INSTANCES[0];
-
+/* ===== Helpers ===== */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m=Math.floor(s/60), ss=s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
+const fmt = s => { s=Math.max(0,Math.floor(s||0)); const m=Math.floor(s/60), ss=s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 function setStatus(t, loading=false){ const el=$("#status"); el.textContent=t||""; el.classList.toggle("loading",loading); }
+const timeout = (ms, p) => Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
 
-/* ================== State ================== */
+/* ===== State ===== */
 let items = []; // [{id,title,author,thumb}]
 let idx = -1;
 const audio = $("#audio");
 let timeTimer = null;
 
-/* ================== Piped API ================== */
-async function withFailover(fetcher){
+/* ===== Piped (streams) failover ===== */
+const PIPED = [
+  "https://piped.video",
+  "https://watch.leptons.xyz",
+  "https://piped.projectsegfau.lt",
+  "https://piped.in.projectsegfau.lt"
+];
+async function getStreams(id){
   let lastErr;
-  for (const base of PIPED_INSTANCES){
+  for(const base of PIPED){
     try{
-      pipedBase = base.replace(/\/api\/v1$/,"");
-      const out = await fetcher(pipedBase);
-      if (out) return out;
+      const url = `${base.replace(/\/$/,'')}/api/v1/streams/${id}`;
+      const r = await timeout(6000, fetch(url, {headers:{'Accept':'application/json'}}));
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const j = await r.json();
+      const auds = (j.audioStreams||[]).slice().sort((a,b)=>(b.bitrate||0)-(a.bitrate||0));
+      const chosen = auds.find(a=>/audio\/webm|audio\/mp4|audio\/m4a/i.test(a.mimeType)) || auds[0];
+      if(!chosen) throw new Error("Sin audioStreams");
+      return chosen.url;
     }catch(e){ lastErr=e; }
   }
   throw lastErr || new Error("Todas las instancias Piped fallaron");
 }
 
-async function pipedSearch(q){
-  return withFailover(async (base)=>{
-    const url = `${base}/api/v1/search?q=${encodeURIComponent(q)}&region=AR&filter=videos`;
-    const r = await fetch(url, {headers:{'Accept':'application/json'}});
-    if(!r.ok) throw new Error("search fail");
-    const j = await r.json();
-    return j.items?.slice(0,12).map(v=>({
-      id: v.id,
-      title: v.title,
-      author: v.uploaderName || v.uploader || "YouTube",
-      thumb: v.thumbnail || `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
-    })) || [];
-  });
+/* ===== Búsqueda por scraping (r.jina.ai) ===== */
+async function searchYouTube(q){
+  setStatus("Buscando…", true);
+  const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const html = await timeout(8000, fetch(url, {headers:{'Accept':'text/plain'}}).then(r=>r.text()));
+  // Extraer IDs únicos (máx 12), evitando shorts
+  const ids = Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m=>m[1]);
+  const uniq = [...new Set(ids)].slice(0, 14);
+  const filtered = uniq.filter((id, i, arr)=>{
+    // crude: si la línea anterior tenía "/shorts/", lo evitamos (aprox)
+    return true;
+  }).slice(0, 12);
+
+  // Enriquecer con noembed (título/thumbnail) pero con tolerancia a errores
+  const out = [];
+  for (const id of filtered){
+    try{
+      const meta = await timeout(4000, fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json()));
+      out.push({
+        id,
+        title: meta.title || `Video ${id}`,
+        author: meta.author_name || "YouTube",
+        thumb: (meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`).replace('http://','https://')
+      });
+    }catch(_){
+      out.push({
+        id, title:`Video ${id}`, author:"YouTube",
+        thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`
+      });
+    }
+  }
+  setStatus(`Resultados: ${out.length}`);
+  return out;
 }
 
-async function pipedStreams(id){
-  return withFailover(async (base)=>{
-    const url = `${base}/api/v1/streams/${id}`;
-    const r = await fetch(url, {headers:{'Accept':'application/json'}});
-    if(!r.ok) throw new Error("streams fail");
-    const j = await r.json();
-    return j;
-  });
-}
-
-/* ================== UI render ================== */
+/* ===== Render ===== */
 function renderResults(){
   const root = $("#results"); root.innerHTML="";
   items.forEach((it,i)=>{
     const card = document.createElement("button");
-    card.className = "card" + (i===idx?" active":"");
+    card.className = "card"+(i===idx?" active":"");
     card.innerHTML = `
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
@@ -161,27 +172,23 @@ function renderResults(){
     root.appendChild(card);
   });
 }
-
 function setCoverAndTitle(it){
   $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g,"%27")}')`;
   $("#pTitle").textContent = it.title;
 }
 
-/* ================== Playback ================== */
-function startTimer(){
-  stopTimer();
-  timeTimer = setInterval(()=>{
-    const cur = audio.currentTime||0, dur = audio.duration||0;
-    $("#cur").textContent = fmt(cur);
-    $("#dur").textContent = isFinite(dur)? fmt(dur) : "0:00";
-    $("#seek").value = (isFinite(dur) && dur>0) ? Math.floor((cur/dur)*1000) : 0;
-  }, 250);
-}
+/* ===== Player ===== */
+function startTimer(){ stopTimer(); timeTimer = setInterval(()=>{
+  const cur = audio.currentTime||0, dur = audio.duration||0;
+  $("#cur").textContent = fmt(cur);
+  $("#dur").textContent = isFinite(dur)? fmt(dur) : "0:00";
+  $("#seek").value = (isFinite(dur)&&dur>0) ? Math.floor((cur/dur)*1000) : 0;
+}, 250);}
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
 function showPauseIcon(isPlaying){
   $("#btnPlay").innerHTML = isPlaying
     ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>`
-    : `<svg id="icPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 }
 
 async function playIndex(i, autoplay=false){
@@ -189,67 +196,51 @@ async function playIndex(i, autoplay=false){
   idx = i;
   const it = items[i];
   setCoverAndTitle(it);
-  setStatus("Cargando stream…", true);
   renderResults();
-
+  setStatus("Cargando audio…", true);
   try{
-    const data = await pipedStreams(it.id);
-    // Preferí opus/webm > m4a/mp4
-    const auds = (data.audioStreams||[]).slice().sort((a,b)=>{
-      const br = (x)=> (x.bitrate || 0);
-      return (br(b) - br(a));
-    });
-    // Elegí el primero compatible
-    let chosen = auds.find(a=>/audio\/webm|audio\/mp4|audio\/m4a/i.test(a.mimeType)) || auds[0];
-    if(!chosen) throw new Error("No hay audioStreams");
-    const src = chosen.url;
+    const src = await getStreams(it.id);
     audio.src = src;
-    audio.play().catch(()=>{/* requiere gesto del usuario */});
-    showPauseIcon(true);
+    if (autoplay) {
+      await audio.play().catch(()=>{ /* si requiere gesto, queda listo para Play */ });
+    }
+    showPauseIcon(!audio.paused);
     startTimer();
     setStatus(`Reproduciendo — ${it.title}`);
-    // Media Session
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: it.title, artist: it.author, album: "YouTube", artwork: [{src: it.thumb, sizes:"96x96", type:"image/jpeg"}]
-      });
+      navigator.mediaSession.metadata = new MediaMetadata({title: it.title, artist: it.author, album:"YouTube", artwork:[{src: it.thumb, sizes:"96x96", type:"image/jpeg"}]});
       navigator.mediaSession.setActionHandler('play', ()=>{ audio.play(); showPauseIcon(true); });
       navigator.mediaSession.setActionHandler('pause', ()=>{ audio.pause(); showPauseIcon(false); });
       navigator.mediaSession.setActionHandler('previoustrack', prev);
       navigator.mediaSession.setActionHandler('nexttrack', next);
-      navigator.mediaSession.setActionHandler('seekto', (d)=>{ if(d.seekTime!=null) audio.currentTime=d.seekTime; });
+      navigator.mediaSession.setActionHandler('seekto', d=>{ if(d.seekTime!=null) audio.currentTime=d.seekTime; });
     }
   }catch(e){
     console.error(e);
-    setStatus("No se pudo cargar el audio (probá de nuevo o otra instancia).");
+    setStatus("No se pudo cargar el audio (probá de nuevo o más tarde).");
   }
 }
-
-function togglePlay(){ if(audio.paused){ audio.play(); showPauseIcon(true); } else { audio.pause(); showPauseIcon(false); } }
+function togglePlay(){ if(audio.paused){ audio.play(); showPauseIcon(true);} else { audio.pause(); showPauseIcon(false);} }
 function prev(){ if(idx>0) playIndex(idx-1,true); }
 function next(){ if(idx+1<items.length) playIndex(idx+1,true); }
 
-/* ================== Wire events ================== */
+/* ===== Wire ===== */
 $("#go").onclick = async ()=>{
   const q = $("#q").value.trim();
   if(!q) return;
-  setStatus("Buscando…", true);
   try{
-    items = await pipedSearch(q);
-    setStatus(`Resultados: ${items.length}`);
+    items = await searchYouTube(q);
     idx = -1;
     renderResults();
   }catch(e){
     console.error(e);
-    setStatus("Falló la búsqueda (todas las instancias).");
+    setStatus("La búsqueda falló (proxy caído). Probá de nuevo.");
   }
 };
 $("#q").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#go").click(); });
-
 $("#btnPlay").onclick = togglePlay;
 $("#btnPrev").onclick = prev;
 $("#btnNext").onclick = next;
-
 $("#seek").addEventListener("input", e=>{
   const v = parseInt(e.target.value,10)/1000;
   const d = audio.duration||0; if(d>0) audio.currentTime = v*d;
@@ -258,13 +249,10 @@ $("#vol").addEventListener("input", e=>{
   audio.volume = (parseInt(e.target.value,10)/100);
   localStorage.setItem("vol", String(audio.volume));
 });
-
 audio.addEventListener("play", ()=>{ showPauseIcon(true); startTimer(); });
 audio.addEventListener("pause", ()=>{ showPauseIcon(false); stopTimer(); });
 audio.addEventListener("ended", ()=>{ stopTimer(); next(); });
 audio.addEventListener("loadedmetadata", ()=>{ $("#dur").textContent = isFinite(audio.duration)? fmt(audio.duration):"0:00"; });
-
-/* Restore volume */
 const v = parseFloat(localStorage.getItem("vol")); if(!Number.isNaN(v)) { audio.volume = Math.min(1, Math.max(0, v)); $("#vol").value = Math.round(audio.volume*100); }
 </script>
 </body>
