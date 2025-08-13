@@ -1,320 +1,543 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SanaveraYou — Audio directo (multi-fallback)</title>
+<title>SanaveraYou — Reproductor simple</title>
 <style>
-  :root{--bg:#0b0c10;--panel:#14151c;--card:#10121a;--border:#26283a;--accent:#ff6d00;--accent2:#ff9a3c;--txt:#f5f7ff;--muted:#9aa3b8}
-  *{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--txt);
-  background:radial-gradient(1300px 700px at 10% -10%,#1b1e2f55,transparent 60%),radial-gradient(1000px 600px at 90% -20%,#3a214a55,transparent 60%),linear-gradient(180deg,#090a12,var(--bg) 35%);
-  display:flex;flex-direction:column}
-  header{position:sticky;top:0;z-index:10;backdrop-filter:blur(10px) saturate(1.2);
-    background:linear-gradient(180deg,#0e0f18cc,#0e0f18aa 60%,transparent);border-bottom:1px solid var(--border);padding:14px 16px}
-  h1{margin:0 0 10px;font-size:18px;font-weight:800}
-  .row{display:flex;gap:10px}
-  input,button{border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--txt)}
-  input{flex:1;min-width:0;padding:10px 12px;font-size:15px;outline:none}
-  button{padding:10px 14px;cursor:pointer;font-weight:700}
-  .btn{background:var(--accent);border-color:#c14e00;color:#000}
-  main{max-width:1100px;margin:0 auto;padding:16px;flex:1;width:100%}
-  #status{font-size:13px;color:var(--muted);margin:8px 2px 16px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-  @media (max-width:600px){.grid{grid-template-columns:1fr}}
-  .card{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;cursor:pointer;transition:.15s}
-  .card:hover{transform:translateY(-2px);box-shadow:0 10px 24px #0006}
-  .thumb{width:64px;height:64px;border-radius:10px;background:#000;background-size:cover;background-position:center;flex:0 0 64px}
-  .meta{min-width:0}.title{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .sub{font-size:12px;color:var(--muted)}
-  .active{outline:2px solid var(--accent)}
-  .player{position:sticky;bottom:0;left:0;right:0;z-index:8;background:var(--panel);border-top:1px solid var(--border);
-    padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
-  .p-cover{width:48px;height:48px;border-radius:10px;background:#000;background-size:cover;background-position:center}
-  .p-info{min-width:0}
-  .p-title{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .p-time{font-size:12px;color:var(--muted)}
-  .ctrls{display:flex;gap:8px;align-items:center}
-  .icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:#0f1118;cursor:pointer}
-  .icon svg{width:18px;height:18px}.icon:hover{background:var(--accent2);color:#000}
-  .seek{grid-column:1 / -1;display:flex;align-items:center;gap:10px}
-  input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
-  .loading::after{content:" ⏳";animation:spin 1s linear infinite;display:inline-block}@keyframes spin{to{transform:rotate(360deg)}}
-  .note{font-size:12px;color:var(--muted);margin-top:4px}
+  :root {
+    --bg: #121212;
+    --panel: #1e1e1e;
+    --accent: #ff6d00;
+    --accent-dark: #e65100;
+    --txt: #f5f5f5;
+    --muted: #a0a0a0;
+    --card: #1a1a1a;
+    --border: #2a2a2a;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, Roboto, sans-serif;
+    background: linear-gradient(180deg, #0a0a0a, var(--bg) 30%);
+    color: var(--txt);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    padding: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: linear-gradient(180deg, rgba(18, 18, 18, 0.95), rgba(18, 18, 18, 0.8) 60%, transparent);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    letter-spacing: 0.3px;
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--txt);
+    font-size: 16px;
+    padding: 6px;
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--txt);
+    padding: 10px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    touch-action: manipulation;
+  }
+  .btn:hover { background: var(--accent); color: #000; }
+  .btn:active { transform: scale(0.98); }
+  .btn-accent {
+    background: var(--accent);
+    border-color: var(--accent-dark);
+    color: #000;
+    font-weight: 600;
+  }
+
+  /* Main content */
+  main {
+    padding: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+    flex: 1;
+  }
+  .results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 100px;
+  }
+  @media (max-width: 600px) {
+    .results { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px var(--shadow);
+  }
+  .card:active { transform: scale(0.98); }
+  .thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    background: #000;
+    flex: 0 0 64px;
+    background-size: cover;
+    background-position: center;
+  }
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--txt);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .active {
+    outline: 2px solid var(--accent);
+    box-shadow: 0 0 10px var(--accent-dark);
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 10px var(--accent-dark); }
+    50% { box-shadow: 0 0 15px var(--accent-dark); }
+    100% { box-shadow: 0 0 10px var(--accent-dark); }
+  }
+
+  /* Player dock */
+  .player {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 -2px 10px var(--shadow);
+  }
+  .p-cover {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: #000;
+    background-size: cover;
+    background-position: center;
+  }
+  .p-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .p-title {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .p-time {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .p-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    background: var(--card);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+  }
+  .icon:hover { background: var(--accent); color: #000; }
+  .icon:active { transform: scale(0.95); }
+  .seek {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .vol {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 100px;
+  }
+  @media (max-width: 400px) {
+    .vol { min-width: 80px; }
+    .p-controls { gap: 8px; }
+    .icon { width: 36px; height: 36px; }
+  }
+  .hide { display: none; }
+
+  /* Loading spinner */
+  .loading::after {
+    content: "⏳";
+    display: inline-block;
+    animation: spin 1s linear infinite;
+    margin-left: 8px;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Paused notification */
+  .paused-notice {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: var(--txt);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
+  .paused-notice.show { display: block; }
+
+  /* Hidden YouTube player */
+  #yt-holder {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    left: -9999px;
+    top: -9999px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  footer {
+    padding: 40px 16px;
+    color: var(--muted);
+    text-align: center;
+    font-size: 14px;
+  }
 </style>
 </head>
 <body>
   <header>
-    <h1>SanaveraYou — Audio directo (multi-fallback)</h1>
-    <div class="row">
+    <h1>SanaveraYou — Buscá y reproducí</h1>
+    <div class="search">
       <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off" />
-      <button id="go" class="btn">Buscar</button>
+      <button id="btnSearch" class="btn btn-accent">Buscar</button>
     </div>
   </header>
 
   <main>
-    <div id="status"></div>
-    <section id="results" class="grid"></section>
+    <div id="status" class="subtitle" style="margin: 12px 2px 16px;"></div>
+    <section id="results" class="results"></section>
   </main>
 
+  <!-- Player (custom controls) -->
   <div class="player">
     <div id="pCover" class="p-cover"></div>
     <div class="p-info">
-      <div id="pTitle" class="p-title">Elegí un resultado</div>
+      <div id="pTitle" class="p-title">Elegí un resultado para reproducir</div>
       <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
-      <div class="note">Intento Piped → Invidious proxied (251/140). Si uno falla, paso al siguiente.</div>
+      <div id="pausedNotice" class="paused-notice">Reproducción pausada</div>
     </div>
-    <div class="ctrls">
-      <button id="btnPrev" class="icon" title="Anterior" aria-label="Anterior">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 12 10 6v12z"/></svg>
-      </button>
-      <button id="btnPlay" class="icon" title="Reproducir/Pausar" aria-label="Reproducir o Pausar">
-        <svg id="icPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-      </button>
-      <button id="btnNext" class="icon" title="Siguiente" aria-label="Siguiente">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 12l10 6V6z"/></svg>
-      </button>
+    <div class="p-controls">
+      <button id="btnPrev" class="icon" title="Anterior">⏮</button>
+      <button id="btnPlay" class="icon" title="Reproducir/Pausar">▶️</button>
+      <button id="btnNext" class="icon" title="Siguiente">⏭</button>
+      <button id="btnFullscreen" class="icon" title="Pantalla completa">⤢</button>
     </div>
     <div class="seek">
       <input id="seek" type="range" min="0" max="1000" value="0" />
-      <span style="width:90px;display:flex;align-items:center;gap:6px">
-        🔊 <input id="vol" type="range" min="0" max="100" value="100" />
-      </span>
     </div>
-    <audio id="audio" preload="none" crossorigin="anonymous"></audio>
+    <div class="vol">
+      🔊 <input id="vol" type="range" min="0" max="100" value="100" />
+    </div>
   </div>
 
+  <!-- Hidden YouTube iframe -->
+  <div id="yt-holder"><div id="player"></div></div>
+
+  <footer>
+    SanaveraYou &copy; 2025
+  </footer>
+
 <script>
-/* ===== Helpers ===== */
+/* ========= Utils ========= */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = s => { s=Math.max(0,Math.floor(s||0)); const m=Math.floor(s/60), ss=s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
-const setStatus = (t, loading=false)=>{ const el=$("#status"); el.textContent=t||""; el.classList.toggle("loading",loading); };
-const timeout = (ms, p) => Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
+const fmtTime = s => {
+  s = Math.max(0, Math.floor(s || 0));
+  const m = Math.floor(s / 60), ss = s % 60;
+  return `${m}:${String(ss).padStart(2, '0')}`;
+};
+function uniq(a) { return [...new Set(a)]; }
 
-/* ===== State ===== */
-let items = []; // [{id,title,author,thumb}]
+/* ========= State ========= */
+let items = [];
 let idx = -1;
-const audio = $("#audio");
+let ytPlayer = null;
 let timeTimer = null;
+let wasPlaying = false;
 
-/* ===== Providers ===== */
-// Piped Streams API → devuelve audioStreams[].url (a veces directo a googlevideo, a veces proxied)
-const PIPED = [
-  "https://piped.video",
-  "https://watch.leptons.xyz",
-  "https://piped.projectsegfau.lt",
-  "https://piped.in.projectsegfau.lt"
-];
-
-// Invidious proxied stream: /latest_version?id=VIDEO&itag=251|140&local=true
-const INVIDIOUS = [
-  "https://yewtu.be",
-  "https://iv.ggtyler.dev",
-  "https://invidious.flokinet.to",
-  "https://inv.nadeko.net"
-];
-
-// Construye una cola de URLs candidatas (Piped → Invidious 251 → Invidious 140)
-async function buildCandidates(id){
-  const urls = [];
-
-  // 1) Piped (varias instancias)
-  for (const base of PIPED){
-    try{
-      const u = `${base.replace(/\/$/,'')}/api/v1/streams/${id}`;
-      const r = await timeout(5000, fetch(u, {headers:{'Accept':'application/json'}}));
-      if (!r.ok) continue;
-      const j = await r.json();
-      const auds = (j.audioStreams||[]).slice().sort((a,b)=>(b.bitrate||0)-(a.bitrate||0));
-      for (const a of auds){
-        if (/audio\/webm|audio\/mp4|audio\/m4a/i.test(a.mimeType)) {
-          urls.push(a.url);
-        }
-      }
-    }catch(_){}
-  }
-
-  // 2) Invidious proxied (251 webm/opus)
-  for (const base of INVIDIOUS){
-    urls.push(`${base.replace(/\/$/,'')}/latest_version?id=${id}&itag=251&local=true`);
-  }
-  // 3) Invidious proxied (140 m4a)
-  for (const base of INVIDIOUS){
-    urls.push(`${base.replace(/\/$/,'')}/latest_version?id=${id}&itag=140&local=true`);
-  }
-
-  // Devolvemos únicos, por si repitió
-  return [...new Set(urls)];
-}
-
-/* ===== Search (scraping vía r.jina.ai) ===== */
-async function searchYouTube(q){
+/* ========= Search (no API key) ========= */
+async function searchYouTube(q) {
   setStatus("Buscando…", true);
-  const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-  const html = await timeout(8000, fetch(url, {headers:{'Accept':'text/plain'}}).then(r=>r.text()));
-  const ids = Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m=>m[1]);
-  const uniq = [...new Set(ids)].slice(0, 14);
-  const filtered = uniq.slice(0, 12);
+  const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => r.text()).catch(() => null);
+  if (!html) { setStatus("Sin respuesta de YouTube"); return []; }
 
+  const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, 12);
   const out = [];
-  for (const id of filtered){
-    try{
-      const meta = await timeout(4000, fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json()));
+  for (const id of ids) {
+    try {
+      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r => r.json());
       out.push({
         id,
         title: meta.title || `Video ${id}`,
+        thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
         author: meta.author_name || "YouTube",
-        thumb: (meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`).replace('http://','https://')
+        url: `https://www.youtube.com/watch?v=${id}`
       });
-    }catch(_){
-      out.push({ id, title:`Video ${id}`, author:"YouTube", thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg` });
+    } catch (_) {
+      out.push({
+        id,
+        title: `Video ${id}`,
+        thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+        author: "YouTube",
+        url: `https://www.youtube.com/watch?v=${id}`
+      });
     }
   }
   setStatus(`Resultados: ${out.length}`);
   return out;
 }
 
-/* ===== Render ===== */
-function renderResults(){
-  const root = $("#results"); root.innerHTML="";
-  items.forEach((it,i)=>{
+function setStatus(t, loading = false) {
+  const statusEl = $("#status");
+  statusEl.textContent = t || "";
+  statusEl.classList.toggle("loading", loading);
+}
+
+function renderResults() {
+  const root = $("#results");
+  root.innerHTML = "";
+  items.forEach((it, i) => {
     const card = document.createElement("button");
-    card.className = "card"+(i===idx?" active":"");
+    card.className = "card" + (i === idx ? " active" : "");
     card.innerHTML = `
-      <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
+      <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g, "%27")}')"></div>
       <div class="meta">
-        <div class="title" title="${it.title.replace(/"/g,"&quot;")}">${it.title}</div>
-        <div class="sub">${it.author}</div>
+        <div class="title" title="${it.title.replace(/"/g, '&quot;')}">${it.title}</div>
+        <div class="subtitle">${it.author || ""}</div>
       </div>`;
-    card.onclick = ()=> playIndex(i,true);
+    card.onclick = () => { playIndex(i, true); };
     root.appendChild(card);
   });
 }
-function setCoverAndTitle(it){
-  $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g,"%27")}')`;
-  $("#pTitle").textContent = it.title;
+
+/* ========= YouTube IFrame API ========= */
+let YT_READY = false;
+function loadYTApi() {
+  if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
 }
-
-/* ===== Player ===== */
-function startTimer(){ stopTimer(); timeTimer = setInterval(()=>{
-  const cur = audio.currentTime||0, dur = audio.duration||0;
-  $("#cur").textContent = fmt(cur);
-  $("#dur").textContent = isFinite(dur)? fmt(dur) : "0:00";
-  $("#seek").value = (isFinite(dur)&&dur>0) ? Math.floor((cur/dur)*1000) : 0;
-}, 250);}
-function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
-function showPauseIcon(isPlaying){
-  $("#btnPlay").innerHTML = isPlaying
-    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-}
-
-/* ===== Fallback player logic ===== */
-let currentCandidates = [];
-let currentCandidateIdx = -1;
-let candidateTimer = null;
-
-function clearCandidateTimer(){
-  if (candidateTimer){ clearTimeout(candidateTimer); candidateTimer = null; }
-}
-
-async function tryNextCandidate(autoplay){
-  clearCandidateTimer();
-  currentCandidateIdx++;
-  const url = currentCandidates[currentCandidateIdx];
-  if (!url){
-    setStatus("No se pudo cargar el audio (todas las fuentes fallaron).");
-    return;
-  }
-  // Setear y probar
-  setStatus("Cargando audio…", true);
-  audio.src = url;
-  audio.load();
-
-  let resolved = false;
-
-  const onCanPlay = async ()=>{
-    if (resolved) return;
-    resolved = true;
-    audio.removeEventListener("canplay", onCanPlay);
-    audio.removeEventListener("error", onErr);
-    clearCandidateTimer();
-    setStatus("Reproduciendo");
-    if (autoplay) { await audio.play().catch(()=>{}); }
-    showPauseIcon(!audio.paused);
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('player', {
+    width: 300,
+    height: 150,
+    videoId: '',
+    playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
+    events: {
+      'onReady': () => { YT_READY = true; },
+      'onStateChange': onYTState
+    }
+  });
+};
+function onYTState(e) {
+  if (e.data === YT.PlayerState.PLAYING) {
     startTimer();
-  };
-  const onErr = ()=>{
-    if (resolved) return;
-    audio.removeEventListener("canplay", onCanPlay);
-    audio.removeEventListener("error", onErr);
-    // Intentar el siguiente
-    tryNextCandidate(autoplay);
-  };
-
-  audio.addEventListener("canplay", onCanPlay, {once:true});
-  audio.addEventListener("error", onErr, {once:true});
-
-  // Timeout duro por si el canplay no llega
-  candidateTimer = setTimeout(()=>{
-    onErr();
-  }, 7000);
+    $("#btnPlay").textContent = "⏸";
+    $("#pausedNotice").classList.remove("show");
+    wasPlaying = true;
+  }
+  if (e.data === YT.PlayerState.PAUSED) {
+    stopTimer();
+    $("#btnPlay").textContent = "▶️";
+    wasPlaying = false;
+  }
+  if (e.data === YT.PlayerState.ENDED) {
+    stopTimer();
+    next();
+  }
 }
 
-async function playIndex(i, autoplay=false){
-  if(!items[i]) return;
+/* ========= Playback controls ========= */
+function playIndex(i, autoplay = false) {
+  if (!YT_READY || !items[i]) return;
   idx = i;
   const it = items[i];
-  setCoverAndTitle(it);
+  $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g, "%27")}')`;
+  $("#pTitle").textContent = it.title;
+  ytPlayer.loadVideoById(it.id);
+  ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);
+  if (!autoplay) { ytPlayer.pauseVideo(); }
   renderResults();
+}
 
-  try{
-    currentCandidates = await buildCandidates(it.id);
-    currentCandidateIdx = -1;
-    if (currentCandidates.length === 0){
-      setStatus("No se encontraron fuentes de audio.");
-      return;
-    }
-    await tryNextCandidate(autoplay);
-  }catch(e){
-    console.error(e);
-    setStatus("Error preparando fuentes de audio.");
+function togglePlay() {
+  if (!YT_READY) return;
+  const st = ytPlayer.getPlayerState();
+  if (st === YT.PlayerState.PLAYING) {
+    ytPlayer.pauseVideo();
+  } else {
+    ytPlayer.playVideo();
+  }
+}
+function prev() {
+  if (idx > 0) { playIndex(idx - 1, true); }
+}
+function next() {
+  if (idx + 1 < items.length) { playIndex(idx + 1, true); }
+}
+function seekToFrac(frac) {
+  if (!YT_READY) return;
+  const d = ytPlayer.getDuration() || 0;
+  ytPlayer.seekTo(frac * d, true);
+}
+function startTimer() {
+  stopTimer();
+  timeTimer = setInterval(() => {
+    if (!YT_READY) return;
+    const cur = ytPlayer.getCurrentTime() || 0;
+    const dur = ytPlayer.getDuration() || 0;
+    $("#cur").textContent = fmtTime(cur);
+    $("#dur").textContent = fmtTime(dur);
+    $("#seek").value = dur ? Math.floor((cur / dur) * 1000) : 0;
+  }, 250);
+}
+function stopTimer() {
+  clearInterval(timeTimer);
+  timeTimer = null;
+}
+
+/* ========= Fullscreen toggle ========= */
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => console.error("Error al entrar en pantalla completa:", err));
+  } else {
+    document.exitFullscreen();
   }
 }
 
-/* ===== Wire UI ===== */
-$("#go").onclick = async ()=>{
-  const q = $("#q").value.trim();
-  if(!q) return;
-  try{
-    setStatus("Buscando…", true);
-    items = await searchYouTube(q);
-    idx = -1; renderResults();
-  }catch(e){
-    console.error(e);
-    setStatus("La búsqueda falló (proxy caído). Probá de nuevo.");
+/* ========= Handle visibility change ========= */
+function handleVisibilityChange() {
+  if (!YT_READY) return;
+  if (document.visibilityState === "visible" && wasPlaying) {
+    ytPlayer.playVideo();
+    $("#pausedNotice").classList.remove("show");
+  } else if (document.visibilityState === "hidden" && wasPlaying) {
+    $("#pausedNotice").classList.add("show");
   }
-};
-$("#q").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#go").click(); });
+}
 
-$("#btnPlay").onclick = ()=>{ if(audio.paused){ audio.play(); showPauseIcon(true);} else { audio.pause(); showPauseIcon(false);} };
-$("#btnPrev").onclick = ()=>{ if(idx>0) playIndex(idx-1,true); };
-$("#btnNext").onclick = ()=>{ if(idx+1<items.length) playIndex(idx+1,true); };
-
-$("#seek").addEventListener("input", e=>{
-  const v = parseInt(e.target.value,10)/1000;
-  const d = audio.duration||0; if(d>0) audio.currentTime = v*d;
+/* ========= Wire UI ========= */
+$("#btnSearch").addEventListener("click", async () => {
+  const q = $("#q").value.trim();
+  if (!q) return;
+  setStatus("Buscando…", true);
+  items = await searchYouTube(q);
+  idx = -1;
+  renderResults();
 });
-$("#vol").addEventListener("input", e=>{
-  audio.volume = (parseInt(e.target.value,10)/100);
-  localStorage.setItem("vol", String(audio.volume));
+$("#q").addEventListener("keydown", e => {
+  if (e.key === "Enter") { $("#btnSearch").click(); }
 });
-const v0 = parseFloat(localStorage.getItem("vol")); if(!Number.isNaN(v0)) { audio.volume = Math.min(1, Math.max(0, v0)); $("#vol").value = Math.round(audio.volume*100); }
 
-audio.addEventListener("play", ()=>{ showPauseIcon(true); startTimer(); });
-audio.addEventListener("pause", ()=>{ showPauseIcon(false); stopTimer(); });
-audio.addEventListener("ended", ()=>{ stopTimer(); if(idx+1<items.length) playIndex(idx+1,true); });
-audio.addEventListener("loadedmetadata", ()=>{ $("#dur").textContent = isFinite(audio.duration)? fmt(audio.duration):"0:00"; });
+$("#btnPlay").onclick = togglePlay;
+$("#btnPrev").onclick = prev;
+$("#btnNext").onclick = next;
+$("#btnFullscreen").onclick = toggleFullscreen;
+$("#seek").addEventListener("input", e => {
+  const v = parseInt(e.target.value, 10) / 1000;
+  seekToFrac(v);
+});
+$("#vol").addEventListener("input", e => {
+  if (YT_READY) ytPlayer.setVolume(parseInt(e.target.value, 10));
+});
+
+// Handle visibility changes
+document.addEventListener("visibilitychange", handleVisibilityChange);
+
+// Init
+loadYTApi();
 </script>
 </body>
 </html>
