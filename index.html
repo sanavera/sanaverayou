@@ -3,38 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SanaveraYou — Audio directo (fallback robusto)</title>
+<title>SanaveraYou — Audio directo (multi-fallback)</title>
 <style>
-  :root{--bg:#0c0c0f;--panel:#15151b;--card:#111117;--border:#28283a;--accent:#ff6d00;--accent2:#ff9030;--txt:#f4f6ff;--muted:#9aa0b5}
-  *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:
-  radial-gradient(1200px 600px at 10% -10%, #1a1b2a55, transparent 60%),
-  radial-gradient(1000px 500px at 90% -20%, #34204055, transparent 60%),
-  linear-gradient(180deg,#0a0a12, var(--bg) 30%); color:var(--txt); min-height:100vh; display:flex; flex-direction:column}
-  header{position:sticky;top:0;z-index:10; backdrop-filter:saturate(1.2) blur(8px);
-    background:linear-gradient(180deg,#0e0e16cc,#0e0e16aa 60%,transparent); border-bottom:1px solid var(--border); padding:14px 16px}
-  h1{font-size:18px;margin:0 0 10px;font-weight:700;letter-spacing:.3px}
+  :root{--bg:#0b0c10;--panel:#14151c;--card:#10121a;--border:#26283a;--accent:#ff6d00;--accent2:#ff9a3c;--txt:#f5f7ff;--muted:#9aa3b8}
+  *{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--txt);
+  background:radial-gradient(1300px 700px at 10% -10%,#1b1e2f55,transparent 60%),radial-gradient(1000px 600px at 90% -20%,#3a214a55,transparent 60%),linear-gradient(180deg,#090a12,var(--bg) 35%);
+  display:flex;flex-direction:column}
+  header{position:sticky;top:0;z-index:10;backdrop-filter:blur(10px) saturate(1.2);
+    background:linear-gradient(180deg,#0e0f18cc,#0e0f18aa 60%,transparent);border-bottom:1px solid var(--border);padding:14px 16px}
+  h1{margin:0 0 10px;font-size:18px;font-weight:800}
   .row{display:flex;gap:10px}
-  input,button{border-radius:12px;border:1px solid var(--border); background:var(--panel); color:var(--txt)}
-  input{flex:1;padding:10px 12px;font-size:15px;outline:none}
-  button{padding:10px 14px;cursor:pointer;font-weight:600}
+  input,button{border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--txt)}
+  input{flex:1;min-width:0;padding:10px 12px;font-size:15px;outline:none}
+  button{padding:10px 14px;cursor:pointer;font-weight:700}
   .btn{background:var(--accent);border-color:#c14e00;color:#000}
   main{max-width:1100px;margin:0 auto;padding:16px;flex:1;width:100%}
   #status{font-size:13px;color:var(--muted);margin:8px 2px 16px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  @media (max-width:600px){.grid{grid-template-columns:1fr}}
   .card{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;cursor:pointer;transition:.15s}
   .card:hover{transform:translateY(-2px);box-shadow:0 10px 24px #0006}
   .thumb{width:64px;height:64px;border-radius:10px;background:#000;background-size:cover;background-position:center;flex:0 0 64px}
-  .meta{min-width:0}.title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{min-width:0}.title{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sub{font-size:12px;color:var(--muted)}
   .active{outline:2px solid var(--accent)}
-  .player{position:sticky;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--border);
+  .player{position:sticky;bottom:0;left:0;right:0;z-index:8;background:var(--panel);border-top:1px solid var(--border);
     padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
   .p-cover{width:48px;height:48px;border-radius:10px;background:#000;background-size:cover;background-position:center}
   .p-info{min-width:0}
-  .p-title{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .p-title{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .p-time{font-size:12px;color:var(--muted)}
   .ctrls{display:flex;gap:8px;align-items:center}
-  .icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:#101018;cursor:pointer}
+  .icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:#0f1118;cursor:pointer}
   .icon svg{width:18px;height:18px}.icon:hover{background:var(--accent2);color:#000}
   .seek{grid-column:1 / -1;display:flex;align-items:center;gap:10px}
   input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
@@ -44,9 +44,9 @@
 </head>
 <body>
   <header>
-    <h1>SanaveraYou — Audio directo (con fallback)</h1>
+    <h1>SanaveraYou — Audio directo (multi-fallback)</h1>
     <div class="row">
-      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off">
+      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off" />
       <button id="go" class="btn">Buscar</button>
     </div>
   </header>
@@ -61,7 +61,7 @@
     <div class="p-info">
       <div id="pTitle" class="p-title">Elegí un resultado</div>
       <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
-      <div class="note">La búsqueda usa scraping proxyeado; el audio usa Piped con failover.</div>
+      <div class="note">Intento Piped → Invidious proxied (251/140). Si uno falla, paso al siguiente.</div>
     </div>
     <div class="ctrls">
       <button id="btnPrev" class="icon" title="Anterior" aria-label="Anterior">
@@ -75,9 +75,9 @@
       </button>
     </div>
     <div class="seek">
-      <input id="seek" type="range" min="0" max="1000" value="0">
+      <input id="seek" type="range" min="0" max="1000" value="0" />
       <span style="width:90px;display:flex;align-items:center;gap:6px">
-        🔊 <input id="vol" type="range" min="0" max="100" value="100">
+        🔊 <input id="vol" type="range" min="0" max="100" value="100" />
       </span>
     </div>
     <audio id="audio" preload="none" crossorigin="anonymous"></audio>
@@ -88,7 +88,7 @@
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s=Math.max(0,Math.floor(s||0)); const m=Math.floor(s/60), ss=s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
-function setStatus(t, loading=false){ const el=$("#status"); el.textContent=t||""; el.classList.toggle("loading",loading); }
+const setStatus = (t, loading=false)=>{ const el=$("#status"); el.textContent=t||""; el.classList.toggle("loading",loading); };
 const timeout = (ms, p) => Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
 
 /* ===== State ===== */
@@ -97,44 +97,65 @@ let idx = -1;
 const audio = $("#audio");
 let timeTimer = null;
 
-/* ===== Piped (streams) failover ===== */
+/* ===== Providers ===== */
+// Piped Streams API → devuelve audioStreams[].url (a veces directo a googlevideo, a veces proxied)
 const PIPED = [
   "https://piped.video",
   "https://watch.leptons.xyz",
   "https://piped.projectsegfau.lt",
   "https://piped.in.projectsegfau.lt"
 ];
-async function getStreams(id){
-  let lastErr;
-  for(const base of PIPED){
+
+// Invidious proxied stream: /latest_version?id=VIDEO&itag=251|140&local=true
+const INVIDIOUS = [
+  "https://yewtu.be",
+  "https://iv.ggtyler.dev",
+  "https://invidious.flokinet.to",
+  "https://inv.nadeko.net"
+];
+
+// Construye una cola de URLs candidatas (Piped → Invidious 251 → Invidious 140)
+async function buildCandidates(id){
+  const urls = [];
+
+  // 1) Piped (varias instancias)
+  for (const base of PIPED){
     try{
-      const url = `${base.replace(/\/$/,'')}/api/v1/streams/${id}`;
-      const r = await timeout(6000, fetch(url, {headers:{'Accept':'application/json'}}));
-      if(!r.ok) throw new Error("HTTP "+r.status);
+      const u = `${base.replace(/\/$/,'')}/api/v1/streams/${id}`;
+      const r = await timeout(5000, fetch(u, {headers:{'Accept':'application/json'}}));
+      if (!r.ok) continue;
       const j = await r.json();
       const auds = (j.audioStreams||[]).slice().sort((a,b)=>(b.bitrate||0)-(a.bitrate||0));
-      const chosen = auds.find(a=>/audio\/webm|audio\/mp4|audio\/m4a/i.test(a.mimeType)) || auds[0];
-      if(!chosen) throw new Error("Sin audioStreams");
-      return chosen.url;
-    }catch(e){ lastErr=e; }
+      for (const a of auds){
+        if (/audio\/webm|audio\/mp4|audio\/m4a/i.test(a.mimeType)) {
+          urls.push(a.url);
+        }
+      }
+    }catch(_){}
   }
-  throw lastErr || new Error("Todas las instancias Piped fallaron");
+
+  // 2) Invidious proxied (251 webm/opus)
+  for (const base of INVIDIOUS){
+    urls.push(`${base.replace(/\/$/,'')}/latest_version?id=${id}&itag=251&local=true`);
+  }
+  // 3) Invidious proxied (140 m4a)
+  for (const base of INVIDIOUS){
+    urls.push(`${base.replace(/\/$/,'')}/latest_version?id=${id}&itag=140&local=true`);
+  }
+
+  // Devolvemos únicos, por si repitió
+  return [...new Set(urls)];
 }
 
-/* ===== Búsqueda por scraping (r.jina.ai) ===== */
+/* ===== Search (scraping vía r.jina.ai) ===== */
 async function searchYouTube(q){
   setStatus("Buscando…", true);
   const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html = await timeout(8000, fetch(url, {headers:{'Accept':'text/plain'}}).then(r=>r.text()));
-  // Extraer IDs únicos (máx 12), evitando shorts
   const ids = Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m=>m[1]);
   const uniq = [...new Set(ids)].slice(0, 14);
-  const filtered = uniq.filter((id, i, arr)=>{
-    // crude: si la línea anterior tenía "/shorts/", lo evitamos (aprox)
-    return true;
-  }).slice(0, 12);
+  const filtered = uniq.slice(0, 12);
 
-  // Enriquecer con noembed (título/thumbnail) pero con tolerancia a errores
   const out = [];
   for (const id of filtered){
     try{
@@ -146,10 +167,7 @@ async function searchYouTube(q){
         thumb: (meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`).replace('http://','https://')
       });
     }catch(_){
-      out.push({
-        id, title:`Video ${id}`, author:"YouTube",
-        thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`
-      });
+      out.push({ id, title:`Video ${id}`, author:"YouTube", thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg` });
     }
   }
   setStatus(`Resultados: ${out.length}`);
@@ -191,56 +209,98 @@ function showPauseIcon(isPlaying){
     : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 }
 
+/* ===== Fallback player logic ===== */
+let currentCandidates = [];
+let currentCandidateIdx = -1;
+let candidateTimer = null;
+
+function clearCandidateTimer(){
+  if (candidateTimer){ clearTimeout(candidateTimer); candidateTimer = null; }
+}
+
+async function tryNextCandidate(autoplay){
+  clearCandidateTimer();
+  currentCandidateIdx++;
+  const url = currentCandidates[currentCandidateIdx];
+  if (!url){
+    setStatus("No se pudo cargar el audio (todas las fuentes fallaron).");
+    return;
+  }
+  // Setear y probar
+  setStatus("Cargando audio…", true);
+  audio.src = url;
+  audio.load();
+
+  let resolved = false;
+
+  const onCanPlay = async ()=>{
+    if (resolved) return;
+    resolved = true;
+    audio.removeEventListener("canplay", onCanPlay);
+    audio.removeEventListener("error", onErr);
+    clearCandidateTimer();
+    setStatus("Reproduciendo");
+    if (autoplay) { await audio.play().catch(()=>{}); }
+    showPauseIcon(!audio.paused);
+    startTimer();
+  };
+  const onErr = ()=>{
+    if (resolved) return;
+    audio.removeEventListener("canplay", onCanPlay);
+    audio.removeEventListener("error", onErr);
+    // Intentar el siguiente
+    tryNextCandidate(autoplay);
+  };
+
+  audio.addEventListener("canplay", onCanPlay, {once:true});
+  audio.addEventListener("error", onErr, {once:true});
+
+  // Timeout duro por si el canplay no llega
+  candidateTimer = setTimeout(()=>{
+    onErr();
+  }, 7000);
+}
+
 async function playIndex(i, autoplay=false){
   if(!items[i]) return;
   idx = i;
   const it = items[i];
   setCoverAndTitle(it);
   renderResults();
-  setStatus("Cargando audio…", true);
+
   try{
-    const src = await getStreams(it.id);
-    audio.src = src;
-    if (autoplay) {
-      await audio.play().catch(()=>{ /* si requiere gesto, queda listo para Play */ });
+    currentCandidates = await buildCandidates(it.id);
+    currentCandidateIdx = -1;
+    if (currentCandidates.length === 0){
+      setStatus("No se encontraron fuentes de audio.");
+      return;
     }
-    showPauseIcon(!audio.paused);
-    startTimer();
-    setStatus(`Reproduciendo — ${it.title}`);
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({title: it.title, artist: it.author, album:"YouTube", artwork:[{src: it.thumb, sizes:"96x96", type:"image/jpeg"}]});
-      navigator.mediaSession.setActionHandler('play', ()=>{ audio.play(); showPauseIcon(true); });
-      navigator.mediaSession.setActionHandler('pause', ()=>{ audio.pause(); showPauseIcon(false); });
-      navigator.mediaSession.setActionHandler('previoustrack', prev);
-      navigator.mediaSession.setActionHandler('nexttrack', next);
-      navigator.mediaSession.setActionHandler('seekto', d=>{ if(d.seekTime!=null) audio.currentTime=d.seekTime; });
-    }
+    await tryNextCandidate(autoplay);
   }catch(e){
     console.error(e);
-    setStatus("No se pudo cargar el audio (probá de nuevo o más tarde).");
+    setStatus("Error preparando fuentes de audio.");
   }
 }
-function togglePlay(){ if(audio.paused){ audio.play(); showPauseIcon(true);} else { audio.pause(); showPauseIcon(false);} }
-function prev(){ if(idx>0) playIndex(idx-1,true); }
-function next(){ if(idx+1<items.length) playIndex(idx+1,true); }
 
-/* ===== Wire ===== */
+/* ===== Wire UI ===== */
 $("#go").onclick = async ()=>{
   const q = $("#q").value.trim();
   if(!q) return;
   try{
+    setStatus("Buscando…", true);
     items = await searchYouTube(q);
-    idx = -1;
-    renderResults();
+    idx = -1; renderResults();
   }catch(e){
     console.error(e);
     setStatus("La búsqueda falló (proxy caído). Probá de nuevo.");
   }
 };
 $("#q").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#go").click(); });
-$("#btnPlay").onclick = togglePlay;
-$("#btnPrev").onclick = prev;
-$("#btnNext").onclick = next;
+
+$("#btnPlay").onclick = ()=>{ if(audio.paused){ audio.play(); showPauseIcon(true);} else { audio.pause(); showPauseIcon(false);} };
+$("#btnPrev").onclick = ()=>{ if(idx>0) playIndex(idx-1,true); };
+$("#btnNext").onclick = ()=>{ if(idx+1<items.length) playIndex(idx+1,true); };
+
 $("#seek").addEventListener("input", e=>{
   const v = parseInt(e.target.value,10)/1000;
   const d = audio.duration||0; if(d>0) audio.currentTime = v*d;
@@ -249,11 +309,12 @@ $("#vol").addEventListener("input", e=>{
   audio.volume = (parseInt(e.target.value,10)/100);
   localStorage.setItem("vol", String(audio.volume));
 });
+const v0 = parseFloat(localStorage.getItem("vol")); if(!Number.isNaN(v0)) { audio.volume = Math.min(1, Math.max(0, v0)); $("#vol").value = Math.round(audio.volume*100); }
+
 audio.addEventListener("play", ()=>{ showPauseIcon(true); startTimer(); });
 audio.addEventListener("pause", ()=>{ showPauseIcon(false); stopTimer(); });
-audio.addEventListener("ended", ()=>{ stopTimer(); next(); });
+audio.addEventListener("ended", ()=>{ stopTimer(); if(idx+1<items.length) playIndex(idx+1,true); });
 audio.addEventListener("loadedmetadata", ()=>{ $("#dur").textContent = isFinite(audio.duration)? fmt(audio.duration):"0:00"; });
-const v = parseFloat(localStorage.getItem("vol")); if(!Number.isNaN(v)) { audio.volume = Math.min(1, Math.max(0, v)); $("#vol").value = Math.round(audio.volume*100); }
 </script>
 </body>
 </html>
