@@ -1,4 +1,3 @@
-```
 <!doctype html>
 <html lang="es">
 <head>
@@ -346,6 +345,23 @@ let ytPlayer = null;
 let timeTimer = null;
 let wasPlaying = false;
 
+/* === NUEVO: auto-toggling play/pausa cada 5s === */
+let autoToggleTimer = null;
+function startAutoToggle(){
+  stopAutoToggle();
+  // Alterna play/pausa cada 5 segundos
+  autoToggleTimer = setInterval(() => {
+    if (!YT_READY) return;
+    togglePlay(); // alterna estado actual
+  }, 5000);
+}
+function stopAutoToggle(){
+  if (autoToggleTimer){
+    clearInterval(autoToggleTimer);
+    autoToggleTimer = null;
+  }
+}
+
 /* ========= Search (no API key) ========= */
 async function searchYouTube(q) {
   setStatus("Buscando…", true);
@@ -397,7 +413,7 @@ function renderResults() {
         <div class="title" title="${it.title.replace(/"/g, '&quot;')}">${it.title}</div>
         <div class="subtitle">${it.author || ""}</div>
       </div>`;
-    card.onclick = () => { playIndex(i, true); };
+    card.onclick = () => { playIndex(i, true); }; // ← user gesture + autoplay
     root.appendChild(card);
   });
 }
@@ -449,7 +465,17 @@ function playIndex(i, autoplay = false) {
   $("#pTitle").textContent = it.title;
   ytPlayer.loadVideoById(it.id);
   ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);
-  if (!autoplay) { ytPlayer.pauseVideo(); }
+
+  // Reiniciar el bucle auto play/pausa si se eligió con autoplay
+  if (autoplay) {
+    // Arranca en play
+    try { ytPlayer.playVideo(); } catch {}
+    startAutoToggle();
+  } else {
+    stopAutoToggle();
+    ytPlayer.pauseVideo();
+  }
+
   renderResults();
 }
 
@@ -463,10 +489,10 @@ function togglePlay() {
   }
 }
 function prev() {
-  if (idx > 0) { playIndex(idx - 1, true); }
+  if (idx > 0) { playIndex(idx - 1, true); } // mantiene bucle
 }
 function next() {
-  if (idx + 1 < items.length) { playIndex(idx + 1, true); }
+  if (idx + 1 < items.length) { playIndex(idx + 1, true); } // mantiene bucle
 }
 function seekToFrac(frac) {
   if (!YT_READY) return;
