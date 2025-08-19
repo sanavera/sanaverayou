@@ -1,57 +1,13 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SanaveraYou — Reproductor simple</title>
-<style>
-/* ... (todo tu CSS igual que antes, sin cambios) ... */
-</style>
-</head>
-<body>
-  <header>
-    <h1>SanaveraYou — Buscá y reproducí</h1>
-    <div class="search">
-      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off" />
-      <button id="btnSearch" class="btn btn-accent">Buscar</button>
-    </div>
-  </header>
-
-  <main>
-    <div id="status" class="subtitle" style="margin: 12px 2px 16px;"></div>
-    <section id="results" class="results"></section>
-  </main>
-
-  <!-- Player -->
-  <div class="player">
-    <div id="pCover" class="p-cover"></div>
-    <div class="p-info">
-      <div id="pTitle" class="p-title">Elegí un resultado para reproducir</div>
-      <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
-      <div id="pausedNotice" class="paused-notice">Reproducción pausada</div>
-    </div>
-    <div class="p-controls">
-      <button id="btnPrev" class="icon">⏮</button>
-      <button id="btnPlay" class="icon">▶️</button>
-      <button id="btnNext" class="icon">⏭</button>
-      <button id="btnFullscreen" class="icon">⤢</button>
-    </div>
-    <div class="seek">
-      <input id="seek" type="range" min="0" max="1000" value="0" />
-    </div>
-    <div class="vol">
-      🔊 <input id="vol" type="range" min="0" max="100" value="100" />
-    </div>
-  </div>
-
-  <div id="yt-holder"><div id="player"></div></div>
-
-  <footer>SanaveraYou &copy; 2025</footer>
-
 <script>
 /* ========= Utils ========= */
 const $ = s => document.querySelector(s);
-const uniq = a => [...new Set(a)];
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmtTime = s => {
+  s = Math.max(0, Math.floor(s || 0));
+  const m = Math.floor(s / 60), ss = s % 60;
+  return `${m}:${String(ss).padStart(2, '0')}`;
+};
+function uniq(a) { return [...new Set(a)]; }
 
 /* ========= State ========= */
 let items = [];
@@ -60,106 +16,221 @@ let ytPlayer = null;
 let timeTimer = null;
 let wasPlaying = false;
 
-/* === NUEVO: auto-forzar play cada 200ms === */
-let autoPlayTimer = null;
-function startAutoPlay(){
-  stopAutoPlay();
-  autoPlayTimer = setInterval(() => {
+/* === NUEVO: forzar play cada 100ms === */
+let forcePlayTimer = null;
+function startForcePlay(){
+  stopForcePlay();
+  forcePlayTimer = setInterval(() => {
     if (YT_READY && ytPlayer) {
       try { ytPlayer.playVideo(); } catch(e){}
     }
-  }, 200); // ⚡ ajustá este valor (ms) si querés más rápido o más lento
+  }, 100); // cada 100ms fuerza play
 }
-function stopAutoPlay(){
-  if (autoPlayTimer){
-    clearInterval(autoPlayTimer);
-    autoPlayTimer = null;
+function stopForcePlay(){
+  if (forcePlayTimer){
+    clearInterval(forcePlayTimer);
+    forcePlayTimer = null;
   }
 }
 
-/* ========= Search ========= */
+/* ========= Search (no API key) ========= */
 async function searchYouTube(q) {
+  setStatus("Buscando…", true);
   const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => r.text()).catch(() => null);
-  if (!html) return [];
+  if (!html) { setStatus("Sin respuesta de YouTube"); return []; }
+
   const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, 12);
   const out = [];
   for (const id of ids) {
     try {
       const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r => r.json());
-      out.push({ id, title: meta.title, thumb: meta.thumbnail_url, author: meta.author_name });
-    } catch(_) {
-      out.push({ id, title: `Video ${id}`, thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube" });
+      out.push({
+        id,
+        title: meta.title || `Video ${id}`,
+        thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+        author: meta.author_name || "YouTube",
+        url: `https://www.youtube.com/watch?v=${id}`
+      });
+    } catch (_) {
+      out.push({
+        id,
+        title: `Video ${id}`,
+        thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+        author: "YouTube",
+        url: `https://www.youtube.com/watch?v=${id}`
+      });
     }
   }
+  setStatus(`Resultados: ${out.length}`);
   return out;
 }
+
+function setStatus(t, loading = false) {
+  const statusEl = $("#status");
+  statusEl.textContent = t || "";
+  statusEl.classList.toggle("loading", loading);
+}
+
 function renderResults() {
   const root = $("#results");
   root.innerHTML = "";
-  items.forEach((it,i)=>{
-    const card=document.createElement("button");
-    card.className="card"+(i===idx?" active":"");
-    card.innerHTML=`<div class="thumb" style="background-image:url('${it.thumb}')"></div>
-      <div class="meta"><div class="title">${it.title}</div><div class="subtitle">${it.author}</div></div>`;
-    card.onclick=()=>{ playIndex(i,true); };
+  items.forEach((it, i) => {
+    const card = document.createElement("button");
+    card.className = "card" + (i === idx ? " active" : "");
+    card.innerHTML = `
+      <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g, "%27")}')"></div>
+      <div class="meta">
+        <div class="title" title="${it.title.replace(/"/g, '&quot;')}">${it.title}</div>
+        <div class="subtitle">${it.author || ""}</div>
+      </div>`;
+    card.onclick = () => { playIndex(i, true); };
     root.appendChild(card);
   });
 }
 
-/* ========= YouTube API ========= */
-let YT_READY=false;
-function loadYTApi(){
-  if(window.YT&&window.YT.Player){onYouTubeIframeAPIReady();return;}
-  const s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";document.head.appendChild(s);
+/* ========= YouTube IFrame API ========= */
+let YT_READY = false;
+function loadYTApi() {
+  if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
 }
-window.onYouTubeIframeAPIReady=function(){
-  ytPlayer=new YT.Player('player',{videoId:'',playerVars:{autoplay:0,controls:0,rel:0,playsinline:1},
-    events:{'onReady':()=>{YT_READY=true;},'onStateChange':onYTState}});
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('player', {
+    width: 300,
+    height: 150,
+    videoId: '',
+    playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
+    events: {
+      'onReady': () => { YT_READY = true; },
+      'onStateChange': onYTState
+    }
+  });
 };
-function onYTState(e){
-  if(e.data===YT.PlayerState.PLAYING){wasPlaying=true;$("#btnPlay").textContent="⏸";}
-  if(e.data===YT.PlayerState.PAUSED){wasPlaying=false;$("#btnPlay").textContent="▶️";}
-  if(e.data===YT.PlayerState.ENDED){next();}
-}
-
-/* ========= Controls ========= */
-function playIndex(i,autoplay=false){
-  if(!YT_READY||!items[i])return;
-  idx=i;const it=items[i];
-  $("#pCover").style.backgroundImage=`url('${it.thumb}')`;
-  $("#pTitle").textContent=it.title;
-  ytPlayer.loadVideoById(it.id);
-  ytPlayer.setVolume(parseInt($("#vol").value,10)||100);
-  if(autoplay){
-    ytPlayer.playVideo();
-    startAutoPlay();
-  } else {
-    stopAutoPlay();
+function onYTState(e) {
+  if (e.data === YT.PlayerState.PLAYING) {
+    startTimer();
+    $("#btnPlay").textContent = "⏸";
+    $("#pausedNotice").classList.remove("show");
+    wasPlaying = true;
+  }
+  if (e.data === YT.PlayerState.PAUSED) {
+    stopTimer();
+    $("#btnPlay").textContent = "▶️";
+    wasPlaying = false;
+  }
+  if (e.data === YT.PlayerState.ENDED) {
+    stopTimer();
+    next();
   }
 }
-function togglePlay(){ if(!YT_READY)return;
-  const st=ytPlayer.getPlayerState();
-  if(st===YT.PlayerState.PLAYING){ytPlayer.pauseVideo();stopAutoPlay();}
-  else {ytPlayer.playVideo();startAutoPlay();}
+
+/* ========= Playback controls ========= */
+function playIndex(i, autoplay = false) {
+  if (!YT_READY || !items[i]) return;
+  idx = i;
+  const it = items[i];
+  $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g, "%27")}')`;
+  $("#pTitle").textContent = it.title;
+  ytPlayer.loadVideoById(it.id);
+  ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);
+
+  if (autoplay) {
+    try { ytPlayer.playVideo(); } catch {}
+    startForcePlay();
+  } else {
+    stopForcePlay();
+    ytPlayer.pauseVideo();
+  }
+
+  renderResults();
 }
-function prev(){ if(idx>0) playIndex(idx-1,true);}
-function next(){ if(idx+1<items.length) playIndex(idx+1,true);}
 
-/* ========= UI ========= */
-$("#btnSearch").onclick=async()=>{
-  const q=$("#q").value.trim(); if(!q)return;
-  items=await searchYouTube(q); idx=-1; renderResults();
-};
-$("#btnPlay").onclick=togglePlay;
-$("#btnPrev").onclick=prev;
-$("#btnNext").onclick=next;
-$("#btnFullscreen").onclick=()=>{ if(!document.fullscreenElement)document.documentElement.requestFullscreen(); else document.exitFullscreen();};
-$("#vol").oninput=e=>{ if(YT_READY)ytPlayer.setVolume(parseInt(e.target.value,10)); };
+// ⬅ ahora el botón Play solo fuerza play, nunca pausa
+function forcePlayOnce() {
+  if (YT_READY && ytPlayer) {
+    ytPlayer.playVideo();
+  }
+}
+function prev() {
+  if (idx > 0) { playIndex(idx - 1, true); }
+}
+function next() {
+  if (idx + 1 < items.length) { playIndex(idx + 1, true); }
+}
+function seekToFrac(frac) {
+  if (!YT_READY) return;
+  const d = ytPlayer.getDuration() || 0;
+  ytPlayer.seekTo(frac * d, true);
+}
+function startTimer() {
+  stopTimer();
+  timeTimer = setInterval(() => {
+    if (!YT_READY) return;
+    const cur = ytPlayer.getCurrentTime() || 0;
+    const dur = ytPlayer.getDuration() || 0;
+    $("#cur").textContent = fmtTime(cur);
+    $("#dur").textContent = fmtTime(dur);
+    $("#seek").value = dur ? Math.floor((cur / dur) * 1000) : 0;
+  }, 250);
+}
+function stopTimer() {
+  clearInterval(timeTimer);
+  timeTimer = null;
+}
 
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"&&wasPlaying){$("#pausedNotice").classList.add("show");} else {$("#pausedNotice").classList.remove("show");}});
+/* ========= Fullscreen toggle ========= */
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => console.error("Error al entrar en pantalla completa:", err));
+  } else {
+    document.exitFullscreen();
+  }
+}
 
+/* ========= Handle visibility change ========= */
+function handleVisibilityChange() {
+  if (!YT_READY) return;
+  if (document.visibilityState === "visible" && wasPlaying) {
+    ytPlayer.playVideo();
+    $("#pausedNotice").classList.remove("show");
+  } else if (document.visibilityState === "hidden" && wasPlaying) {
+    $("#pausedNotice").classList.add("show");
+  }
+}
+
+/* ========= Wire UI ========= */
+$("#btnSearch").addEventListener("click", async () => {
+  const q = $("#q").value.trim();
+  if (!q) return;
+  setStatus("Buscando…", true);
+  items = await searchYouTube(q);
+  idx = -1;
+  renderResults();
+});
+$("#q").addEventListener("keydown", e => {
+  if (e.key === "Enter") { $("#btnSearch").click(); }
+});
+
+// Ahora el botón de play solo hace play, nunca pausa
+$("#btnPlay").onclick = forcePlayOnce;
+
+$("#btnPrev").onclick = prev;
+$("#btnNext").onclick = next;
+$("#btnFullscreen").onclick = toggleFullscreen;
+$("#seek").addEventListener("input", e => {
+  const v = parseInt(e.target.value, 10) / 1000;
+  seekToFrac(v);
+});
+$("#vol").addEventListener("input", e => {
+  if (YT_READY) ytPlayer.setVolume(parseInt(e.target.value, 10));
+});
+
+// Handle visibility changes
+document.addEventListener("visibilitychange", handleVisibilityChange);
+
+// Init
 loadYTApi();
 </script>
-</body>
-</html>
