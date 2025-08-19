@@ -353,7 +353,7 @@ function startAutoToggle(){
   autoToggleTimer = setInterval(() => {
     if (!YT_READY) return;
     togglePlay(); // alterna estado actual
-  }, 5000);
+  }, 1000);
 }
 function stopAutoToggle(){
   if (autoToggleTimer){
