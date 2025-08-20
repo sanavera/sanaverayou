@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ===== Topbar (estilo Sanavera MP3: mini-logo + input) ===== -->
+  <!-- ===== Topbar (mini-logo + input, sin botón Buscar) ===== -->
   <header class="topbar">
     <div class="search-row">
       <img id="brand-mini" src="logo-mini.png" alt="Logo" />
@@ -33,7 +33,7 @@
   <!-- ===== Dock de controles (se mueve al modal cuando se abre) ===== -->
   <section id="controlsDock" class="controls-section">
     <div class="controls">
-      <button id="btnRepeat" class="btn" title="Repetir">
+      <button id="btnRepeat" class="btn" title="Repetir / Repetir 1">
         <svg class="ic" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4V6H7a3 3 0 0 0-3 3v1H2V9a5 5 0 0 1 5-5h10V1zm-10 22l-4-4 4-4v3h10a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7v3z"/></svg>
       </button>
       <button id="btnPrev" class="btn" title="Anterior">
@@ -86,7 +86,7 @@
     </div>
   </div>
 
-  <!-- Iframe oculto para YouTube -->
+  <!-- Iframe oculto para YouTube (invisible y fuera de pantalla) -->
   <div id="yt-holder"><div id="player"></div></div>
 
   <script src="script.js"></script>
