@@ -11,16 +11,15 @@
   <!-- Sprite de íconos -->
   <svg width="0" height="0" style="position:absolute;visibility:hidden">
     <symbol id="ic-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.471 6.471 0 0 0 1.57-4.23C15.99 6.01 13.98 4 11.49 4S7 6.01 7 9s2.01 5 4.49 5c1.61 0 3.06-.66 4.1-1.73l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-4.01 0C9.01 14 7 11.99 7 9.5S9.01 5 11.49 5 16 7.01 16 9.5 13.97 14 11.49 14Z"/></symbol>
-    <symbol id="ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+    <symbol id="ic-play"  viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
     <symbol id="ic-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></symbol>
-    <symbol id="ic-prev" viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></symbol>
-    <symbol id="ic-next" viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></symbol>
-    <symbol id="ic-full" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm0-4h3V7h2v5H5V9zm12 9h-3v2h5v-5h-2v3zM17 7h-3V5h5v5h-2V7z"/></symbol>
+    <symbol id="ic-prev"  viewBox="0 0 24 24"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></symbol>
+    <symbol id="ic-next"  viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z"/></symbol>
+    <symbol id="ic-repeat" viewBox="0 0 24 24"><path d="M7 7h9V5l3 3-3 3V9H7a3 3 0 0 0-3 3v1H2v-1a5 5 0 0 1 5-5zm10 10H8v2l-3-3 3-3v2h9a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5z"/></symbol>
+    <symbol id="ic-shuffle" viewBox="0 0 24 24"><path d="M10.59 9.17 6.41 5 5 6.41l4.17 4.17 1.42-1.41zM14 4h6v6l-2.5-2.5-3.76 3.76-1.41-1.41L16.59 6.5 14 4zm-4.59 5.83-1.42 1.41L8.59 12 5 15.59 6.41 17 10 13.41l-1.41-1.41L9.41 12l-.01-.01 1.41-1.41zM14 20h6v-6l-2.5 2.5-3.76-3.76-1.41 1.41 3.26 3.26L14 20z"/></symbol>
+    <symbol id="ic-close" viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.3 19.7 2.89 18.29 9.17 12 2.89 5.71 4.3 4.3l6.29 6.29 6.29-6.29 1.41 1.41z"/></symbol>
     <symbol id="ic-heart" viewBox="0 0 24 24"><path d="M12.1 21.35 10 19.28C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.74 0 3.41.81 4.5 2.09C12.09 4.81 13.76 4 15.5 4 18 4 20 6 20 8.5c0 3.78-3.4 6.86-8 10.78l-1.9 2.07z" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="ic-heart-fill" viewBox="0 0 24 24"><path d="M12.1 21.35 10 19.28C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.74 0 3.41.81 4.5 2.09C12.09 4.81 13.76 4 15.5 4 18 4 20 6 20 8.5c0 3.78-3.4 6.86-8 10.78l-1.9 2.07z"/></symbol>
-    <symbol id="ic-close" viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.3 19.7 2.89 18.29 9.17 12 2.89 5.71 4.3 4.3l6.29 6.29 6.29-6.29 1.41 1.41z"/></symbol>
-    <symbol id="ic-list" viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h12v2H3v-2zm0 6h18v2H3v-2z"/></symbol>
-    <symbol id="ic-grid" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></symbol>
   </svg>
 
   <!-- Header -->
@@ -29,33 +28,40 @@
       <img id="logo" src="https://dummyimage.com/72x72/3a3a3a/ffffff&text=S" alt="Logo" />
       <h1>SanaveraYou Pro</h1>
     </div>
+
     <div class="search">
-      <span class="icon-24"><svg><use href="#ic-search"/></svg></span>
-      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul — Yo tomo)" autocomplete="off" />
+      <span class="icon-24 search-ico"><svg><use href="#ic-search"/></svg></span>
+      <input id="q" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
       <button id="btnSearch" class="btn btn-accent">Buscar</button>
+      <div id="suggest" class="suggest hide"></div>
     </div>
   </header>
 
-  <!-- Contenido -->
   <main>
     <div id="status" class="subtitle" style="margin: 12px 2px 16px;"></div>
     <section id="results" class="results"></section>
   </main>
 
-  <!-- Player inferior (global) -->
-  <div class="player">
+  <!-- Player inferior -->
+  <div class="player" id="playerBar">
     <div id="pCover" class="p-cover"></div>
     <div class="p-info">
-      <div class="p-title"><span id="eqNow" class="eq hide"><span></span><span></span><span></span></span> <span id="pTitle">Elegí un resultado para reproducir</span></div>
+      <div class="p-title">
+        <span id="eqNow" class="eq hide"><span></span><span></span><span></span></span>
+        <span id="pTitle">Elegí un resultado para reproducir</span>
+      </div>
       <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
       <div id="pausedNotice" class="paused-notice">Reproducción pausada</div>
     </div>
+
     <div class="p-controls">
+      <button id="btnRepeat" class="icon" title="Repetir"><svg><use href="#ic-repeat"/></svg></button>
       <button id="btnPrev" class="icon" title="Anterior"><svg><use href="#ic-prev"/></svg></button>
-      <button id="btnPlay" class="icon" title="Reproducir/Pausar"><svg id="btnPlayIcon"><use href="#ic-play"/></svg></button>
+      <button id="btnPlay" class="icon btn-play" title="Reproducir/Pausar"><svg id="btnPlayIcon"><use href="#ic-play"/></svg></button>
       <button id="btnNext" class="icon" title="Siguiente"><svg><use href="#ic-next"/></svg></button>
-      <button id="btnFullscreen" class="icon" title="Pantalla completa"><svg><use href="#ic-full"/></svg></button>
+      <button id="btnShuffle" class="icon" title="Aleatorio"><svg><use href="#ic-shuffle"/></svg></button>
     </div>
+
     <div class="seek">
       <input id="seek" type="range" min="0" max="1000" value="0" />
     </div>
@@ -64,9 +70,9 @@
     </div>
   </div>
 
-  <!-- FAB: alterna búsqueda/favoritos -->
-  <button id="fab" class="fab" title="Favoritos" aria-label="Abrir favoritos">
-    <svg id="fabIcon"><use href="#ic-list"/></svg>
+  <!-- FAB en búsqueda: abre favoritos -->
+  <button id="fabOpenFavs" class="fab" title="Favoritos" aria-label="Abrir favoritos">
+    <svg><use href="#ic-heart"/></svg>
   </button>
 
   <!-- Modal Favoritos (pantalla completa) -->
@@ -82,6 +88,11 @@
       </header>
 
       <section id="favList" class="fav-list"></section>
+
+      <!-- FAB dentro del modal: volver a Búsqueda -->
+      <button id="fabBackToSearch" class="fab fab-in-modal" title="Búsqueda" aria-label="Ir a búsqueda">
+        <svg><use href="#ic-search"/></svg>
+      </button>
     </div>
   </div>
 
