@@ -115,32 +115,28 @@
   </div>
 
   <script>
-  /* ========= Utils ========= */
   const $ = s => document.querySelector(s);
-  const $$ = s => Array.from(document.querySelectorAll(s));
   const fmtTime = s => {
     s = Math.max(0, Math.floor(s || 0));
     const m = Math.floor(s / 60), ss = s % 60;
     return `${m}:${String(ss).padStart(2, '0')}`;
   };
-  function uniq(a) { return [...new Set(a)]; }
 
-  /* ========= State ========= */
   let items = [];
   let idx = -1;
   let ytPlayer = null;
   let timeTimer = null;
   let wasPlaying = false;
-
-  // === NUEVO: forzar play cada 100ms ===
   let forcePlayTimer = null;
+  let alreadySeeked = false; // ✅ flag para evitar múltiples seeks
+
   function startForcePlay(){
     stopForcePlay();
     forcePlayTimer = setInterval(() => {
       if (YT_READY && ytPlayer) {
         try { ytPlayer.playVideo(); } catch(e){}
       }
-    }, 70); // cada 100ms fuerza play
+    }, 100);
   }
   function stopForcePlay(){
     if (forcePlayTimer){
@@ -149,43 +145,26 @@
     }
   }
 
-  /* ========= Search ========= */
   async function searchYouTube(q) {
-    setStatus("Buscando…", true);
     const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
     const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => r.text()).catch(() => null);
-    if (!html) { setStatus("Sin respuesta de YouTube"); return []; }
+    if (!html) return [];
 
-    const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, 12);
+    const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))].slice(0, 12);
     const out = [];
     for (const id of ids) {
       try {
         const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r => r.json());
         out.push({
-          id,
-          title: meta.title || `Video ${id}`,
-          thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-          author: meta.author_name || "YouTube",
-          url: `https://www.youtube.com/watch?v=${id}`
+          id, title: meta.title, 
+          thumb: meta.thumbnail_url,
+          author: meta.author_name
         });
-      } catch (_) {
-        out.push({
-          id,
-          title: `Video ${id}`,
-          thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-          author: "YouTube",
-          url: `https://www.youtube.com/watch?v=${id}`
-        });
+      } catch {
+        out.push({ id, title:`Video ${id}`, thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube" });
       }
     }
-    setStatus(`Resultados: ${out.length}`);
     return out;
-  }
-
-  function setStatus(t, loading = false) {
-    const statusEl = $("#status");
-    statusEl.textContent = t || "";
-    statusEl.classList.toggle("loading", loading);
   }
 
   function renderResults() {
@@ -195,17 +174,13 @@
       const card = document.createElement("button");
       card.className = "card" + (i === idx ? " active" : "");
       card.innerHTML = `
-        <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g, "%27")}')"></div>
-        <div class="meta">
-          <div class="title" title="${it.title.replace(/"/g, '&quot;')}">${it.title}</div>
-          <div class="subtitle">${it.author || ""}</div>
-        </div>`;
-      card.onclick = () => { playIndex(i, true); };
+        <div class="thumb" style="background-image:url('${it.thumb}')"></div>
+        <div class="meta"><div class="title">${it.title}</div><div class="subtitle">${it.author}</div></div>`;
+      card.onclick = () => playIndex(i, true);
       root.appendChild(card);
     });
   }
 
-  /* ========= YouTube IFrame API ========= */
   let YT_READY = false;
   function loadYTApi() {
     if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }
@@ -215,14 +190,9 @@
   }
   window.onYouTubeIframeAPIReady = function () {
     ytPlayer = new YT.Player('player', {
-      width: 300,
-      height: 150,
       videoId: '',
       playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
-      events: {
-        'onReady': () => { YT_READY = true; },
-        'onStateChange': onYTState
-      }
+      events: { 'onReady': () => YT_READY = true, 'onStateChange': onYTState }
     });
   };
   function onYTState(e) {
@@ -237,46 +207,21 @@
       $("#btnPlay").textContent = "▶️";
       wasPlaying = false;
     }
-    if (e.data === YT.PlayerState.ENDED) {
-      stopTimer();
-      next();
-    }
   }
 
-  /* ========= Playback controls ========= */
   function playIndex(i, autoplay = false) {
     if (!YT_READY || !items[i]) return;
     idx = i;
     const it = items[i];
-    $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g, "%27")}')`;
+    $("#pCover").style.backgroundImage = `url('${it.thumb}')`;
     $("#pTitle").textContent = it.title;
     ytPlayer.loadVideoById(it.id);
     ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);
 
-    if (autoplay) {
-      try { ytPlayer.playVideo(); } catch {}
-      startForcePlay();
-    } else {
-      stopForcePlay();
-      ytPlayer.pauseVideo();
-    }
-
+    if (autoplay) ytPlayer.playVideo();
     renderResults();
   }
 
-  // botón Play ahora solo da play
-  function forcePlayOnce() {
-    if (YT_READY && ytPlayer) {
-      ytPlayer.playVideo();
-    }
-  }
-  function prev() { if (idx > 0) playIndex(idx - 1, true); }
-  function next() { if (idx + 1 < items.length) playIndex(idx + 1, true); }
-  function seekToFrac(frac) {
-    if (!YT_READY) return;
-    const d = ytPlayer.getDuration() || 0;
-    ytPlayer.seekTo(frac * d, true);
-  }
   function startTimer() {
     stopTimer();
     timeTimer = setInterval(() => {
@@ -293,42 +238,45 @@
     timeTimer = null;
   }
 
-  /* ========= Fullscreen ========= */
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(err => console.error(err));
+      document.documentElement.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
   }
 
-  /* ========= Visibility ========= */
+  // ✅ Manejo de foco
   function handleVisibilityChange() {
     if (!YT_READY) return;
-    if (document.visibilityState === "visible" && wasPlaying) {
-      ytPlayer.playVideo();
-      $("#pausedNotice").classList.remove("show");
-    } else if (document.visibilityState === "hidden" && wasPlaying) {
+    if (document.visibilityState === "hidden" && wasPlaying) {
       $("#pausedNotice").classList.add("show");
+      if (!alreadySeeked) {
+        ytPlayer.seekTo(60, true); // minuto 1
+        alreadySeeked = true;
+      }
+      startForcePlay();
+    } else if (document.visibilityState === "visible") {
+      $("#pausedNotice").classList.remove("show");
+      stopForcePlay();
+      alreadySeeked = false;
     }
   }
 
-  /* ========= Wire UI ========= */
   $("#btnSearch").addEventListener("click", async () => {
     const q = $("#q").value.trim();
     if (!q) return;
-    setStatus("Buscando…", true);
     items = await searchYouTube(q);
     idx = -1;
     renderResults();
   });
   $("#q").addEventListener("keydown", e => { if (e.key === "Enter") $("#btnSearch").click(); });
-  $("#btnPlay").onclick = forcePlayOnce;
-  $("#btnPrev").onclick = prev;
-  $("#btnNext").onclick = next;
+  $("#btnPlay").onclick = () => { if (YT_READY) ytPlayer.playVideo(); };
+  $("#btnPrev").onclick = () => { if (idx > 0) playIndex(idx-1,true); };
+  $("#btnNext").onclick = () => { if (idx+1<items.length) playIndex(idx+1,true); };
   $("#btnFullscreen").onclick = toggleFullscreen;
-  $("#seek").addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10)/1000));
-  $("#vol").addEventListener("input", e => { if (YT_READY) ytPlayer.setVolume(parseInt(e.target.value, 10)); });
+  $("#seek").addEventListener("input", e => ytPlayer.seekTo((parseInt(e.target.value,10)/1000)*ytPlayer.getDuration(), true));
+  $("#vol").addEventListener("input", e => ytPlayer.setVolume(parseInt(e.target.value,10)));
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   loadYTApi();
