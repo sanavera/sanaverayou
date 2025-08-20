@@ -1,11 +1,7 @@
 /* ====== Utilidades ====== */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = s => {
-  s = Math.max(0, Math.floor(s||0));
-  const m = Math.floor(s/60), ss = s%60;
-  return `${m}:${String(ss).padStart(2,'0')}`;
-};
+const fmt = s => { s=Math.max(0,Math.floor(s||0)); const m=Math.floor(s/60), ss=s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const uniq = a => [...new Set(a)];
 const cleanTitle = t => (t||"")
   .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"")
@@ -14,41 +10,36 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ")
   .trim();
 
+/* SVG helper para corazón en lista */
+const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+
 /* ====== Estado ====== */
-let items = [];        // resultados
-let favs = [];         // favoritos (LS)
-let idx = -1;          // índice actual en items
+let items = [];
+let favs = [];
+let idx = -1;
 let ytPlayer = null;
 let wasPlaying = false;
 let timer = null;
 
 let repeatOne = false;
 let shuffleOn = false;
-let originalOrder = []; // para restaurar
+let originalOrder = [];
 
 /* ====== Búsqueda (sin API key) ====== */
 async function searchYouTube(q){
   setCount("Buscando…");
   const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-  const html = await fetch(endpoint, {headers:{Accept:"text/plain"}}).then(r=>r.text()).catch(()=>null);
+  const html = await fetch(endpoint,{headers:{Accept:"text/plain"}}).then(r=>r.text()).catch(()=>null);
   if(!html){ setCount("Sin respuesta de YouTube"); return []; }
 
-  const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1])).slice(0, 24);
+  const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1])).slice(0,24);
   const out = [];
   for(const id of ids){
     try{
       const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json());
-      out.push({
-        id, title: cleanTitle(meta.title||`Video ${id}`),
-        thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-        author: meta.author_name||"YouTube"
-      });
+      out.push({ id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"YouTube" });
     }catch{
-      out.push({
-        id, title: cleanTitle(`Video ${id}`),
-        thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-        author:"YouTube"
-      });
+      out.push({ id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube" });
     }
   }
   setCount(`Resultados: ${out.length}`);
@@ -74,10 +65,9 @@ function renderResults(){
         <div class="subtitle">${it.author||""}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn heart ${isFav(it.id)?'active':''}" title="Favorito">❤</button>
+        <button class="icon-btn heart ${isFav(it.id)?'active':''}" title="Favorito">${HEART_SVG}</button>
       </div>`;
     li.addEventListener("click", e=>{
-      // si clic en corazón, no reproducir
       if(e.target.closest(".heart")){
         toggleFav(it);
         e.stopPropagation();
@@ -114,8 +104,6 @@ function renderFavs(){
         e.stopPropagation();
         return;
       }
-      // reproducir desde favoritos
-      // si el actual no está en items, lo agregamos temporalmente al principio
       const pos = items.findIndex(x=>x.id===it.id);
       if(pos === -1){
         items.unshift(it);
@@ -128,22 +116,18 @@ function renderFavs(){
     });
     ul.appendChild(li);
   });
-  // actualizar hero
   const current = items[idx];
   $("#favHero").style.backgroundImage = current ? `url(${current.thumb})` : "none";
   $("#favNowTitle").textContent = current ? current.title : "—";
   refreshIndicators();
 }
 
-/* ====== Favoritos (LS, tope de lista) ====== */
+/* ====== Favoritos ====== */
 const LS_KEY = "sanayera_favs_v1";
 function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_KEY)||"[]"); }catch{ favs=[]; } }
 function saveFavs(){ localStorage.setItem(LS_KEY, JSON.stringify(favs)); }
 function isFav(id){ return favs.some(f=>f.id===id); }
 function toggleFav(track){
-  const i = favs.findIndex(f=>f.id===track.id);
-  if(i>=0){ favs.splice(i,1); }
-  // insertar al principio (dedup + unshift)
   favs = favs.filter(f=>f.id!==track.id);
   favs.unshift(track);
   saveFavs();
@@ -179,11 +163,8 @@ function onYTState(e){
   $("#btnPlayFav").classList.toggle("playing", playing);
   wasPlaying = playing;
   if(st===YT.PlayerState.ENDED){
-    if(repeatOne){
-      ytPlayer.seekTo(0,true); ytPlayer.playVideo();
-    }else{
-      next();
-    }
+    if(repeatOne){ ytPlayer.seekTo(0,true); ytPlayer.playVideo(); }
+    else{ next(); }
   }
   refreshIndicators();
 }
@@ -196,7 +177,6 @@ function playIndex(i, autoplay=false){
   ytPlayer.loadVideoById({videoId:it.id, startSeconds:0, suggestedQuality:"auto"});
   if(!autoplay) ytPlayer.pauseVideo();
   startTimer();
-  // actualizar hero de favoritos por si está abierto
   $("#favHero").style.backgroundImage = `url(${it.thumb})`;
   $("#favNowTitle").textContent = it.title;
   refreshIndicators();
@@ -234,29 +214,26 @@ function stopTimer(){ clearInterval(timer); timer=null; }
 function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const currentId = items[idx]?.id || "";
-  // resultados
   $$("#results .card").forEach(card=>{
     card.classList.toggle("is-playing", playing && card.dataset.trackId===currentId);
   });
-  // favoritos
   $$("#favList .fav-item").forEach(li=>{
     li.classList.toggle("is-playing", playing && li.dataset.trackId===currentId);
   });
 }
 
-/* ====== Manejo de visibilidad (truco de recarga) ====== */
+/* ====== Visibilidad (truco recarga) ====== */
 document.addEventListener("visibilitychange", ()=>{
   if(!YT_READY || idx<0 || !items[idx]) return;
   if(document.visibilityState==="hidden" && wasPlaying){
     const t = ytPlayer.getCurrentTime()||0;
     const it = items[idx];
-    // recargar mismo video en el tiempo exacto
     ytPlayer.loadVideoById({videoId:it.id, startSeconds:t, suggestedQuality:"auto"});
     ytPlayer.playVideo();
   }
 });
 
-/* ====== UI wiring ====== */
+/* ====== UI ====== */
 $("#searchInput").addEventListener("keydown", async e=>{
   if(e.key==="Enter"){
     const q = $("#searchInput").value.trim();
@@ -272,17 +249,10 @@ $("#fabFavorites").onclick = ()=> openFavs();
 $("#fabBackToSearch").onclick = ()=> closeFavs();
 $("#btnCloseFavs").onclick = ()=> closeFavs();
 
-function openFavs(){
-  $("#favoritesModal").classList.add("show");
-  document.body.classList.add("modal-open");
-  renderFavs();
-}
-function closeFavs(){
-  $("#favoritesModal").classList.remove("show");
-  document.body.classList.remove("modal-open");
-}
+function openFavs(){ $("#favoritesModal").classList.add("show"); document.body.classList.add("modal-open"); renderFavs(); }
+function closeFavs(){ $("#favoritesModal").classList.remove("show"); document.body.classList.remove("modal-open"); }
 
-/* Botonera búsqueda */
+/* Controles búsqueda */
 $("#btnPlay").onclick = togglePlay;
 $("#btnPrev").onclick = prev;
 $("#btnNext").onclick = next;
@@ -296,25 +266,15 @@ $("#btnShuffle").onclick = ()=>{
   $("#btnShuffle").classList.toggle("active", shuffleOn);
   $("#btnShuffleFav").classList.toggle("active", shuffleOn);
   if(shuffleOn){
-    // mantener actual al frente y barajar el resto
     if(idx>=0){
       const current = items[idx];
       const rest = items.filter((_,i)=>i!==idx);
-      for(let i=rest.length-1;i>0;i--){
-        const j = Math.floor(Math.random()*(i+1));
-        [rest[i],rest[j]] = [rest[j],rest[i]];
-      }
-      items = [current, ...rest];
-      idx = 0;
+      for(let i=rest.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rest[i],rest[j]]=[rest[j],rest[i]]; }
+      items = [current, ...rest]; idx = 0;
     }else{
-      // barajar todo
-      for(let i=items.length-1;i>0;i--){
-        const j = Math.floor(Math.random()*(i+1));
-        [items[i],items[j]] = [items[j],items[i]];
-      }
+      for(let i=items.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [items[i],items[j]]=[items[j],items[i]]; }
     }
   }else{
-    // restaurar orden original si existe
     if(originalOrder.length){
       const currentId = items[idx]?.id;
       items = originalOrder.slice();
@@ -325,15 +285,18 @@ $("#btnShuffle").onclick = ()=>{
 };
 $("#seek").addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
 
-/* Botonera favoritos (espejo) */
+/* Controles favoritos (espejo) */
 $("#btnPlayFav").onclick = togglePlay;
 $("#btnPrevFav").onclick = prev;
 $("#btnNextFav").onclick = next;
 $("#btnRepeatFav").onclick = ()=> $("#btnRepeat").click();
 $("#btnShuffleFav").onclick = ()=> $("#btnShuffle").click();
-$("#seekFav").addEventListener("input", e=> $("#seek").value = e.target.value && $("#seek").dispatchEvent(new Event("input")) );
+$("#seekFav").addEventListener("input", e=> { $("#seek").value = e.target.value; $("#seek").dispatchEvent(new Event("input")); });
 
 /* ====== Init ====== */
 loadFavs();
 renderFavs();
 loadYTApi();
+
+/* Bloquea scroll del body al abrir modal (estética) */
+document.body.classList.toggle = document.body.classList.toggle; // no-op para evitar warnings en minificadores
