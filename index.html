@@ -7,92 +7,86 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Topbar / Buscador -->
+  <!-- ===== Topbar (estilo Sanavera MP3: mini-logo + input) ===== -->
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-badge">S</div>
-      <div class="brand-text">
-        <strong>SanaveraYou Pro</strong>
-      </div>
-    </div>
-
     <div class="search-row">
-      <input id="q" autocomplete="off" placeholder="Buscar (ej: Amar Azul – Yo tomo)" />
+      <img id="brand-mini" src="logo-mini.png" alt="Logo" />
+      <input id="q" type="text" autocomplete="off"
+             placeholder="Buscar (ej: Amar Azul – Yo tomo)" />
     </div>
-
-    <!-- Sugerencia única -->
-    <div id="suggestion" class="suggestion hide">
-      <button id="useSuggestion"></button>
+    <div id="suggestion" class="sugg hide">
+      <button id="useSuggestion" class="sugg-btn"></button>
     </div>
-
     <div id="results-count" class="muted"></div>
   </header>
 
-  <!-- Grilla de resultados -->
-  <main id="results" class="results"></main>
+  <!-- ===== Resultados ===== -->
+  <main id="main">
+    <section id="results" class="results"></section>
+  </main>
 
-  <!-- FAB: abrir Favoritos (desde Búsqueda) -->
-  <button id="fabFavorites" class="fab" aria-label="Favoritos">
+  <!-- ===== FAB abrir Favoritos ===== -->
+  <button id="fabFavorites" class="fab" title="Favoritos">
     <svg viewBox="0 0 24 24" class="ic"><path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z"/></svg>
   </button>
 
-  <!-- Botonera / Player fijo (lo movemos al modal cuando se abre) -->
+  <!-- ===== Dock de controles (se mueve al modal cuando se abre) ===== -->
   <section id="controlsDock" class="controls-section">
     <div class="controls">
       <button id="btnRepeat" class="btn" title="Repetir">
         <svg class="ic" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4V6H7a3 3 0 0 0-3 3v1H2V9a5 5 0 0 1 5-5h10V1zm-10 22l-4-4 4-4v3h10a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7v3z"/></svg>
       </button>
       <button id="btnPrev" class="btn" title="Anterior">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M6 6h2v12H6zM10 6l10 6-10 6z"/></svg>
+        <svg class="ic" viewBox="0 0 24 24"><path d="M6 6h2v12H6zM20 6l-10 6 10 6z"/></svg>
       </button>
       <button id="btnPlay" class="btn btn-play" title="Play/Pausa">
-        <svg class="ic play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <svg class="ic pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        <svg class="ic fa-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="ic fa-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
       <button id="btnNext" class="btn" title="Siguiente">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M6 6l10 6-10 6zM18 6h2v12h-2z"/></svg>
+        <svg class="ic" viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM4 6l10 6-10 6z"/></svg>
       </button>
       <button id="btnShuffle" class="btn" title="Aleatorio">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M17 3h4v4h-2V5h-2a4 4 0 0 0-3.2 1.6L9.6 13A6 6 0 0 1 5 15H3v-2h2a4 4 0 0 0 3.2-1.6l4.2-6A6 6 0 0 1 17 3zm2 12h2v4h-4v-2h2v-2zM3 17v-2h2a6 6 0 0 0 4.8 2.4H13l2 2h-3.2A8 8 0 0 1 5 17H3z"/></svg>
+        <svg class="ic" viewBox="0 0 24 24"><path d="M17 3h4v4h-2V5h-2V3zM7 7l2 2 6-6H7v4zm10 10h2v-2h2v4h-4v-2zM7 17h8l-2-2H7v2zm12-8h-6l2 2h4v-2zM3 7h2v10H3z"/></svg>
       </button>
     </div>
-
     <div class="progress-container">
-      <input id="seek" type="range" min="0" max="1000" value="0" class="seek-bar"/>
+      <input id="seek" class="seek-bar" type="range" min="0" max="1000" value="0" />
       <div class="time-info">
         <span id="cur">0:00</span>
         <span id="dur">0:00</span>
       </div>
     </div>
-
     <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
   </section>
 
-  <!-- Modal Favoritos -->
-  <div id="favModal" class="modal">
+  <!-- ===== Modal Favoritos (pantalla completa, fijo) ===== -->
+  <div id="favModal" class="modal" aria-hidden="true">
     <div class="modal-content">
-      <div class="fav-hero">
-        <div class="fav-hero-blur" id="favHero"></div>
-        <div class="fav-hero-text">
-          <div class="muted">Tus favoritos</div>
-          <h2 id="favNowTitle">—</h2>
+      <div id="favHero" class="fav-hero">
+        <div class="hero-bar">
+          <div class="hero-left">
+            <div class="hero-sub">Tus favoritos</div>
+            <div id="favNowTitle" class="hero-title">—</div>
+          </div>
+          <button id="closeFav" class="close-btn" title="Cerrar">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+          </button>
         </div>
-        <button id="closeFav" class="close-x" aria-label="Cerrar">
-          <svg viewBox="0 0 24 24" class="ic"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
-        </button>
       </div>
 
-      <!-- Lista Favoritos -->
-      <section id="favList" class="playlist"></section>
+      <div class="fav-scroll">
+        <div id="favList" class="playlist"></div>
+      </div>
 
       <!-- FAB para volver a Búsqueda -->
-      <button id="fabBackToSearch" class="fab fab-alt" aria-label="Buscar">
-        <svg viewBox="0 0 24 24" class="ic"><path d="M21 20l-5.6-5.6a7 7 0 1 0-1.4 1.4L20 21l1-1zM4 10a6 6 0 1 1 12 0A6 6 0 0 1 4 10z"/></svg>
+      <button id="fabBackToSearch" class="fab fab-secondary" title="Búsqueda">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.5 21.5 20 15.5 14zM9.5 14C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       </button>
     </div>
   </div>
 
-  <!-- Contenedor para el iframe oculto -->
+  <!-- Iframe oculto para YouTube -->
   <div id="yt-holder"><div id="player"></div></div>
 
   <script src="script.js"></script>
