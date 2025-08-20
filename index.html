@@ -103,6 +103,130 @@
     background: var(--card);  
     border: 1px solid var(--border);  
     border-radius: 16px;  
+    overflow: hidden和大
+
+System: ¡Entendido! El objetivo es mantener la reproducción del video incluso cuando la pestaña pierde el foco, recargando el video con un retraso de 2 segundos al recuperar el foco para que se reanude desde el tiempo exacto donde se quedó, simulando una reproducción continua. Vamos a ajustar el código para implementar esto correctamente, teniendo en cuenta las restricciones del reproductor de YouTube y las observaciones que hiciste sobre el retraso.
+
+### Cambios necesarios
+1. **Agregar un retraso al recargar el video**:
+   - Cuando la pestaña recupera el foco, usaremos `setTimeout` para esperar 2 segundos antes de recargar el video con `loadVideoById`, utilizando el tiempo guardado (`lastTime`) y habilitando la reproducción automática.
+2. **Evitar la pausa automática**:
+   - Aunque YouTube pausa automáticamente los videos en segundo plano debido a restricciones del navegador y la plataforma, recargar el video al recuperar el foco con un retraso puede ayudar a simular continuidad.
+3. **Mejorar la lógica de `handleVisibilityChange`**:
+   - Guardaremos el tiempo actual del video cuando la pestaña pierde el foco.
+   - Al recuperar el foco, recargaremos el video después de 2 segundos desde el tiempo guardado, asegurando que se reproduzca automáticamente.
+4. **Manejo de estado**:
+   - Usaremos la variable `lastTime` para almacenar el tiempo del video y `wasPlaying` para verificar si el video estaba en reproducción antes de perder el foco.
+
+### Código corregido
+A continuación, te proporciono el código completo con las modificaciones necesarias. Los cambios principales están en la función `handleVisibilityChange` y en la gestión del estado para recargar el video con un retraso.
+
+```html
+<!doctype html>  
+<html lang="es">  
+<head>  
+<meta charset="utf-8" />  
+<meta name="viewport" content="width=device-width, initial-scale=1" />  
+<title>SanaveraYou — Reproductor simple</title>  
+<style>  
+  :root {  
+    --bg: #121212;  
+    --panel: #1e1e1e;  
+    --accent: #ff6d00;  
+    --accent-dark: #e65100;  
+    --txt: #f5f5f5;  
+    --muted: #a0a0a0;  
+    --card: #1a1a1a;  
+    --border: #2a2a2a;  
+    --shadow: rgba(0, 0, 0, 0.4);  
+  }  
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }  
+  body {  
+    font-family: system-ui, -apple-system, Roboto, sans-serif;  
+    background: linear-gradient(180deg, #0a0a0a, var(--bg) 30%);  
+    color: var(--txt);  
+    min-height: 100vh;  
+    display: flex;  
+    flex-direction: column;  
+  }  
+  
+  /* Header */  
+  header {  
+    padding: 16px;  
+    position: sticky;  
+    top: 0;  
+    z-index: 10;  
+    background: linear-gradient(180deg, rgba(18, 18, 18, 0.95), rgba(18, 18, 18, 0.8) 60%, transparent);  
+    border-bottom: 1px solid var(--border);  
+    backdrop-filter: blur(8px);  
+  }  
+  h1 {  
+    font-size: 20px;  
+    font-weight: 700;  
+    margin-bottom: 12px;  
+    letter-spacing: 0.3px;  
+  }  
+  .search {  
+    display: flex;  
+    align-items: center;  
+    gap: 10px;  
+    background: var(--card);  
+    border: 1px solid var(--border);  
+    border-radius: 12px;  
+    padding: 10px;  
+  }  
+  .search input {  
+    flex: 1;  
+    background: transparent;  
+    border: none;  
+    outline: none;  
+    color: var(--txt);  
+    font-size: 16px;  
+    padding: 6px;  
+  }  
+  .btn {  
+    appearance: none;  
+    border: 1px solid var(--border);  
+    background: var(--panel);  
+    color: var(--txt);  
+    padding: 10px 16px;  
+    border-radius: 12px;  
+    cursor: pointer;  
+    font-weight: 500;  
+    transition: all 0.2s ease;  
+    font-size: 14px;  
+    touch-action: manipulation;  
+  }  
+  .btn:hover { background: var(--accent); color: #000; }  
+  .btn:active { transform: scale(0.98); }  
+  .btn-accent {  
+    background: var(--accent);  
+    border-color: var(--accent-dark);  
+    color: #000;  
+    font-weight: 600;  
+  }  
+  
+  /* Main content */  
+  main {  
+    padding: 16px;  
+    max-width: 1200px;  
+    margin: 0 auto;  
+    flex: 1;  
+  }  
+  .results {  
+    display: grid;  
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));  
+    gap: 16px;  
+    margin-bottom: 100px;  
+  }  
+  @media (max-width: 600px) {  
+    .results { grid-template-columns: 1fr; }  
+  }  
+  .card {  
+    background: var(--card);  
+    border: 1px solid var(--border);  
+    border-radius: 16px;  
     overflow: hidden;  
     display: flex;  
     align-items: center;  
@@ -309,7 +433,7 @@
     <div class="p-controls">  
       <button id="btnPrev" class="icon" title="Anterior">⏮</button>  
       <button id="btnPlay" class="icon" title="Reproducir/Pausar">▶️</button>  
-      <button id="btnNext" class="icon" title="Siguiente">⏭</button> 
+      <button id="btnNext" class="icon" title="Siguiente">⏭</button>  
       <button id="btnFullscreen" class="icon" title="Pantalla completa">⤢</button>  
     </div>  
     <div class="seek">  
@@ -447,7 +571,11 @@ function playIndex(i, autoplay = false) {
   const it = items[i];  
   $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g, "%27")}')`;  
   $("#pTitle").textContent = it.title;  
-  ytPlayer.loadVideoById(it.id);  
+  ytPlayer.loadVideoById({  
+    videoId: it.id,  
+    startSeconds: 0,  
+    suggestedQuality: 'auto'  
+  });  
   ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
   if (!autoplay) { ytPlayer.pauseVideo(); }  
   renderResults();  
@@ -499,20 +627,26 @@ function toggleFullscreen() {
 }  
   
 /* ========= Handle visibility change ========= */  
+let reloadTimeout = null;  
 function handleVisibilityChange() {  
   if (!YT_READY || idx < 0 || !items[idx]) return;  
   if (document.visibilityState === "hidden" && wasPlaying) {  
     lastTime = ytPlayer.getCurrentTime() || 0; // Guardar el tiempo actual  
-    ytPlayer.pauseVideo(); // Pausar el video  
     $("#pausedNotice").classList.add("show");  
   } else if (document.visibilityState === "visible" && wasPlaying) {  
-    const it = items[idx];  
-    ytPlayer.loadVideoById({  
-      videoId: it.id,  
-      startSeconds: lastTime // Cargar el video desde el tiempo guardado  
-    });  
-    ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
-    $("#pausedNotice").classList.remove("show");  
+    // Limpiar cualquier timeout previo para evitar recargas múltiples  
+    clearTimeout(reloadTimeout);  
+    // Esperar 2 segundos antes de recargar el video  
+    reloadTimeout = setTimeout(() => {  
+      const it = items[idx];  
+      ytPlayer.loadVideoById({  
+        videoId: it.id,  
+        startSeconds: lastTime, // Cargar desde el tiempo guardado  
+        suggestedQuality: 'auto'  
+      });  
+      ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
+      $("#pausedNotice").classList.remove("show");  
+    }, 2000); // Retraso de 2 segundos  
   }  
 }  
   
