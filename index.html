@@ -1,72 +1,98 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SanaveraYou — Reproductor Musical</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SanaveraYou — Reproductor</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
 </head>
 <body>
+  <!-- Sprite de íconos SVG reutilizables -->
+  <svg width="0" height="0" style="position:absolute;visibility:hidden" aria-hidden="true">
+    <symbol id="ic-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20 15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
+    <symbol id="ic-prev" viewBox="0 0 24 24"><path d="M6 6h2v12H6zM9.5 12l9-6v12z"/></symbol>
+    <symbol id="ic-next" viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM5.5 18V6l9 6z"/></symbol>
+    <symbol id="ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+    <symbol id="ic-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></symbol>
+    <symbol id="ic-close" viewBox="0 0 24 24"><path d="M18.3 5.71L12 12.01l-6.29-6.3-1.41 1.42 6.29 6.29-6.29 6.29 1.41 1.41 6.29-6.29 6.29 6.29 1.41-1.41-6.29-6.29 6.29-6.29z"/></symbol>
+    <symbol id="ic-heart" viewBox="0 0 24 24"><path d="M12 21s-6.716-4.405-9.428-7.117C.606 11.917.5 9.3 2.1 7.7c1.6-1.6 4.3-1.6 5.9 0L12 11.7l4-4c1.6-1.6 4.3-1.6 5.9 0 1.6 1.6 1.5 4.2-.472 6.183C18.716 16.595 12 21 12 21z"/></symbol>
+    <symbol id="ic-heart-fill" viewBox="0 0 24 24"><path d="M12 21s-6.716-4.405-9.428-7.117C.606 11.917.5 9.3 2.1 7.7c1.6-1.6 4.3-1.6 5.9 0L12 11.7l4-4c1.6-1.6 4.3-1.6 5.9 0 1.6 1.6 1.5 4.2-.472 6.183C18.716 16.595 12 21 12 21z"/></symbol>
+    <symbol id="ic-list" viewBox="0 0 24 24"><path d="M4 10h11v2H4zm0-4h16v2H4zm0 8h16v2H4zm0 4h11v2H4z"/></symbol>
+    <symbol id="ic-grid" viewBox="0 0 24 24"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></symbol>
+    <symbol id="ic-full" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7zm0-4h3V8H5v5h2zm10 7h-3v2h5v-5h-2zm0-11V3h-5v2h3v3z"/></symbol>
+  </svg>
+
   <!-- Header -->
-  <header>
-    <div class="logo">
-      <img src="https://via.placeholder.com/40" alt="SanaveraYou Logo" id="logo">
+  <header class="header">
+    <div class="brand">
+      <!-- Reemplazá este src por tu logo -->
+      <img id="logo" src="https://dummyimage.com/36x36/ff6d00/000000.png&text=SY" alt="SanaveraYou" />
+      <h1>SanaveraYou</h1>
     </div>
-    <div class="search hide" id="searchTab">
-      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off">
+    <div class="search">
+      <span class="icon-24"><svg><use href="#ic-search"/></svg></span>
+      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off" />
       <button id="btnSearch" class="btn btn-accent">Buscar</button>
     </div>
   </header>
 
-  <!-- Main Content -->
+  <!-- Estado -->
   <main>
-    <div id="status" class="subtitle"></div>
-    <!-- Search Results -->
+    <div id="status" class="subtitle" style="margin:12px 2px 16px;"></div>
     <section id="results" class="results"></section>
-    <!-- Favorites Modal -->
-    <section id="favorites" class="favorites hide">
-      <div class="favorites-header">
-        <div id="favCover" class="fav-cover"></div>
-        <h2>Favoritos</h2>
-      </div>
-      <div id="favResults" class="results"></div>
-    </section>
   </main>
 
-  <!-- Player Dock -->
+  <!-- Player dock -->
   <div class="player">
     <div id="pCover" class="p-cover"></div>
     <div class="p-info">
-      <div id="pTitle" class="p-title">Elegí una canción para reproducir</div>
+      <div id="pTitle" class="p-title">Elegí un resultado para reproducir</div>
       <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
       <div id="pausedNotice" class="paused-notice">Reproducción pausada</div>
     </div>
-    <div class="p-controls">
-      <button id="btnPrev" class="icon prev" title="Anterior"></button>
-      <button id="btnPlay" class="icon play" title="Reproducir/Pausar"></button>
-      <button id="btnNext" class="icon next" title="Siguiente"></button>
-      <button id="btnFullscreen" class="icon fullscreen" title="Pantalla completa"></button>
-    </div>
+
     <div class="seek">
-      <input id="seek" type="range" min="0" max="1000" value="0">
+      <input id="seek" type="range" min="0" max="1000" value="0" />
     </div>
+
+    <div class="p-controls">
+      <button id="btnPrev" class="icon" title="Anterior" aria-label="Anterior"><svg><use href="#ic-prev"/></svg></button>
+      <button id="btnPlay" class="icon" title="Reproducir/Pausar" aria-label="Reproducir"><svg id="btnPlayIcon"><use href="#ic-play"/></svg></button>
+      <button id="btnNext" class="icon" title="Siguiente" aria-label="Siguiente"><svg><use href="#ic-next"/></svg></button>
+      <button id="btnFullscreen" class="icon" title="Pantalla completa" aria-label="Pantalla completa"><svg><use href="#ic-full"/></svg></button>
+    </div>
+
     <div class="vol">
-      <span class="vol-icon"></span>
-      <input id="vol" type="range" min="0" max="100" value="100">
+      <input id="vol" type="range" min="0" max="100" value="100" />
     </div>
   </div>
 
-  <!-- Floating Action Button -->
-  <button id="fab" class="fab">Favoritos</button>
+  <!-- FAB: alterna Búsqueda / Favoritos -->
+  <button id="fab" class="fab" title="Favoritos" aria-label="Abrir favoritos">
+    <svg id="fabIcon"><use href="#ic-list"/></svg>
+  </button>
 
-  <!-- Hidden YouTube Iframe -->
+  <!-- Modal de Favoritos -->
+  <div id="favsModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel">
+      <div class="fav-header">
+        <div id="favHeaderCover" class="fav-cover"></div>
+        <div class="fav-titles">
+          <div class="fav-caption">Tus favoritos</div>
+          <div class="fav-now" id="favNowTitle">—</div>
+        </div>
+        <button id="closeFavs" class="icon ghost" title="Cerrar" aria-label="Cerrar"><svg><use href="#ic-close"/></svg></button>
+      </div>
+
+      <div id="favList" class="fav-list"></div>
+    </div>
+  </div>
+
+  <!-- Hidden YouTube iframe (off-screen) -->
   <div id="yt-holder"><div id="player"></div></div>
 
-  <!-- Footer -->
-  <footer>
-    SanaveraYou &copy; 2025
-  </footer>
-
-  <script src="script.js"></script>
+  <footer class="footer">SanaveraYou &copy; 2025</footer>
 </body>
 </html>
