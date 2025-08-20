@@ -3,17 +3,34 @@ const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmtTime = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const uniq = a => [...new Set(a)];
-const esc = s => String(s||'').replace(/"/g,'&quot;');
+const esc  = s => String(s||'').replace(/"/g,'&quot;');
+
+/* Limpia ruido típico de títulos de videos */
+function cleanTitle(t){
+  if(!t) return "";
+  let s = " " + t + " ";
+  // elimina ( [ { … } ] ) si contienen palabras de video
+  s = s.replace(/[\[\(\{][^\]\)\}]*?(official|oficial|music\s*video|video\s*clip|videoclip|video|mv|lyric[s]?|lyrics|hd|4k)[^\]\)\}]*?[\]\)\}]/gi, " ");
+  // corta sufijos tipo " - Official Video..."
+  s = s.replace(/\s[-–|•]\s*(official|oficial|music\s*video|video\s*clip|videoclip|video|mv|lyric[s]?|lyrics|hd|4k)\b.*$/gi," ");
+  // tags sueltos
+  s = s.replace(/\b(official\s*video|video\s*oficial|music\s*video|videoclip|mv|lyrics?)\b/gi, " ");
+  // espacios sobrantes y separadores residuales
+  s = s.replace(/\s{2,}/g," ").replace(/\s[-–|•]\s*$/," ").trim();
+  return s;
+}
 
 /* ========= Estado ========= */
 let items=[], favs=[];
 let ctx={ source:'search', index:-1 }; // 'search' | 'favorites'
 let ytPlayer=null, YT_READY=false;
 let timeTimer=null, wasPlaying=false, lastTime=0, visReloadCooldown=false;
+let repeatMode='off';   // 'off' | 'all' | 'one'
+let shuffleOn=false;
 
-const FAVS_KEY='sy_favs_v2';
+const FAVS_KEY='sy_favs_v3';
 
-/* ========= Búsqueda ========= */
+/* ========= Búsqueda + sugerencia Google ========= */
 async function searchYouTube(q){
   setStatus("Buscando…", true);
   const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
@@ -24,15 +41,38 @@ async function searchYouTube(q){
   for(const id of ids){
     try{
       const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json());
-      out.push({ id, title: meta.title||`Video ${id}`, thumb: meta.thumbnail_url||`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"YouTube", url:`https://www.youtube.com/watch?v=${id}` });
+      out.push({ id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url||`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"Desconocido", url:`https://www.youtube.com/watch?v=${id}` });
     }catch{
-      out.push({ id, title:`Video ${id}`, thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube", url:`https://www.youtube.com/watch?v=${id}` });
+      out.push({ id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"Desconocido", url:`https://www.youtube.com/watch?v=${id}` });
     }
   }
   setStatus(`Resultados: ${out.length}`);
   return out;
 }
 function setStatus(t, loading=false){ const el=$("#status"); el.textContent=t||""; el.classList.toggle("loading",loading); }
+
+/* Google Suggest (1 sugerencia) */
+let sugTimer=null;
+const suggBox = $("#suggest");
+function showSuggest(text){
+  if(!text){ suggBox.classList.add('hide'); return; }
+  suggBox.textContent = text;
+  suggBox.classList.remove('hide');
+  suggBox.onclick = ()=>{ $("#q").value = text; suggBox.classList.add('hide'); $("#btnSearch").click(); };
+}
+$("#q").addEventListener("input", ()=>{
+  clearTimeout(sugTimer);
+  const val=$("#q").value.trim();
+  if(val.length<3){ showSuggest(""); return; }
+  sugTimer=setTimeout(async()=>{
+    try{
+      const url=`https://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(val)}`;
+      const res=await fetch(url).then(r=>r.json());
+      const s=(res[1]||[]).find(x=>String(x).toLowerCase().startsWith(val.toLowerCase()));
+      showSuggest(s && s.toLowerCase()!==val.toLowerCase() ? s : "");
+    }catch{ showSuggest(""); }
+  },180);
+});
 
 /* ========= Render búsqueda ========= */
 function renderResults(){
@@ -88,7 +128,6 @@ function renderFavs(){
     });
   }
 
-  // Hero de fondo y título
   const cur=getCurrentItem();
   const header=$("#favHeader");
   if(cur){
@@ -126,14 +165,22 @@ window.onYouTubeIframeAPIReady=function(){
 };
 function onYTState(e){
   if(e.data===YT.PlayerState.PLAYING){
-    startTimer(); switchPlayIcon(true); $("#pausedNotice").classList.remove("show"); wasPlaying=true;
-    $("#eqNow").classList.remove('hide');
+    startTimer(); switchPlayIcon(true); $("#pausedNotice").classList.remove("show"); wasPlaying=true; $("#eqNow").classList.remove('hide');
   }
   if(e.data===YT.PlayerState.PAUSED){
-    stopTimer(); switchPlayIcon(false); wasPlaying=false;
-    $("#eqNow").classList.add('hide');
+    stopTimer(); switchPlayIcon(false); wasPlaying=false; $("#eqNow").classList.add('hide');
   }
-  if(e.data===YT.PlayerState.ENDED){ stopTimer(); next(); }
+  if(e.data===YT.PlayerState.ENDED){
+    stopTimer();
+    const list = getList(ctx.source);
+    if(repeatMode==='one'){ ytPlayer.seekTo(0,true); ytPlayer.playVideo(); return; }
+    if(shuffleOn && list.length>1){
+      let r; do{ r = Math.floor(Math.random()*list.length); }while(r===ctx.index);
+      playFrom(ctx.source, r, true); return;
+    }
+    if(ctx.index+1 < list.length){ next(); }
+    else if(repeatMode==='all' && list.length){ playFrom(ctx.source, 0, true); }
+  }
 }
 function switchPlayIcon(isPlaying){ $("#btnPlayIcon use").setAttribute('href', isPlaying?'#ic-pause':'#ic-play'); }
 
@@ -170,10 +217,7 @@ function startTimer(){
 }
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
 
-/* ========= Fullscreen ========= */
-function toggleFullscreen(){ if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); } else { document.exitFullscreen(); } }
-
-/* ========= Hack de foco ========= */
+/* ========= Hack de foco (recarga mismo video en el segundo actual) ========= */
 function handleVisibilityChange(){
   const curItem=getCurrentItem();
   if(!YT_READY || !curItem) return;
@@ -202,24 +246,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
     ctx.source='search'; ctx.index=-1;
     renderResults();
   });
-  $("#q").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#btnSearch").click(); });
+  $("#q").addEventListener("keydown", e=>{
+    if(e.key==="Enter"){ $("#btnSearch").click(); }
+  });
 
+  // Controles
   $("#btnPlay").onclick=togglePlay;
   $("#btnPrev").onclick=prev;
   $("#btnNext").onclick=next;
-  $("#btnFullscreen").onclick=toggleFullscreen;
   $("#seek").addEventListener("input", e=>{ const v=parseInt(e.target.value,10)/1000; seekToFrac(v); });
   $("#vol").addEventListener("input", e=>{ if(YT_READY) ytPlayer.setVolume(parseInt(e.target.value,10)); });
 
-  // FAB y modal
-  const favsModal=$("#favsModal"), fab=$("#fab"), fabIcon=$("#fabIcon"), closeFavs=$("#closeFavs");
-  function openFavs(){ document.body.classList.add('modal-open'); favsModal.classList.add('show'); fabIcon.setAttribute('href','#ic-grid'); fab.setAttribute('title','Búsqueda'); fab.setAttribute('aria-label','Ir a búsqueda'); renderFavs(); }
-  function closeFavsModal(){ document.body.classList.remove('modal-open'); favsModal.classList.remove('show'); fabIcon.setAttribute('href','#ic-list'); fab.setAttribute('title','Favoritos'); fab.setAttribute('aria-label','Abrir favoritos'); }
-  fab.addEventListener('click', ()=>{ favsModal.classList.contains('show') ? closeFavsModal() : openFavs(); });
-  $("#favsModal .modal-backdrop").addEventListener('click', closeFavsModal);
-  closeFavs.addEventListener('click', closeFavsModal);
+  // Repeat/Shuffle
+  $("#btnRepeat").addEventListener('click', ()=>{
+    repeatMode = (repeatMode==='off') ? 'all' : (repeatMode==='all') ? 'one' : 'off';
+    $("#btnRepeat").classList.toggle('active', repeatMode!=='off');
+    $("#btnRepeat").classList.toggle('repeat-one', repeatMode==='one');
+  });
+  $("#btnShuffle").addEventListener('click', ()=>{
+    shuffleOn = !shuffleOn;
+    $("#btnShuffle").classList.toggle('active', shuffleOn);
+  });
+
+  // FABs y modal
+  const favsModal=$("#favsModal");
+  const openFavs = ()=>{ document.body.classList.add('modal-open'); favsModal.classList.add('show'); renderFavs(); };
+  const closeFavs= ()=>{ document.body.classList.remove('modal-open'); favsModal.classList.remove('show'); };
+  $("#fabOpenFavs").addEventListener('click', openFavs);
+  $("#fabBackToSearch").addEventListener('click', closeFavs);
+  $("#closeFavs").addEventListener('click', closeFavs);
+  $("#favsModal .modal-backdrop").addEventListener('click', closeFavs);
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
-
   loadYTApi();
 });
