@@ -1,8 +1,4 @@
-/* =========================
-   SanaveraYou Pro - script.js
-   ========================= */
-
-/* Helpers */
+/* ========= Helpers ========= */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
@@ -12,13 +8,13 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ").trim();
 const eqHtml = () => `<span class="eq"><span></span><span></span><span></span></span>`;
 
-/* State */
+/* ========= State ========= */
 let searchItems = [];
 let searchItemsOriginal = [];
 let favItems = JSON.parse(localStorage.getItem('sana.favs') || '[]');
 let favOriginal = favItems.slice();
 
-let activeList = 'search'; // 'search' | 'fav'
+let activeList = 'search';
 let idx = -1;
 
 let ytPlayer = null;
@@ -30,9 +26,9 @@ let repeatMode = 'off'; // 'off' | 'all' | 'one'
 let shuffleOn = false;
 
 let suggValue = "";
-let playingId = null; // <-- ID de la canción que realmente suena
+let playingId = null;
 
-/* YouTube IFrame API */
+/* ========= YouTube IFrame API ========= */
 function loadYTApi(){
   if (window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
   const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
@@ -46,24 +42,23 @@ window.onYouTubeIframeAPIReady=function(){
 };
 function onYTState(e){
   if (e.data===YT.PlayerState.PLAYING){
-    startTimer(); $('#btnPlay').classList.add('playing'); wasPlaying=true;
+    startTimer(); $('#btnPlay').classList.add('playing'); wasPlaying=true; updateUI();
   }
   if (e.data===YT.PlayerState.PAUSED){
-    stopTimer(); $('#btnPlay').classList.remove('playing'); wasPlaying=false;
+    stopTimer(); $('#btnPlay').classList.remove('playing'); wasPlaying=false; updateUI();
   }
   if (e.data===YT.PlayerState.ENDED){
-    stopTimer();
+    stopTimer(); updateUI();
     if (repeatMode==='one'){ ytPlayer.seekTo(0,true); ytPlayer.playVideo(); return; }
     next();
   }
 }
 
-/* Search (sin API key) */
+/* ========= Search (no API key) ========= */
 async function searchYouTube(q){
   const endpoint=`https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html=await fetch(endpoint,{headers:{'Accept':'text/plain'}}).then(r=>r.text()).catch(()=>null);
   if(!html)return[];
-
   const ids=[...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m=>m[1]))].slice(0,30);
   const out=[];
   for(const id of ids){
@@ -77,30 +72,60 @@ async function searchYouTube(q){
   return out;
 }
 
-/* Google Suggest (1 sola) */
+/* ========= Google Suggest (YT) ========= */
 async function fetchSuggestion(q){
-  if(!q||q.length<2){ hideSugg(); return; }
+  if(!q || q.length<2){ hideSugg(); return; }
+
+  // 1) Intento con YouTube client (estructura [1][i][0])
+  const ytUrl = `https://r.jina.ai/http://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&q=${encodeURIComponent(q)}`;
   try{
-    const url=`https://r.jina.ai/http://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
-    const txt=await fetch(url,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
-    const data=JSON.parse(txt);
-    const s=(data && data[1] && data[1][0])? data[1][0] : '';
-    if(s){ suggValue=s; $('#useSuggestion').textContent=s; $('#suggestion').classList.remove('hide'); }
-    else hideSugg();
-  }catch{ hideSugg(); }
+    const txt = await fetch(ytUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
+    const data = JSON.parse(txt);
+    const arr = Array.isArray(data?.[1]) ? data[1] : [];
+    const first = Array.isArray(arr?.[0]) ? arr[0][0] : "";
+    if (first && typeof first === 'string'){
+      suggValue = first;
+      $('#useSuggestion').textContent = first;
+      $('#suggestion').classList.remove('hide');
+      return;
+    }
+  }catch{ /* seguimos al fallback */ }
+
+  // 2) Fallback a client=firefox (estructura [1][i])
+  try{
+    const ffUrl = `https://r.jina.ai/http://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
+    const txt = await fetch(ffUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
+    const data = JSON.parse(txt);
+    const first = (Array.isArray(data?.[1]) && typeof data[1][0]==='string') ? data[1][0] : "";
+    if(first){
+      suggValue = first;
+      $('#useSuggestion').textContent = first;
+      $('#suggestion').classList.remove('hide');
+      return;
+    }
+  }catch{}
+  hideSugg();
 }
 function hideSugg(){ suggValue=""; $('#suggestion').classList.add('hide'); }
 
-/* Render */
+/* ========= Render ========= */
+function isActuallyPlayingId(id){
+  try{ return id===playingId && ytPlayer && ytPlayer.getPlayerState()===YT.PlayerState.PLAYING; }
+  catch{ return false; }
+}
+
 function renderResults(){
   const root=$('#results'); root.innerHTML='';
   searchItems.forEach((it,i)=>{
-    const isPlaying = it.id === playingId;
     const card=document.createElement('div'); card.className='card';
+    const showEq = isActuallyPlayingId(it.id);
     card.innerHTML=`
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
-        <div class="title">${it.title}${isPlaying ? ' '+eqHtml() : ''}</div>
+        <div class="title">
+          <span class="t">${it.title}</span>
+          ${showEq ? eqHtml() : ''}
+        </div>
         <div class="subtitle">${it.author||''}</div>
       </div>
       <div class="actions">
@@ -127,12 +152,15 @@ function renderFavs(){
 
   const root=$('#favList'); root.innerHTML='';
   favItems.forEach((it,i)=>{
-    const isPlaying = it.id === playingId;
-    const row=document.createElement('div'); row.className=`playlist-item ${isPlaying?'active':''}`;
+    const showEq = isActuallyPlayingId(it.id);
+    const row=document.createElement('div'); row.className=`playlist-item ${showEq?'active':''}`;
     row.innerHTML=`
       <img src="${it.thumb}" alt="">
       <div class="info">
-        <h3>${it.title}${isPlaying ? ' '+eqHtml() : ''}</h3>
+        <h3>
+          <span class="t">${it.title}</span>
+          ${showEq ? eqHtml() : ''}
+        </h3>
         <p>${it.author||''}</p>
       </div>
       <button class="remove" title="Quitar">
@@ -149,7 +177,7 @@ function renderFavs(){
   });
 }
 
-/* Favoritos */
+/* ========= Favoritos ========= */
 function isFav(id){ return favItems.some(f=>f.id===id); }
 function toggleFav(it){
   if(isFav(it.id)) favItems=favItems.filter(f=>f.id!==it.id);
@@ -164,7 +192,7 @@ function removeFav(id){
   localStorage.setItem('sana.favs', JSON.stringify(favItems));
 }
 
-/* Playback */
+/* ========= Playback ========= */
 function getActiveArray(){ return activeList==='fav'? favItems : searchItems; }
 
 function playIndex(i,autoplay=false){
@@ -217,7 +245,7 @@ function startTimer(){
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
 function updateUI(){ renderResults(); if($('#favModal').classList.contains('show')) renderFavs(); }
 
-/* Repeat / Shuffle */
+/* ========= Repeat / Shuffle ========= */
 $('#btnRepeat').addEventListener('click',()=>{
   repeatMode = repeatMode==='off' ? 'all' : repeatMode==='all' ? 'one' : 'off';
   $('#btnRepeat').classList.toggle('active', repeatMode!=='off');
@@ -245,7 +273,7 @@ function shuffleArray(a){
   return arr;
 }
 
-/* Visibility hack (recarga mismo tiempo) */
+/* ========= Visibility hack ========= */
 document.addEventListener('visibilitychange',()=>{
   if(!ytPlayer||idx<0) return;
   if(document.visibilityState==='hidden' && wasPlaying){
@@ -256,7 +284,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-/* UI wiring */
+/* ========= UI wiring ========= */
 $('#q').addEventListener('input',e=>{ fetchSuggestion(e.target.value.trim()); });
 $('#q').addEventListener('keydown',e=>{
   if(e.key==='Enter'){
@@ -276,13 +304,13 @@ async function doSearch(q){
   $('#results-count').textContent=`Resultados: ${searchItems.length}`;
 }
 
-/* Controles */
+/* ========= Controles ========= */
 $('#btnPlay').addEventListener('click',togglePlay);
 $('#btnPrev').addEventListener('click',prev);
 $('#btnNext').addEventListener('click',next);
 $('#seek').addEventListener('input',e=>{ const v=parseInt(e.target.value,10)/1000; seekToFrac(v); });
 
-/* Modal Favoritos */
+/* ========= Modal Favoritos ========= */
 const favModal=$('#favModal');
 const controlsDock=$('#controlsDock');
 const favContent=$('.modal-content');
@@ -292,21 +320,21 @@ $('#fabBackToSearch').addEventListener('click',closeFavModal);
 $('#closeFav').addEventListener('click',closeFavModal);
 
 function openFavModal(){
-  favContent.appendChild(controlsDock);         // mueve la botonera al modal
+  favContent.appendChild(controlsDock);
   favModal.classList.add('show');
-  document.body.classList.add('modal-open');    // bloquea scroll de fondo
+  document.body.classList.add('modal-open');
   activeList='fav';
   renderFavs();
 }
 function closeFavModal(){
-  document.body.appendChild(controlsDock);      // vuelve al body (pantalla principal)
+  document.body.appendChild(controlsDock);
   favModal.classList.remove('show');
   document.body.classList.remove('modal-open');
   activeList='search';
   renderResults();
 }
 
-/* Init */
+/* ========= Init ========= */
 loadYTApi();
 renderResults();
 renderFavs();
