@@ -15,6 +15,8 @@
     --card: #1a1a1a;  
     --border: #2a2a2a;  
     --shadow: rgba(0, 0, 0, 0.4);  
+    --progress-bg: #4a4a4a;  
+    --progress-fill: #ff6d00;  
   }  
   
   * { box-sizing: border-box; margin: 0; padding: 0; }  
@@ -166,75 +168,131 @@
     padding: 12px 16px;  
     display: flex;  
     align-items: center;  
-    gap: 12px;  
-    box-shadow: 0 -2px 10px var(--shadow);  
+    gap: 16px;  
+    box-shadow: 0 -4px 12px var(--shadow);  
+    border-radius: 12px 12px 0 0;  
   }  
   .p-cover {  
-    width: 48px;  
-    height: 48px;  
+    width: 56px;  
+    height: 56px;  
     border-radius: 10px;  
     background: #000;  
     background-size: cover;  
     background-position: center;  
+    flex-shrink: 0;  
   }  
   .p-info {  
     flex: 1;  
     min-width: 0;  
     display: flex;  
     flex-direction: column;  
-    gap: 4px;  
+    gap: 6px;  
   }  
   .p-title {  
-    font-size: 15px;  
+    font-size: 16px;  
     font-weight: 600;  
     white-space: nowrap;  
     overflow: hidden;  
     text-overflow: ellipsis;  
   }  
   .p-time {  
-    font-size: 12px;  
+    font-size: 13px;  
     color: var(--muted);  
   }  
   .p-controls {  
     display: flex;  
     align-items: center;  
-    gap: 10px;  
+    gap: 12px;  
+    flex-shrink: 0;  
   }  
   .icon {  
-    width: 40px;  
-    height: 40px;  
-    border-radius: 12px;  
+    width: 44px;  
+    height: 44px;  
+    border-radius: 10px;  
     display: grid;  
     place-items: center;  
     border: 1px solid var(--border);  
     background: var(--card);  
+    color: var(--txt);  
     cursor: pointer;  
-    font-size: 18px;  
-    transition: all 0.2s ease;  
+    font-size: 20px;  
+    transition: all 0.3s ease;  
+    box-shadow: 0 2px 6px var(--shadow);  
   }  
-  .icon:hover { background: var(--accent); color: #000; }  
-  .icon:active { transform: scale(0.95); }  
+  .icon:hover {  
+    background: var(--accent);  
+    color: #000;  
+    transform: translateY(-2px);  
+    box-shadow: 0 4px 8px var(--shadow);  
+  }  
+  .icon:active {  
+    transform: scale(0.95);  
+    box-shadow: 0 2px 4px var(--shadow);  
+  }  
   .seek {  
-    flex: 1;  
+    flex: 2;  
     display: flex;  
     align-items: center;  
     gap: 10px;  
   }  
   input[type="range"] {  
+    -webkit-appearance: none;  
     width: 100%;  
-    accent-color: var(--accent);  
+    height: 6px;  
+    background: var(--progress-bg);  
+    border-radius: 3px;  
+    outline: none;  
     cursor: pointer;  
+  }  
+  input[type="range"]::-webkit-slider-thumb {  
+    -webkit-appearance: none;  
+    width: 16px;  
+    height: 16px;  
+    background: var(--progress-fill);  
+    border-radius: 50%;  
+    border: 2px solid var(--txt);  
+    box-shadow: 0 2px 4px var(--shadow);  
+    transition: all 0.2s ease;  
+  }  
+  input[type="range"]::-webkit-slider-thumb:hover {  
+    transform: scale(1.2);  
+  }  
+  input[type="range"]::-moz-range-thumb {  
+    width: 16px;  
+    height: 16px;  
+    background: var(--progress-fill);  
+    border-radius: 50%;  
+    border: 2px solid var(--txt);  
+    box-shadow: 0 2px 4px var(--shadow);  
+  }  
+  input[type="range"]::-moz-range-progress {  
+    background: var(--progress-fill);  
+    border-radius: 3px;  
   }  
   .vol {  
     display: flex;  
     align-items: center;  
     gap: 8px;  
-    min-width: 100px;  
+    min-width: 120px;  
+    flex-shrink: 0;  
+  }  
+  .vol input[type="range"] {  
+    height: 5px;  
+  }  
+  .vol input[type="range"]::-webkit-slider-thumb {  
+    width: 14px;  
+    height: 14px;  
+  }  
+  .vol input[type="range"]::-moz-range-thumb {  
+    width: 14px;  
+    height: 14px;  
   }  
   @media (max-width: 400px) {  
+    .player { gap: 10px; padding: 10px; }  
+    .p-cover { width: 48px; height: 48px; }  
     .vol { min-width: 80px; }  
     .p-controls { gap: 8px; }  
-    .icon { width: 36px; height: 36px; }  
+    .icon { width: 36px; height: 36px; font-size: 18px; }  
   }  
   .hide { display: none; }  
   
@@ -345,7 +403,6 @@ let ytPlayer = null;
 let timeTimer = null;  
 let wasPlaying = false;  
 let lastTime = 0; // Variable para almacenar el tiempo actual del video  
-let reloadTimeout = null; // Variable para manejar el timeout de recarga  
   
 /* ========= Search (no API key) ========= */  
 async function searchYouTube(q) {  
@@ -508,19 +565,15 @@ function handleVisibilityChange() {
   if (!YT_READY || idx < 0 || !items[idx]) return;  
   if (document.visibilityState === "hidden" && wasPlaying) {  
     lastTime = ytPlayer.getCurrentTime() || 0; // Guardar el tiempo actual  
-    clearTimeout(reloadTimeout); // Limpiar cualquier timeout previo  
-    reloadTimeout = setTimeout(() => {  
-      const it = items[idx];  
-      ytPlayer.loadVideoById({  
-        videoId: it.id,  
-        startSeconds: lastTime, // Cargar desde el tiempo guardado  
-        suggestedQuality: 'auto'  
-      });  
-      ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
-      $("#pausedNotice").classList.remove("show");  
-    }, 100); // Retraso de 2 segundos  
+    const it = items[idx];  
+    ytPlayer.loadVideoById({  
+      videoId: it.id,  
+      startSeconds: lastTime, // Cargar desde el tiempo guardado  
+      suggestedQuality: 'auto'  
+    });  
+    ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
+    $("#pausedNotice").classList.remove("show");  
   } else if (document.visibilityState === "visible") {  
-    // No hacer nada al recuperar el foco, ya que la recarga ya ocurrió  
     $("#pausedNotice").classList.remove("show");  
   }  
 }  
