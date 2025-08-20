@@ -518,7 +518,7 @@ function handleVisibilityChange() {
       });  
       ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
       $("#pausedNotice").classList.remove("show");  
-    }, 2000); // Retraso de 2 segundos  
+    }, 100); // Retraso de 2 segundos  
   } else if (document.visibilityState === "visible") {  
     // No hacer nada al recuperar el foco, ya que la recarga ya ocurrió  
     $("#pausedNotice").classList.remove("show");  
