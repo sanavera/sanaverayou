@@ -375,4 +375,3 @@ function closeFavModal() {
 loadYTApi();
 renderResults();
 renderFavs();
-```0
