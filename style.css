@@ -24,10 +24,6 @@ body.modal-open{position:fixed;width:100%;overflow:hidden}
 #q{flex:1;background:var(--tile);color:var(--text);border:2px solid transparent;border-radius:var(--border-radius);padding:12px 14px;font-size:15px;font-weight:500;outline:none;transition:.15s;box-shadow:var(--shadow-sm)}
 #q::placeholder{color:var(--muted);font-weight:400}
 #q:focus{border-color:var(--brand);background:var(--elev)}
-.sugg{margin-top:8px;position:relative;z-index:55}
-.sugg-btn{width:100%;text-align:left;padding:10px 12px;background:var(--tile);border:1px solid var(--line);border-radius:10px;color:var(--text);cursor:pointer;transition:.15s;font-weight:600}
-.sugg-btn:hover{background:var(--tile-hover)}
-.hide{display:none!important}
 .muted{margin-top:8px;color:var(--muted);font-weight:500}
 
 /* Resultados */
