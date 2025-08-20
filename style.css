@@ -21,6 +21,9 @@ body{margin:0;background:linear-gradient(135deg,var(--bg),#0a0b10);color:var(--t
 .muted{color:var(--muted)}
 .up{text-transform:uppercase;letter-spacing:.06em}
 
+/* Bloquear scroll del fondo al abrir modal */
+body.modal-open{overflow:hidden; position:fixed; inset:0; width:100%;}
+
 /* Topbar */
 .topbar{position:sticky;top:0;z-index:50;background:var(--elev);border-bottom:1px solid var(--line);padding:14px}
 .brand-compact{display:flex;align-items:center;gap:10px}
@@ -59,7 +62,7 @@ body{margin:0;background:linear-gradient(135deg,var(--bg),#0a0b10);color:var(--t
 
 /* Botonera común */
 .controls-section{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(22,24,33,.92);backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:14px var(--side-pad) 10px}
-.controls{display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:10px}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:8px}
 .btn{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--tile);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .btn-play{width:64px;height:64px;background:var(--brand);color:#0a0b10;border:none}
 .progress-container{width:100%}
@@ -67,12 +70,18 @@ body{margin:0;background:linear-gradient(135deg,var(--bg),#0a0b10);color:var(--t
 .seek-bar::-webkit-slider-thumb{appearance:none;width:16px;height:16px;border-radius:50%;background:var(--brand)}
 .time-info{display:flex;justify-content:space-between;color:var(--muted);padding:6px 2px 0}
 
+/* Crédito pequeño centrado */
+.footer-text{
+  text-align:center; font-size:11px; font-weight:600; color:var(--muted);
+  line-height:1.2; padding-top:6px; margin-bottom:calc(4px + env(safe-area-inset-bottom));
+}
+
 /* FABs */
 .fab{position:fixed;right:18px;bottom:96px;z-index:60;width:66px;height:66px;border-radius:18px;border:1px solid var(--line);background:#f35a63;color:#111;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);cursor:pointer}
 .fab-alt{bottom:180px}
 
-/* Favoritos */
-.modal{position:fixed;inset:0;background:rgba(14,15,19,.92);backdrop-filter:blur(8px);display:none;z-index:1000}
+/* Favoritos (modal fijo) */
+.modal{position:fixed;inset:0;background:rgba(14,15,19,.92);backdrop-filter:blur(8px);display:none;z-index:1000;overscroll-behavior:contain}
 .modal.show{display:block}
 .modal-content{position:relative;display:flex;flex-direction:column;min-height:100vh}
 .fav-hero{position:relative;aspect-ratio:16/9;max-height:42vh;background:#000;background-position:center;background-size:cover}
