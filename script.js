@@ -1,4 +1,4 @@
-/* ========== Helpers ========== */
+/* Helpers */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
@@ -8,7 +8,7 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ").trim();
 const eqHtml = () => `<span class="eq"><span></span><span></span><span></span></span>`;
 
-/* ========== State ========== */
+/* Estado */
 let searchItems = [];
 let searchItemsOriginal = [];
 let favItems = JSON.parse(localStorage.getItem('sana.favs') || '[]');
@@ -22,15 +22,15 @@ let timeTimer = null;
 let wasPlaying = false;
 let lastTime = 0;
 
-let repeatMode = 'off'; // off | all | one
-let shuffleOn = false;
+let repeatMode = 'off';   // off | all | one
+let shuffleOn  = false;
 
 let suggValue = "";
 let suggTimer = null;
 
 let playingId = null;
 
-/* ========== YouTube IFrame API (oculto) ========== */
+/* YouTube IFrame API oculto */
 function loadYTApi(){
   if (window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
   const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
@@ -44,19 +44,19 @@ window.onYouTubeIframeAPIReady=function(){
 };
 function onYTState(e){
   if (e.data===YT.PlayerState.PLAYING){
-    startTimer(); $('#btnPlay').classList.add('playing'); wasPlaying=true; updateUI();
+    startTimer(); $('#btnPlay').classList.add('playing'); wasPlaying=true; refreshIndicators();
   }
   if (e.data===YT.PlayerState.PAUSED){
-    stopTimer(); $('#btnPlay').classList.remove('playing'); wasPlaying=false; updateUI();
+    stopTimer(); $('#btnPlay').classList.remove('playing'); wasPlaying=false; refreshIndicators();
   }
   if (e.data===YT.PlayerState.ENDED){
-    stopTimer(); updateUI();
+    stopTimer(); refreshIndicators();
     if (repeatMode==='one'){ ytPlayer.seekTo(0,true); ytPlayer.playVideo(); return; }
     next();
   }
 }
 
-/* ========== Búsqueda (sin API key) ========== */
+/* Buscar (sin API key) */
 async function searchYouTube(q){
   const endpoint=`https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html=await fetch(endpoint,{headers:{'Accept':'text/plain'}}).then(r=>r.text()).catch(()=>null);
@@ -74,53 +74,53 @@ async function searchYouTube(q){
   return out;
 }
 
-/* ========== Sugerencias Google/YouTube ========== */
+/* Sugerencias (Google) + fallback */
 function parseYTSuggest(data){
-  // Formato client=youtube&hjson=t => ["query", [ [ "texto", ... ], ... ], ...]
   const arr = Array.isArray(data?.[1]) ? data[1] : null;
   if(!arr) return null;
   for(const it of arr){
     if(Array.isArray(it) && typeof it[0]==='string') return it[0];
-    if(typeof it==='string') return it; // por si acaso
+    if(typeof it==='string') return it;
   }
   return null;
 }
 async function fetchSuggestion(q){
   if(!q || q.length<2){ hideSugg(); return; }
 
-  // 1) YouTube client (https, proxied)
+  // 1) client=youtube (proxied, https)
   try{
-    const ytUrl = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&q=${encodeURIComponent(q)}`;
-    const txt = await fetch(ytUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
+    const u = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&q=${encodeURIComponent(q)}`;
+    const txt = await fetch(u,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
     const data = JSON.parse(txt);
     const first = parseYTSuggest(data);
-    if(first){
-      suggValue=first;
-      $('#useSuggestion').textContent=first;
-      $('#suggestion').classList.remove('hide');
-      return;
-    }
+    if(first){ showSugg(first); return; }
   }catch{}
 
-  // 2) Fallback: client=firefox => ["query", ["sug1","sug2",...], ...]
+  // 2) Fallback client=firefox (lista simple)
   try{
-    const ffUrl = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
-    const txt = await fetch(ffUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
+    const u = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
+    const txt = await fetch(u,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
     const data = JSON.parse(txt);
-    const first = (Array.isArray(data?.[1]) && typeof data[1][0]==='string') ? data[1][0] : "";
-    if(first){
-      suggValue=first;
-      $('#useSuggestion').textContent=first;
-      $('#suggestion').classList.remove('hide');
-      return;
-    }
+    const first = (Array.isArray(data?.[1]) && data[1][0]) ? data[1][0] : "";
+    if(first){ showSugg(first); return; }
+  }catch{}
+
+  // 3) Fallback duro: primera coincidencia de YouTube
+  try{
+    const items = await searchYouTube(q);
+    if(items[0]?.title){ showSugg(items[0].title); return; }
   }catch{}
 
   hideSugg();
 }
+function showSugg(text){
+  suggValue=text;
+  $('#useSuggestion').textContent=text;
+  $('#suggestion').classList.remove('hide');
+}
 function hideSugg(){ suggValue=""; $('#suggestion').classList.add('hide'); }
 
-/* ========== Render ========== */
+/* Render UI */
 function shouldShowEq(id){
   try{
     const st = ytPlayer?.getPlayerState?.();
@@ -130,8 +130,8 @@ function shouldShowEq(id){
 function renderResults(){
   const root=$('#results'); root.innerHTML='';
   searchItems.forEach((it,i)=>{
-    const card=document.createElement('div'); card.className='card';
     const showEq = shouldShowEq(it.id);
+    const card=document.createElement('div'); card.className='card';
     card.innerHTML=`
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
@@ -188,8 +188,31 @@ function renderFavs(){
     root.appendChild(row);
   });
 }
+function refreshIndicators(){
+  // resultados
+  const cards = $$('#results .card');
+  cards.forEach((card,i)=>{
+    const id = searchItems[i]?.id;
+    const titleEl = card.querySelector('.title');
+    const eq = titleEl.querySelector('.eq');
+    const want = shouldShowEq(id);
+    if(want && !eq) titleEl.insertAdjacentHTML('beforeend', eqHtml());
+    if(!want && eq) eq.remove();
+  });
+  // favoritos
+  const rows = $$('#favList .playlist-item');
+  rows.forEach((row,i)=>{
+    const id = favItems[i]?.id;
+    const titleEl = row.querySelector('h3');
+    const eq = titleEl.querySelector('.eq');
+    const want = shouldShowEq(id);
+    row.classList.toggle('active', want);
+    if(want && !eq) titleEl.insertAdjacentHTML('beforeend', eqHtml());
+    if(!want && eq) eq.remove();
+  });
+}
 
-/* ========== Favoritos ========== */
+/* Favoritos */
 function isFav(id){ return favItems.some(f=>f.id===id); }
 function toggleFav(it){
   if(isFav(it.id)) favItems=favItems.filter(f=>f.id!==it.id);
@@ -204,7 +227,7 @@ function removeFav(id){
   localStorage.setItem('sana.favs', JSON.stringify(favItems));
 }
 
-/* ========== Playback ========== */
+/* Reproducción */
 function getActiveArray(){ return activeList==='fav'? favItems : searchItems; }
 
 function playIndex(i,autoplay=false){
@@ -213,7 +236,7 @@ function playIndex(i,autoplay=false){
   const it=arr[i]; playingId = it.id;
   ytPlayer.loadVideoById({videoId:it.id,startSeconds:0,suggestedQuality:'auto'});
   if(autoplay){ try{ ytPlayer.playVideo(); wasPlaying=true; }catch{} } else ytPlayer.pauseVideo();
-  updateUI();
+  renderResults(); refreshIndicators();
 }
 function playFavIndex(i,autoplay=false){
   const arr=favItems; if(!arr[i]||!ytPlayer) return;
@@ -221,14 +244,14 @@ function playFavIndex(i,autoplay=false){
   const it=arr[i]; playingId = it.id;
   ytPlayer.loadVideoById({videoId:it.id,startSeconds:0,suggestedQuality:'auto'});
   if(autoplay){ try{ ytPlayer.playVideo(); wasPlaying=true; }catch{} } else ytPlayer.pauseVideo();
-  updateUI();
+  renderFavs(); refreshIndicators();
 }
 function togglePlay(){
   if(!ytPlayer) return;
   const st=ytPlayer.getPlayerState();
   if(st===YT.PlayerState.PLAYING){ ytPlayer.pauseVideo(); wasPlaying=false; }
   else { ytPlayer.playVideo(); wasPlaying=true; }
-  updateUI();
+  refreshIndicators();
 }
 function prev(){
   const arr=getActiveArray(); if(arr.length===0) return;
@@ -238,7 +261,7 @@ function prev(){
 function next(){
   const arr=getActiveArray(); if(arr.length===0) return;
   if(idx<arr.length-1) idx++;
-  else { if(repeatMode==='all') idx=0; else { ytPlayer.pauseVideo(); wasPlaying=false; updateUI(); return; } }
+  else { if(repeatMode==='all') idx=0; else { ytPlayer.pauseVideo(); wasPlaying=false; refreshIndicators(); return; } }
   activeList==='fav'? playFavIndex(idx,true) : playIndex(idx,true);
 }
 function seekToFrac(frac){
@@ -253,12 +276,12 @@ function startTimer(){
     $('#cur').textContent=fmt(cur);
     $('#dur').textContent=fmt(dur);
     $('#seek').value=dur? Math.floor((cur/dur)*1000) : 0;
+    refreshIndicators();
   },250);
 }
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
-function updateUI(){ renderResults(); if($('#favModal').classList.contains('show')) renderFavs(); }
 
-/* ========== Repeat / Shuffle ========== */
+/* Repeat / Shuffle */
 $('#btnRepeat').addEventListener('click',()=>{
   repeatMode = repeatMode==='off' ? 'all' : repeatMode==='all' ? 'one' : 'off';
   $('#btnRepeat').classList.toggle('active', repeatMode!=='off');
@@ -272,12 +295,12 @@ $('#btnShuffle').addEventListener('click',()=>{
     if(!shuffleOn){ searchItemsOriginal=searchItems.slice(); searchItems=shuffleArray(searchItems); shuffleOn=true; }
     else { searchItems=searchItemsOriginal.slice(); shuffleOn=false; }
     if(currentId) idx=Math.max(0, searchItems.findIndex(x=>x.id===currentId));
-    renderResults();
+    renderResults(); refreshIndicators();
   }else{
     if(!shuffleOn){ favOriginal=favItems.slice(); favItems=shuffleArray(favItems); shuffleOn=true; }
     else { favItems=favOriginal.slice(); shuffleOn=false; }
     if(currentId) idx=Math.max(0, favItems.findIndex(x=>x.id===currentId));
-    renderFavs();
+    renderFavs(); refreshIndicators();
   }
 });
 function shuffleArray(a){
@@ -286,7 +309,7 @@ function shuffleArray(a){
   return arr;
 }
 
-/* ========== Visibility hack (tu técnica) ========== */
+/* Hack de visibilidad (tu técnica) */
 document.addEventListener('visibilitychange',()=>{
   if(!ytPlayer||idx<0) return;
   if(document.visibilityState==='hidden' && wasPlaying){
@@ -298,7 +321,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-/* ========== UI wiring ========== */
+/* UI wiring */
 $('#q').addEventListener('input',e=>{
   const v=e.target.value.trim();
   clearTimeout(suggTimer);
@@ -343,14 +366,14 @@ function openFavModal(){
   favModal.classList.add('show');
   document.body.classList.add('modal-open');
   activeList='fav';
-  renderFavs();
+  renderFavs(); refreshIndicators();
 }
 function closeFavModal(){
   document.body.appendChild(controlsDock);
   favModal.classList.remove('show');
   document.body.classList.remove('modal-open');
   activeList='search';
-  renderResults();
+  renderResults(); refreshIndicators();
 }
 
 /* Init */
