@@ -1,5 +1,5 @@
-/* ========= Helpers ========= */
-const $ = s => document.querySelector(s);
+/* ========== Helpers ========== */
+const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const cleanTitle = t => (t||"")
@@ -8,7 +8,7 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ").trim();
 const eqHtml = () => `<span class="eq"><span></span><span></span><span></span></span>`;
 
-/* ========= State ========= */
+/* ========== State ========== */
 let searchItems = [];
 let searchItemsOriginal = [];
 let favItems = JSON.parse(localStorage.getItem('sana.favs') || '[]');
@@ -22,13 +22,15 @@ let timeTimer = null;
 let wasPlaying = false;
 let lastTime = 0;
 
-let repeatMode = 'off'; // 'off' | 'all' | 'one'
+let repeatMode = 'off'; // off | all | one
 let shuffleOn = false;
 
 let suggValue = "";
+let suggTimer = null;
+
 let playingId = null;
 
-/* ========= YouTube IFrame API ========= */
+/* ========== YouTube IFrame API (oculto) ========== */
 function loadYTApi(){
   if (window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
   const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
@@ -54,7 +56,7 @@ function onYTState(e){
   }
 }
 
-/* ========= Search (no API key) ========= */
+/* ========== Búsqueda (sin API key) ========== */
 async function searchYouTube(q){
   const endpoint=`https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html=await fetch(endpoint,{headers:{'Accept':'text/plain'}}).then(r=>r.text()).catch(()=>null);
@@ -72,53 +74,64 @@ async function searchYouTube(q){
   return out;
 }
 
-/* ========= Google Suggest (YT) ========= */
+/* ========== Sugerencias Google/YouTube ========== */
+function parseYTSuggest(data){
+  // Formato client=youtube&hjson=t => ["query", [ [ "texto", ... ], ... ], ...]
+  const arr = Array.isArray(data?.[1]) ? data[1] : null;
+  if(!arr) return null;
+  for(const it of arr){
+    if(Array.isArray(it) && typeof it[0]==='string') return it[0];
+    if(typeof it==='string') return it; // por si acaso
+  }
+  return null;
+}
 async function fetchSuggestion(q){
   if(!q || q.length<2){ hideSugg(); return; }
 
-  // 1) Intento con YouTube client (estructura [1][i][0])
-  const ytUrl = `https://r.jina.ai/http://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&q=${encodeURIComponent(q)}`;
+  // 1) YouTube client (https, proxied)
   try{
+    const ytUrl = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&q=${encodeURIComponent(q)}`;
     const txt = await fetch(ytUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
     const data = JSON.parse(txt);
-    const arr = Array.isArray(data?.[1]) ? data[1] : [];
-    const first = Array.isArray(arr?.[0]) ? arr[0][0] : "";
-    if (first && typeof first === 'string'){
-      suggValue = first;
-      $('#useSuggestion').textContent = first;
-      $('#suggestion').classList.remove('hide');
-      return;
-    }
-  }catch{ /* seguimos al fallback */ }
-
-  // 2) Fallback a client=firefox (estructura [1][i])
-  try{
-    const ffUrl = `https://r.jina.ai/http://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
-    const txt = await fetch(ffUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
-    const data = JSON.parse(txt);
-    const first = (Array.isArray(data?.[1]) && typeof data[1][0]==='string') ? data[1][0] : "";
+    const first = parseYTSuggest(data);
     if(first){
-      suggValue = first;
-      $('#useSuggestion').textContent = first;
+      suggValue=first;
+      $('#useSuggestion').textContent=first;
       $('#suggestion').classList.remove('hide');
       return;
     }
   }catch{}
+
+  // 2) Fallback: client=firefox => ["query", ["sug1","sug2",...], ...]
+  try{
+    const ffUrl = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
+    const txt = await fetch(ffUrl,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
+    const data = JSON.parse(txt);
+    const first = (Array.isArray(data?.[1]) && typeof data[1][0]==='string') ? data[1][0] : "";
+    if(first){
+      suggValue=first;
+      $('#useSuggestion').textContent=first;
+      $('#suggestion').classList.remove('hide');
+      return;
+    }
+  }catch{}
+
   hideSugg();
 }
 function hideSugg(){ suggValue=""; $('#suggestion').classList.add('hide'); }
 
-/* ========= Render ========= */
-function isActuallyPlayingId(id){
-  try{ return id===playingId && ytPlayer && ytPlayer.getPlayerState()===YT.PlayerState.PLAYING; }
-  catch{ return false; }
+/* ========== Render ========== */
+function shouldShowEq(id){
+  try{
+    const st = ytPlayer?.getPlayerState?.();
+    return id===playingId && (wasPlaying || st===YT.PlayerState.PLAYING);
+  }catch{ return false; }
 }
-
 function renderResults(){
   const root=$('#results'); root.innerHTML='';
   searchItems.forEach((it,i)=>{
     const card=document.createElement('div'); card.className='card';
-    const showEq = isActuallyPlayingId(it.id);
+    const showEq = shouldShowEq(it.id);
     card.innerHTML=`
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
@@ -144,7 +157,6 @@ function renderResults(){
   });
   $('#results-count').textContent = searchItems.length ? `Resultados: ${searchItems.length}` : '';
 }
-
 function renderFavs(){
   const cur=(getActiveArray()[idx]||{});
   $('#favHero').style.backgroundImage=cur.thumb?`url('${cur.thumb.replace(/'/g,"%27")}')`:'none';
@@ -152,7 +164,7 @@ function renderFavs(){
 
   const root=$('#favList'); root.innerHTML='';
   favItems.forEach((it,i)=>{
-    const showEq = isActuallyPlayingId(it.id);
+    const showEq = shouldShowEq(it.id);
     const row=document.createElement('div'); row.className=`playlist-item ${showEq?'active':''}`;
     row.innerHTML=`
       <img src="${it.thumb}" alt="">
@@ -177,7 +189,7 @@ function renderFavs(){
   });
 }
 
-/* ========= Favoritos ========= */
+/* ========== Favoritos ========== */
 function isFav(id){ return favItems.some(f=>f.id===id); }
 function toggleFav(it){
   if(isFav(it.id)) favItems=favItems.filter(f=>f.id!==it.id);
@@ -192,7 +204,7 @@ function removeFav(id){
   localStorage.setItem('sana.favs', JSON.stringify(favItems));
 }
 
-/* ========= Playback ========= */
+/* ========== Playback ========== */
 function getActiveArray(){ return activeList==='fav'? favItems : searchItems; }
 
 function playIndex(i,autoplay=false){
@@ -200,7 +212,7 @@ function playIndex(i,autoplay=false){
   idx=i; activeList='search';
   const it=arr[i]; playingId = it.id;
   ytPlayer.loadVideoById({videoId:it.id,startSeconds:0,suggestedQuality:'auto'});
-  if(!autoplay) ytPlayer.pauseVideo();
+  if(autoplay){ try{ ytPlayer.playVideo(); wasPlaying=true; }catch{} } else ytPlayer.pauseVideo();
   updateUI();
 }
 function playFavIndex(i,autoplay=false){
@@ -208,14 +220,15 @@ function playFavIndex(i,autoplay=false){
   idx=i; activeList='fav';
   const it=arr[i]; playingId = it.id;
   ytPlayer.loadVideoById({videoId:it.id,startSeconds:0,suggestedQuality:'auto'});
-  if(!autoplay) ytPlayer.pauseVideo();
+  if(autoplay){ try{ ytPlayer.playVideo(); wasPlaying=true; }catch{} } else ytPlayer.pauseVideo();
   updateUI();
 }
 function togglePlay(){
   if(!ytPlayer) return;
   const st=ytPlayer.getPlayerState();
-  if(st===YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
-  else ytPlayer.playVideo();
+  if(st===YT.PlayerState.PLAYING){ ytPlayer.pauseVideo(); wasPlaying=false; }
+  else { ytPlayer.playVideo(); wasPlaying=true; }
+  updateUI();
 }
 function prev(){
   const arr=getActiveArray(); if(arr.length===0) return;
@@ -225,7 +238,7 @@ function prev(){
 function next(){
   const arr=getActiveArray(); if(arr.length===0) return;
   if(idx<arr.length-1) idx++;
-  else { if(repeatMode==='all') idx=0; else { ytPlayer.pauseVideo(); return; } }
+  else { if(repeatMode==='all') idx=0; else { ytPlayer.pauseVideo(); wasPlaying=false; updateUI(); return; } }
   activeList==='fav'? playFavIndex(idx,true) : playIndex(idx,true);
 }
 function seekToFrac(frac){
@@ -245,7 +258,7 @@ function startTimer(){
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
 function updateUI(){ renderResults(); if($('#favModal').classList.contains('show')) renderFavs(); }
 
-/* ========= Repeat / Shuffle ========= */
+/* ========== Repeat / Shuffle ========== */
 $('#btnRepeat').addEventListener('click',()=>{
   repeatMode = repeatMode==='off' ? 'all' : repeatMode==='all' ? 'one' : 'off';
   $('#btnRepeat').classList.toggle('active', repeatMode!=='off');
@@ -273,7 +286,7 @@ function shuffleArray(a){
   return arr;
 }
 
-/* ========= Visibility hack ========= */
+/* ========== Visibility hack (tu técnica) ========== */
 document.addEventListener('visibilitychange',()=>{
   if(!ytPlayer||idx<0) return;
   if(document.visibilityState==='hidden' && wasPlaying){
@@ -281,11 +294,16 @@ document.addEventListener('visibilitychange',()=>{
     const arr=getActiveArray(); const it=arr[idx];
     playingId = it.id;
     ytPlayer.loadVideoById({videoId:it.id,startSeconds:lastTime,suggestedQuality:'auto'});
+    setTimeout(()=>{ try{ ytPlayer.playVideo(); }catch{} }, 0);
   }
 });
 
-/* ========= UI wiring ========= */
-$('#q').addEventListener('input',e=>{ fetchSuggestion(e.target.value.trim()); });
+/* ========== UI wiring ========== */
+$('#q').addEventListener('input',e=>{
+  const v=e.target.value.trim();
+  clearTimeout(suggTimer);
+  suggTimer=setTimeout(()=>fetchSuggestion(v),250);
+});
 $('#q').addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     const base=e.target.value.trim();
@@ -296,6 +314,7 @@ $('#q').addEventListener('keydown',e=>{
 $('#useSuggestion').addEventListener('click',()=>{
   const v=suggValue; if(!v) return; $('#q').value=v; hideSugg(); doSearch(v);
 });
+
 async function doSearch(q){
   hideSugg(); $('#results-count').textContent='Buscando…';
   searchItems=await searchYouTube(q);
@@ -304,13 +323,13 @@ async function doSearch(q){
   $('#results-count').textContent=`Resultados: ${searchItems.length}`;
 }
 
-/* ========= Controles ========= */
+/* Controles */
 $('#btnPlay').addEventListener('click',togglePlay);
 $('#btnPrev').addEventListener('click',prev);
 $('#btnNext').addEventListener('click',next);
 $('#seek').addEventListener('input',e=>{ const v=parseInt(e.target.value,10)/1000; seekToFrac(v); });
 
-/* ========= Modal Favoritos ========= */
+/* Modal Favoritos */
 const favModal=$('#favModal');
 const controlsDock=$('#controlsDock');
 const favContent=$('.modal-content');
@@ -334,7 +353,7 @@ function closeFavModal(){
   renderResults();
 }
 
-/* ========= Init ========= */
+/* Init */
 loadYTApi();
 renderResults();
 renderFavs();
