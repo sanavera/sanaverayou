@@ -3,17 +3,15 @@ const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmtTime = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const uniq = a => [...new Set(a)];
-const escapeAttr = s => String(s||'').replace(/"/g,'&quot;');
+const esc = s => String(s||'').replace(/"/g,'&quot;');
 
 /* ========= Estado ========= */
-let items = [];
-let favs  = [];
-let ctx   = { source:'search', index:-1 }; // 'search' | 'favorites'
+let items=[], favs=[];
+let ctx={ source:'search', index:-1 }; // 'search' | 'favorites'
 let ytPlayer=null, YT_READY=false;
-let timeTimer=null, wasPlaying=false, lastTime=0;
-let visReloadCooldown=false;
+let timeTimer=null, wasPlaying=false, lastTime=0, visReloadCooldown=false;
 
-const FAVS_KEY='sy_favs_v1';
+const FAVS_KEY='sy_favs_v2';
 
 /* ========= Búsqueda ========= */
 async function searchYouTube(q){
@@ -40,13 +38,13 @@ function setStatus(t, loading=false){ const el=$("#status"); el.textContent=t||"
 function renderResults(){
   const root=$("#results"); root.innerHTML="";
   items.forEach((it,i)=>{
+    const isCurrent = (ctx.source==='search' && ctx.index===i);
     const card=document.createElement("div");
-    card.className="card";
-    if(ctx.source==='search' && ctx.index===i) card.classList.add("active-card");
+    card.className="card" + (isCurrent ? " active-card" : "");
     card.innerHTML=`
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
-        <div class="title" title="${escapeAttr(it.title)}">${it.title}</div>
+        <div class="title">${isCurrent?'<span class="eq"><span></span><span></span><span></span></span>':''}${esc(it.title)}</div>
         <div class="subtitle">${it.author||""}</div>
       </div>
       <button class="heart ${isFav(it.id)?'active':''}" title="${isFav(it.id)?'Quitar de favoritos':'Agregar a favoritos'}" aria-label="Favorito">
@@ -60,28 +58,25 @@ function renderResults(){
   });
 }
 
-/* ========= Render favoritos (fullscreen) ========= */
+/* ========= Render favoritos ========= */
 function renderFavs(){
-  const box=$("#favList"); box.innerHTML="";
+  const list=$("#favList"); list.innerHTML="";
   if(!favs.length){
-    const empty=document.createElement('div');
-    empty.className="subtitle"; empty.style.padding="18px";
+    const empty=document.createElement('div'); empty.className="subtitle"; empty.style.padding="18px";
     empty.textContent="Aún no tenés favoritos. Agregá con el corazón desde Búsqueda.";
-    box.appendChild(empty);
+    list.appendChild(empty);
   }else{
     favs.forEach((it,i)=>{
+      const isCurrent = (ctx.source==='favorites' && ctx.index===i);
       const row=document.createElement('div');
-      row.className="fav-row";
-      if(ctx.source==='favorites' && ctx.index===i) row.classList.add('is-current');
+      row.className="fav-row"+(isCurrent?' is-current':'');
       row.innerHTML=`
         <div class="fav-thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
         <div class="fav-meta">
-          <div class="fav-title" title="${escapeAttr(it.title)}">${it.title}</div>
+          <div class="fav-title">${isCurrent?'<span class="eq"><span></span><span></span><span></span></span>':''}${esc(it.title)}</div>
           <div class="fav-sub">${it.author||""}</div>
         </div>
-        <div class="fav-actions">
-          <button class="btn-x" title="Quitar" aria-label="Quitar"><svg><use href="#ic-close"/></svg></button>
-        </div>`;
+        <div class="fav-actions"><button class="btn-x" title="Quitar"><svg><use href="#ic-close"/></svg></button></div>`;
       row.addEventListener('click',e=>{
         if(e.target.closest('.btn-x')) return;
         playFrom('favorites',i,true);
@@ -89,13 +84,13 @@ function renderFavs(){
       row.querySelector('.btn-x').addEventListener('click',e=>{
         e.stopPropagation(); removeFav(it.id);
       });
-      box.appendChild(row);
+      list.appendChild(row);
     });
   }
 
-  // Hero (fondo de cabecera con la carátula del tema actual)
+  // Hero de fondo y título
   const cur=getCurrentItem();
-  const header=$(".fav-header");
+  const header=$("#favHeader");
   if(cur){
     header.style.backgroundImage = `linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.75)), url('${cur.thumb.replace(/'/g,"%27")}')`;
     $("#favNowTitle").textContent = cur.title;
@@ -130,9 +125,15 @@ window.onYouTubeIframeAPIReady=function(){
   });
 };
 function onYTState(e){
-  if(e.data===YT.PlayerState.PLAYING){ startTimer(); switchPlayIcon(true); $("#pausedNotice").classList.remove("show"); wasPlaying=true; }
-  if(e.data===YT.PlayerState.PAUSED){  stopTimer(); switchPlayIcon(false); wasPlaying=false; }
-  if(e.data===YT.PlayerState.ENDED){   stopTimer(); next(); }
+  if(e.data===YT.PlayerState.PLAYING){
+    startTimer(); switchPlayIcon(true); $("#pausedNotice").classList.remove("show"); wasPlaying=true;
+    $("#eqNow").classList.remove('hide');
+  }
+  if(e.data===YT.PlayerState.PAUSED){
+    stopTimer(); switchPlayIcon(false); wasPlaying=false;
+    $("#eqNow").classList.add('hide');
+  }
+  if(e.data===YT.PlayerState.ENDED){ stopTimer(); next(); }
 }
 function switchPlayIcon(isPlaying){ $("#btnPlayIcon use").setAttribute('href', isPlaying?'#ic-pause':'#ic-play'); }
 
@@ -169,10 +170,10 @@ function startTimer(){
 }
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
 
-/* ========= Fullscreen toggle ========= */
+/* ========= Fullscreen ========= */
 function toggleFullscreen(){ if(!document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); } else { document.exitFullscreen(); } }
 
-/* ========= Hack de foco: recargar mismo video en el segundo exacto ========= */
+/* ========= Hack de foco ========= */
 function handleVisibilityChange(){
   const curItem=getCurrentItem();
   if(!YT_READY || !curItem) return;
@@ -210,10 +211,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $("#seek").addEventListener("input", e=>{ const v=parseInt(e.target.value,10)/1000; seekToFrac(v); });
   $("#vol").addEventListener("input", e=>{ if(YT_READY) ytPlayer.setVolume(parseInt(e.target.value,10)); });
 
-  // FAB <-> Favoritos (modal fullscreen)
+  // FAB y modal
   const favsModal=$("#favsModal"), fab=$("#fab"), fabIcon=$("#fabIcon"), closeFavs=$("#closeFavs");
-  function openFavs(){ favsModal.classList.add('show'); fabIcon.setAttribute('href','#ic-grid'); fab.setAttribute('title','Búsqueda'); fab.setAttribute('aria-label','Ir a búsqueda'); renderFavs(); }
-  function closeFavsModal(){ favsModal.classList.remove('show'); fabIcon.setAttribute('href','#ic-list'); fab.setAttribute('title','Favoritos'); fab.setAttribute('aria-label','Abrir favoritos'); }
+  function openFavs(){ document.body.classList.add('modal-open'); favsModal.classList.add('show'); fabIcon.setAttribute('href','#ic-grid'); fab.setAttribute('title','Búsqueda'); fab.setAttribute('aria-label','Ir a búsqueda'); renderFavs(); }
+  function closeFavsModal(){ document.body.classList.remove('modal-open'); favsModal.classList.remove('show'); fabIcon.setAttribute('href','#ic-list'); fab.setAttribute('title','Favoritos'); fab.setAttribute('aria-label','Abrir favoritos'); }
   fab.addEventListener('click', ()=>{ favsModal.classList.contains('show') ? closeFavsModal() : openFavs(); });
   $("#favsModal .modal-backdrop").addEventListener('click', closeFavsModal);
   closeFavs.addEventListener('click', closeFavsModal);
