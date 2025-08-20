@@ -7,30 +7,31 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ===== Topbar (mini-logo + input, sin botón Buscar) ===== -->
+  <!-- Topbar -->
   <header class="topbar">
     <div class="search-row">
       <img id="brand-mini" src="logo-mini.png" alt="Logo" />
       <input id="q" type="text" autocomplete="off"
              placeholder="Buscar (ej: Amar Azul – Yo tomo)" />
     </div>
+    <!-- Sugerencia (una sola) -->
     <div id="suggestion" class="sugg hide">
       <button id="useSuggestion" class="sugg-btn"></button>
     </div>
     <div id="results-count" class="muted"></div>
   </header>
 
-  <!-- ===== Resultados ===== -->
+  <!-- Resultados -->
   <main id="main">
     <section id="results" class="results"></section>
   </main>
 
-  <!-- ===== FAB abrir Favoritos ===== -->
+  <!-- FAB Favoritos -->
   <button id="fabFavorites" class="fab" title="Favoritos">
     <svg viewBox="0 0 24 24" class="ic"><path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z"/></svg>
   </button>
 
-  <!-- ===== Dock de controles (se mueve al modal cuando se abre) ===== -->
+  <!-- Controles (se reubican dentro del modal al abrir) -->
   <section id="controlsDock" class="controls-section">
     <div class="controls">
       <button id="btnRepeat" class="btn" title="Repetir / Repetir 1">
@@ -60,7 +61,7 @@
     <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
   </section>
 
-  <!-- ===== Modal Favoritos (pantalla completa, fijo) ===== -->
+  <!-- Modal Favoritos -->
   <div id="favModal" class="modal" aria-hidden="true">
     <div class="modal-content">
       <div id="favHero" class="fav-hero">
@@ -79,14 +80,13 @@
         <div id="favList" class="playlist"></div>
       </div>
 
-      <!-- FAB para volver a Búsqueda -->
       <button id="fabBackToSearch" class="fab fab-secondary" title="Búsqueda">
         <svg class="ic" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.5 21.5 20 15.5 14zM9.5 14C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       </button>
     </div>
   </div>
 
-  <!-- Iframe oculto para YouTube (invisible y fuera de pantalla) -->
+  <!-- Iframe YouTube oculto -->
   <div id="yt-holder"><div id="player"></div></div>
 
   <script src="script.js"></script>
