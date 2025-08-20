@@ -10,6 +10,7 @@ const cleanTitle = t => (t||"")
   .replace(/\((official|video|videoclip|mv|lyric|audio|music|clip)[^)]+\)/ig,"")
   .replace(/\b(official|video|videoclip|mv|lyrics?|audio|music|clip|hd|4k)\b/ig,"")
   .replace(/\s{2,}/g," ").trim();
+const eqHtml = () => `<span class="eq"><span></span><span></span><span></span></span>`;
 
 /* State */
 let searchItems = [];
@@ -29,6 +30,7 @@ let repeatMode = 'off'; // 'off' | 'all' | 'one'
 let shuffleOn = false;
 
 let suggValue = "";
+let playingId = null; // <-- ID de la canción que realmente suena
 
 /* YouTube IFrame API */
 function loadYTApi(){
@@ -90,16 +92,15 @@ async function fetchSuggestion(q){
 function hideSugg(){ suggValue=""; $('#suggestion').classList.add('hide'); }
 
 /* Render */
-const eqHtml = () => `<span class="eq"><span></span><span></span><span></span></span>`;
-
 function renderResults(){
   const root=$('#results'); root.innerHTML='';
   searchItems.forEach((it,i)=>{
+    const isPlaying = it.id === playingId;
     const card=document.createElement('div'); card.className='card';
     card.innerHTML=`
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
-        <div class="title">${it.title}${activeList==='search'&&i===idx ? ' '+eqHtml() : ''}</div>
+        <div class="title">${it.title}${isPlaying ? ' '+eqHtml() : ''}</div>
         <div class="subtitle">${it.author||''}</div>
       </div>
       <div class="actions">
@@ -120,17 +121,18 @@ function renderResults(){
 }
 
 function renderFavs(){
-  const cur=getActiveArray()[idx]||{};
+  const cur=(getActiveArray()[idx]||{});
   $('#favHero').style.backgroundImage=cur.thumb?`url('${cur.thumb.replace(/'/g,"%27")}')`:'none';
   $('#favNowTitle').textContent=cur.title||'—';
 
   const root=$('#favList'); root.innerHTML='';
   favItems.forEach((it,i)=>{
-    const row=document.createElement('div'); row.className=`playlist-item ${activeList==='fav'&&i===idx?'active':''}`;
+    const isPlaying = it.id === playingId;
+    const row=document.createElement('div'); row.className=`playlist-item ${isPlaying?'active':''}`;
     row.innerHTML=`
       <img src="${it.thumb}" alt="">
       <div class="info">
-        <h3>${it.title}${activeList==='fav'&&i===idx ? ' '+eqHtml() : ''}</h3>
+        <h3>${it.title}${isPlaying ? ' '+eqHtml() : ''}</h3>
         <p>${it.author||''}</p>
       </div>
       <button class="remove" title="Quitar">
@@ -168,7 +170,7 @@ function getActiveArray(){ return activeList==='fav'? favItems : searchItems; }
 function playIndex(i,autoplay=false){
   const arr=searchItems; if(!arr[i]||!ytPlayer) return;
   idx=i; activeList='search';
-  const it=arr[i];
+  const it=arr[i]; playingId = it.id;
   ytPlayer.loadVideoById({videoId:it.id,startSeconds:0,suggestedQuality:'auto'});
   if(!autoplay) ytPlayer.pauseVideo();
   updateUI();
@@ -176,7 +178,7 @@ function playIndex(i,autoplay=false){
 function playFavIndex(i,autoplay=false){
   const arr=favItems; if(!arr[i]||!ytPlayer) return;
   idx=i; activeList='fav';
-  const it=arr[i];
+  const it=arr[i]; playingId = it.id;
   ytPlayer.loadVideoById({videoId:it.id,startSeconds:0,suggestedQuality:'auto'});
   if(!autoplay) ytPlayer.pauseVideo();
   updateUI();
@@ -223,17 +225,17 @@ $('#btnRepeat').addEventListener('click',()=>{
 });
 $('#btnShuffle').addEventListener('click',()=>{
   const listName = (activeList==='fav') ? 'fav' : 'search';
-  const current=getActiveArray()[idx]?.id;
+  const currentId=playingId;
 
   if(listName==='search'){
     if(!shuffleOn){ searchItemsOriginal=searchItems.slice(); searchItems=shuffleArray(searchItems); shuffleOn=true; }
     else { searchItems=searchItemsOriginal.slice(); shuffleOn=false; }
-    if(current) idx=searchItems.findIndex(x=>x.id===current);
+    if(currentId) idx=Math.max(0, searchItems.findIndex(x=>x.id===currentId));
     renderResults();
   }else{
     if(!shuffleOn){ favOriginal=favItems.slice(); favItems=shuffleArray(favItems); shuffleOn=true; }
     else { favItems=favOriginal.slice(); shuffleOn=false; }
-    if(current) idx=favItems.findIndex(x=>x.id===current);
+    if(currentId) idx=Math.max(0, favItems.findIndex(x=>x.id===currentId));
     renderFavs();
   }
 });
@@ -249,6 +251,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden' && wasPlaying){
     lastTime=ytPlayer.getCurrentTime?.()||0;
     const arr=getActiveArray(); const it=arr[idx];
+    playingId = it.id;
     ytPlayer.loadVideoById({videoId:it.id,startSeconds:lastTime,suggestedQuality:'auto'});
   }
 });
@@ -289,15 +292,14 @@ $('#fabBackToSearch').addEventListener('click',closeFavModal);
 $('#closeFav').addEventListener('click',closeFavModal);
 
 function openFavModal(){
-  // mover la botonera dentro del modal (queda siempre visible)
-  favContent.appendChild(controlsDock);
+  favContent.appendChild(controlsDock);         // mueve la botonera al modal
   favModal.classList.add('show');
-  document.body.classList.add('modal-open');
+  document.body.classList.add('modal-open');    // bloquea scroll de fondo
   activeList='fav';
   renderFavs();
 }
 function closeFavModal(){
-  document.body.appendChild(controlsDock);   // vuelve al body
+  document.body.appendChild(controlsDock);      // vuelve al body (pantalla principal)
   favModal.classList.remove('show');
   document.body.classList.remove('modal-open');
   activeList='search';
