@@ -1,613 +1,72 @@
-<!doctype html>  
-<html lang="es">  
-<head>  
-<meta charset="utf-8" />  
-<meta name="viewport" content="width=device-width, initial-scale=1" />  
-<title>SanaveraYou — Reproductor simple</title>  
-<style>  
-  :root {  
-    --bg: #121212;  
-    --panel: #1e1e1e;  
-    --accent: #ff6d00;  
-    --accent-dark: #e65100;  
-    --txt: #f5f5f5;  
-    --muted: #a0a0a0;  
-    --card: #1a1a1a;  
-    --border: #2a2a2a;  
-    --shadow: rgba(0, 0, 0, 0.4);  
-    --progress-bg: #4a4a4a;  
-    --progress-fill: #ff6d00;  
-  }  
-  
-  * { box-sizing: border-box; margin: 0; padding: 0; }  
-  body {  
-    font-family: system-ui, -apple-system, Roboto, sans-serif;  
-    background: linear-gradient(180deg, #0a0a0a, var(--bg) 30%);  
-    color: var(--txt);  
-    min-height: 100vh;  
-    display: flex;  
-    flex-direction: column;  
-  }  
-  
-  /* Header */  
-  header {  
-    padding: 16px;  
-    position: sticky;  
-    top: 0;  
-    z-index: 10;  
-    background: linear-gradient(180deg, rgba(18, 18, 18, 0.95), rgba(18, 18, 18, 0.8) 60%, transparent);  
-    border-bottom: 1px solid var(--border);  
-    backdrop-filter: blur(8px);  
-  }  
-  h1 {  
-    font-size: 20px;  
-    font-weight: 700;  
-    margin-bottom: 12px;  
-    letter-spacing: 0.3px;  
-  }  
-  .search {  
-    display: flex;  
-    align-items: center;  
-    gap: 10px;  
-    background: var(--card);  
-    border: 1px solid var(--border);  
-    border-radius: 12px;  
-    padding: 10px;  
-  }  
-  .search input {  
-    flex: 1;  
-    background: transparent;  
-    border: none;  
-    outline: none;  
-    color: var(--txt);  
-    font-size: 16px;  
-    padding: 6px;  
-  }  
-  .btn {  
-    appearance: none;  
-    border: 1px solid var(--border);  
-    background: var(--panel);  
-    color: var(--txt);  
-    padding: 10px 16px;  
-    border-radius: 12px;  
-    cursor: pointer;  
-    font-weight: 500;  
-    transition: all 0.2s ease;  
-    font-size: 14px;  
-    touch-action: manipulation;  
-  }  
-  .btn:hover { background: var(--accent); color: #000; }  
-  .btn:active { transform: scale(0.98); }  
-  .btn-accent {  
-    background: var(--accent);  
-    border-color: var(--accent-dark);  
-    color: #000;  
-    font-weight: 600;  
-  }  
-  
-  /* Main content */  
-  main {  
-    padding: 16px;  
-    max-width: 1200px;  
-    margin: 0 auto;  
-    flex: 1;  
-  }  
-  .results {  
-    display: grid;  
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));  
-    gap: 16px;  
-    margin-bottom: 100px;  
-  }  
-  @media (max-width: 600px) {  
-    .results { grid-template-columns: 1fr; }  
-  }  
-  .card {  
-    background: var(--card);  
-    border: 1px solid var(--border);  
-    border-radius: 16px;  
-    overflow: hidden;  
-    display: flex;  
-    align-items: center;  
-    gap: 12px;  
-    padding: 12px;  
-    cursor: pointer;  
-    transition: all 0.2s ease;  
-  }  
-  .card:hover {  
-    transform: translateY(-3px);  
-    box-shadow: 0 8px 20px var(--shadow);  
-  }  
-  .card:active { transform: scale(0.98); }  
-  .thumb {  
-    width: 64px;  
-    height: 64px;  
-    border-radius: 12px;  
-    background: #000;  
-    flex: 0 0 64px;  
-    background-size: cover;  
-    background-position: center;  
-  }  
-  .meta {  
-    display: flex;  
-    flex-direction: column;  
-    gap: 6px;  
-    min-width: 0;  
-  }  
-  .title {  
-    font-size: 15px;  
-    font-weight: 600;  
-    color: var(--txt);  
-    white-space: nowrap;  
-    overflow: hidden;  
-    text-overflow: ellipsis;  
-  }  
-  .subtitle {  
-    font-size: 13px;  
-    color: var(--muted);  
-  }  
-  .active {  
-    outline: 2px solid var(--accent);  
-    box-shadow: 0 0 10px var(--accent-dark);  
-    animation: pulse 1.5s infinite;  
-  }  
-  @keyframes pulse {  
-    0% { box-shadow: 0 0 10px var(--accent-dark); }  
-    50% { box-shadow: 0 0 15px var(--accent-dark); }  
-    100% { box-shadow: 0 0 10px var(--accent-dark); }  
-  }  
-  
-  /* Player dock */  
-  .player {  
-    position: fixed;  
-    bottom: 0;  
-    left: 0;  
-    right: 0;  
-    z-index: 10;  
-    background: var(--panel);  
-    border-top: 1px solid var(--border);  
-    padding: 12px 16px;  
-    display: flex;  
-    align-items: center;  
-    gap: 16px;  
-    box-shadow: 0 -4px 12px var(--shadow);  
-    border-radius: 12px 12px 0 0;  
-  }  
-  .p-cover {  
-    width: 56px;  
-    height: 56px;  
-    border-radius: 10px;  
-    background: #000;  
-    background-size: cover;  
-    background-position: center;  
-    flex-shrink: 0;  
-  }  
-  .p-info {  
-    flex: 1;  
-    min-width: 0;  
-    display: flex;  
-    flex-direction: column;  
-    gap: 6px;  
-  }  
-  .p-title {  
-    font-size: 16px;  
-    font-weight: 600;  
-    white-space: nowrap;  
-    overflow: hidden;  
-    text-overflow: ellipsis;  
-  }  
-  .p-time {  
-    font-size: 13px;  
-    color: var(--muted);  
-  }  
-  .p-controls {  
-    display: flex;  
-    align-items: center;  
-    gap: 12px;  
-    flex-shrink: 0;  
-  }  
-  .icon {  
-    width: 44px;  
-    height: 44px;  
-    border-radius: 10px;  
-    display: grid;  
-    place-items: center;  
-    border: 1px solid var(--border);  
-    background: var(--card);  
-    color: var(--txt);  
-    cursor: pointer;  
-    font-size: 20px;  
-    transition: all 0.3s ease;  
-    box-shadow: 0 2px 6px var(--shadow);  
-  }  
-  .icon:hover {  
-    background: var(--accent);  
-    color: #000;  
-    transform: translateY(-2px);  
-    box-shadow: 0 4px 8px var(--shadow);  
-  }  
-  .icon:active {  
-    transform: scale(0.95);  
-    box-shadow: 0 2px 4px var(--shadow);  
-  }  
-  .seek {  
-    flex: 2;  
-    display: flex;  
-    align-items: center;  
-    gap: 10px;  
-  }  
-  input[type="range"] {  
-    -webkit-appearance: none;  
-    width: 100%;  
-    height: 6px;  
-    background: var(--progress-bg);  
-    border-radius: 3px;  
-    outline: none;  
-    cursor: pointer;  
-  }  
-  input[type="range"]::-webkit-slider-thumb {  
-    -webkit-appearance: none;  
-    width: 16px;  
-    height: 16px;  
-    background: var(--progress-fill);  
-    border-radius: 50%;  
-    border: 2px solid var(--txt);  
-    box-shadow: 0 2px 4px var(--shadow);  
-    transition: all 0.2s ease;  
-  }  
-  input[type="range"]::-webkit-slider-thumb:hover {  
-    transform: scale(1.2);  
-  }  
-  input[type="range"]::-moz-range-thumb {  
-    width: 16px;  
-    height: 16px;  
-    background: var(--progress-fill);  
-    border-radius: 50%;  
-    border: 2px solid var(--txt);  
-    box-shadow: 0 2px 4px var(--shadow);  
-  }  
-  input[type="range"]::-moz-range-progress {  
-    background: var(--progress-fill);  
-    border-radius: 3px;  
-  }  
-  .vol {  
-    display: flex;  
-    align-items: center;  
-    gap: 8px;  
-    min-width: 120px;  
-    flex-shrink: 0;  
-  }  
-  .vol input[type="range"] {  
-    height: 5px;  
-  }  
-  .vol input[type="range"]::-webkit-slider-thumb {  
-    width: 14px;  
-    height: 14px;  
-  }  
-  .vol input[type="range"]::-moz-range-thumb {  
-    width: 14px;  
-    height: 14px;  
-  }  
-  @media (max-width: 400px) {  
-    .player { gap: 10px; padding: 10px; }  
-    .p-cover { width: 48px; height: 48px; }  
-    .vol { min-width: 80px; }  
-    .p-controls { gap: 8px; }  
-    .icon { width: 36px; height: 36px; font-size: 18px; }  
-  }  
-  .hide { display: none; }  
-  
-  /* Loading spinner */  
-  .loading::after {  
-    content: "⏳";  
-    display: inline-block;  
-    animation: spin 1s linear infinite;  
-    margin-left: 8px;  
-  }  
-  @keyframes spin {  
-    from { transform: rotate(0deg); }  
-    to { transform: rotate(360deg); }  
-  }  
-  
-  /* Paused notification */  
-  .paused-notice {  
-    position: absolute;  
-    top: 50%;  
-    left: 50%;  
-    transform: translate(-50%, -50%);  
-    background: rgba(0, 0, 0, 0.8);  
-    color: var(--txt);  
-    padding: 8px 16px;  
-    border-radius: 8px;  
-    font-size: 14px;  
-    display: none;  
-  }  
-  .paused-notice.show { display: block; }  
-  
-  /* Hidden YouTube player */  
-  #yt-holder {  
-    position: absolute;  
-    width: 1px;  
-    height: 1px;  
-    left: -9999px;  
-    top: -9999px;  
-    opacity: 0;  
-    pointer-events: none;  
-  }  
-  
-  footer {  
-    padding: 40px 16px;  
-    color: var(--muted);  
-    text-align: center;  
-    font-size: 14px;  
-  }  
-</style>  
-</head>  
-<body>  
-  <header>  
-    <h1>SanaveraYou — Buscá y reproducí</h1>  
-    <div class="search">  
-      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off" />  
-      <button id="btnSearch" class="btn btn-accent">Buscar</button>  
-    </div>  
-  </header>  
-  
-  <main>  
-    <div id="status" class="subtitle" style="margin: 12px 2px 16px;"></div>  
-    <section id="results" class="results"></section>  
-  </main>  
-  
-  <!-- Player (custom controls) -->  
-  <div class="player">  
-    <div id="pCover" class="p-cover"></div>  
-    <div class="p-info">  
-      <div id="pTitle" class="p-title">Elegí un resultado para reproducir</div>  
-      <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>  
-      <div id="pausedNotice" class="paused-notice">Reproducción pausada</div>  
-    </div>  
-    <div class="p-controls">  
-      <button id="btnPrev" class="icon" title="Anterior">⏮</button>  
-      <button id="btnPlay" class="icon" title="Reproducir/Pausar">▶️</button>  
-      <button id="btnNext" class="icon" title="Siguiente">⏭</button>  
-      <button id="btnFullscreen" class="icon" title="Pantalla completa">⤢</button>  
-    </div>  
-    <div class="seek">  
-      <input id="seek" type="range" min="0" max="1000" value="0" />  
-    </div>  
-    <div class="vol">  
-      🔊 <input id="vol" type="range" min="0" max="100" value="100" />  
-    </div>  
-  </div>  
-  
-  <!-- Hidden YouTube iframe -->  
-  <div id="yt-holder"><div id="player"></div></div>  
-  
-  <footer>  
-    SanaveraYou &copy; 2025  
-  </footer>  
-  
-<script>  
-/* ========= Utils ========= */  
-const $ = s => document.querySelector(s);  
-const $$ = s => Array.from(document.querySelectorAll(s));  
-const fmtTime = s => {  
-  s = Math.max(0, Math.floor(s || 0));  
-  const m = Math.floor(s / 60), ss = s % 60;  
-  return `${m}:${String(ss).padStart(2, '0')}`;  
-};  
-function uniq(a) { return [...new Set(a)]; }  
-  
-/* ========= State ========= */  
-let items = [];  
-let idx = -1;  
-let ytPlayer = null;  
-let timeTimer = null;  
-let wasPlaying = false;  
-let lastTime = 0; // Variable para almacenar el tiempo actual del video  
-  
-/* ========= Search (no API key) ========= */  
-async function searchYouTube(q) {  
-  setStatus("Buscando…", true);  
-  const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;  
-  const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => r.text()).catch(() => null);  
-  if (!html) { setStatus("Sin respuesta de YouTube"); return []; }  
-  
-  const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, 12);  
-  const out = [];  
-  for (const id of ids) {  
-    try {  
-      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r => r.json());  
-      out.push({  
-        id,  
-        title: meta.title || `Video ${id}`,  
-        thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,  
-        author: meta.author_name || "YouTube",  
-        url: `https://www.youtube.com/watch?v=${id}`  
-      });  
-    } catch (_) {  
-      out.push({  
-        id,  
-        title: `Video ${id}`,  
-        thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,  
-        author: "YouTube",  
-        url: `https://www.youtube.com/watch?v=${id}`  
-      });  
-    }  
-  }  
-  setStatus(`Resultados: ${out.length}`);  
-  return out;  
-}  
-  
-function setStatus(t, loading = false) {  
-  const statusEl = $("#status");  
-  statusEl.textContent = t || "";  
-  statusEl.classList.toggle("loading", loading);  
-}  
-  
-function renderResults() {  
-  const root = $("#results");  
-  root.innerHTML = "";  
-  items.forEach((it, i) => {  
-    const card = document.createElement("button");  
-    card.className = "card" + (i === idx ? " active" : "");  
-    card.innerHTML = `  
-      <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g, "%27")}')"></div>  
-      <div class="meta">  
-        <div class="title" title="${it.title.replace(/"/g, '&quot;')}">${it.title}</div>  
-        <div class="subtitle">${it.author || ""}</div>  
-      </div>`;  
-    card.onclick = () => { playIndex(i, true); };  
-    root.appendChild(card);  
-  });  
-}  
-  
-/* ========= YouTube IFrame API ========= */  
-let YT_READY = false;  
-function loadYTApi() {  
-  if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }  
-  const s = document.createElement("script");  
-  s.src = "https://www.youtube.com/iframe_api";  
-  document.head.appendChild(s);  
-}  
-window.onYouTubeIframeAPIReady = function () {  
-  ytPlayer = new YT.Player('player', {  
-    width: 300,  
-    height: 150,  
-    videoId: '',  
-    playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },  
-    events: {  
-      'onReady': () => { YT_READY = true; },  
-      'onStateChange': onYTState  
-    }  
-  });  
-};  
-function onYTState(e) {  
-  if (e.data === YT.PlayerState.PLAYING) {  
-    startTimer();  
-    $("#btnPlay").textContent = "⏸";  
-    $("#pausedNotice").classList.remove("show");  
-    wasPlaying = true;  
-  }  
-  if (e.data === YT.PlayerState.PAUSED) {  
-    stopTimer();  
-    $("#btnPlay").textContent = "▶️";  
-    wasPlaying = false;  
-  }  
-  if (e.data === YT.PlayerState.ENDED) {  
-    stopTimer();  
-    next();  
-  }  
-}  
-  
-/* ========= Playback controls ========= */  
-function playIndex(i, autoplay = false) {  
-  if (!YT_READY || !items[i]) return;  
-  idx = i;  
-  const it = items[i];  
-  $("#pCover").style.backgroundImage = `url('${it.thumb.replace(/'/g, "%27")}')`;  
-  $("#pTitle").textContent = it.title;  
-  ytPlayer.loadVideoById({  
-    videoId: it.id,  
-    startSeconds: 0,  
-    suggestedQuality: 'auto'  
-  });  
-  ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
-  if (!autoplay) { ytPlayer.pauseVideo(); }  
-  renderResults();  
-}  
-  
-function togglePlay() {  
-  if (!YT_READY) return;  
-  const st = ytPlayer.getPlayerState();  
-  if (st === YT.PlayerState.PLAYING) {  
-    ytPlayer.pauseVideo();  
-  } else {  
-    ytPlayer.playVideo();  
-  }  
-}  
-function prev() {  
-  if (idx > 0) { playIndex(idx - 1, true); }  
-}  
-function next() {  
-  if (idx + 1 < items.length) { playIndex(idx + 1, true); }  
-}  
-function seekToFrac(frac) {  
-  if (!YT_READY) return;  
-  const d = ytPlayer.getDuration() || 0;  
-  ytPlayer.seekTo(frac * d, true);  
-}  
-function startTimer() {  
-  stopTimer();  
-  timeTimer = setInterval(() => {  
-    if (!YT_READY) return;  
-    const cur = ytPlayer.getCurrentTime() || 0;  
-    const dur = ytPlayer.getDuration() || 0;  
-    $("#cur").textContent = fmtTime(cur);  
-    $("#dur").textContent = fmtTime(dur);  
-    $("#seek").value = dur ? Math.floor((cur / dur) * 1000) : 0;  
-  }, 250);  
-}  
-function stopTimer() {  
-  clearInterval(timeTimer);  
-  timeTimer = null;  
-}  
-  
-/* ========= Fullscreen toggle ========= */  
-function toggleFullscreen() {  
-  if (!document.fullscreenElement) {  
-    document.documentElement.requestFullscreen().catch(err => console.error("Error al entrar en pantalla completa:", err));  
-  } else {  
-    document.exitFullscreen();  
-  }  
-}  
-  
-/* ========= Handle visibility change ========= */  
-function handleVisibilityChange() {  
-  if (!YT_READY || idx < 0 || !items[idx]) return;  
-  if (document.visibilityState === "hidden" && wasPlaying) {  
-    lastTime = ytPlayer.getCurrentTime() || 0; // Guardar el tiempo actual  
-    const it = items[idx];  
-    ytPlayer.loadVideoById({  
-      videoId: it.id,  
-      startSeconds: lastTime, // Cargar desde el tiempo guardado  
-      suggestedQuality: 'auto'  
-    });  
-    ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);  
-    $("#pausedNotice").classList.remove("show");  
-  } else if (document.visibilityState === "visible") {  
-    $("#pausedNotice").classList.remove("show");  
-  }  
-}  
-  
-/* ========= Wire UI ========= */  
-$("#btnSearch").addEventListener("click", async () => {  
-  const q = $("#q").value.trim();  
-  if (!q) return;  
-  setStatus("Buscando…", true);  
-  items = await searchYouTube(q);  
-  idx = -1;  
-  renderResults();  
-});  
-$("#q").addEventListener("keydown", e => {  
-  if (e.key === "Enter") { $("#btnSearch").click(); }  
-});  
-  
-$("#btnPlay").onclick = togglePlay;  
-$("#btnPrev").onclick = prev;  
-$("#btnNext").onclick = next;  
-$("#btnFullscreen").onclick = toggleFullscreen;  
-$("#seek").addEventListener("input", e => {  
-  const v = parseInt(e.target.value, 10) / 1000;  
-  seekToFrac(v);  
-});  
-$("#vol").addEventListener("input", e => {  
-  if (YT_READY) ytPlayer.setVolume(parseInt(e.target.value, 10));  
-});  
-  
-// Handle visibility changes  
-document.addEventListener("visibilitychange", handleVisibilityChange);  
-  
-// Init  
-loadYTApi();  
-</script>  
-</body>  
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SanaveraYou — Reproductor Musical</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <img src="https://via.placeholder.com/40" alt="SanaveraYou Logo" id="logo">
+    </div>
+    <div class="search hide" id="searchTab">
+      <input id="q" placeholder="Buscar en YouTube (ej: Amar Azul – Yo tomo)" autocomplete="off">
+      <button id="btnSearch" class="btn btn-accent">Buscar</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <div id="status" class="subtitle"></div>
+    <!-- Search Results -->
+    <section id="results" class="results"></section>
+    <!-- Favorites Modal -->
+    <section id="favorites" class="favorites hide">
+      <div class="favorites-header">
+        <div id="favCover" class="fav-cover"></div>
+        <h2>Favoritos</h2>
+      </div>
+      <div id="favResults" class="results"></div>
+    </section>
+  </main>
+
+  <!-- Player Dock -->
+  <div class="player">
+    <div id="pCover" class="p-cover"></div>
+    <div class="p-info">
+      <div id="pTitle" class="p-title">Elegí una canción para reproducir</div>
+      <div class="p-time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
+      <div id="pausedNotice" class="paused-notice">Reproducción pausada</div>
+    </div>
+    <div class="p-controls">
+      <button id="btnPrev" class="icon prev" title="Anterior"></button>
+      <button id="btnPlay" class="icon play" title="Reproducir/Pausar"></button>
+      <button id="btnNext" class="icon next" title="Siguiente"></button>
+      <button id="btnFullscreen" class="icon fullscreen" title="Pantalla completa"></button>
+    </div>
+    <div class="seek">
+      <input id="seek" type="range" min="0" max="1000" value="0">
+    </div>
+    <div class="vol">
+      <span class="vol-icon"></span>
+      <input id="vol" type="range" min="0" max="100" value="100">
+    </div>
+  </div>
+
+  <!-- Floating Action Button -->
+  <button id="fab" class="fab">Favoritos</button>
+
+  <!-- Hidden YouTube Iframe -->
+  <div id="yt-holder"><div id="player"></div></div>
+
+  <!-- Footer -->
+  <footer>
+    SanaveraYou &copy; 2025
+  </footer>
+
+  <script src="script.js"></script>
+</body>
 </html>
