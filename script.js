@@ -25,9 +25,6 @@ let lastTime = 0;
 let repeatMode = 'off';   // off | all | one
 let shuffleOn  = false;
 
-let suggValue = "";
-let suggTimer = null;
-
 let playingId = null;
 
 /* YouTube IFrame API oculto */
@@ -43,7 +40,8 @@ window.onYouTubeIframeAPIReady=function(){
   });
 };
 function onYTState(e){
-  if (e.data===YT.PlayerState.PLAYING){
+  // Consideramos PLAYING y BUFFERING como "activo" para la EQ
+  if (e.data===YT.PlayerState.PLAYING || e.data===YT.PlayerState.BUFFERING){
     startTimer(); $('#btnPlay').classList.add('playing'); wasPlaying=true; refreshIndicators();
   }
   if (e.data===YT.PlayerState.PAUSED){
@@ -74,57 +72,11 @@ async function searchYouTube(q){
   return out;
 }
 
-/* Sugerencias (Google) + fallback */
-function parseYTSuggest(data){
-  const arr = Array.isArray(data?.[1]) ? data[1] : null;
-  if(!arr) return null;
-  for(const it of arr){
-    if(Array.isArray(it) && typeof it[0]==='string') return it[0];
-    if(typeof it==='string') return it;
-  }
-  return null;
-}
-async function fetchSuggestion(q){
-  if(!q || q.length<2){ hideSugg(); return; }
-
-  // 1) client=youtube (proxied, https)
-  try{
-    const u = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&q=${encodeURIComponent(q)}`;
-    const txt = await fetch(u,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
-    const data = JSON.parse(txt);
-    const first = parseYTSuggest(data);
-    if(first){ showSugg(first); return; }
-  }catch{}
-
-  // 2) Fallback client=firefox (lista simple)
-  try{
-    const u = `https://r.jina.ai/https://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
-    const txt = await fetch(u,{headers:{'Accept':'text/plain'}}).then(r=>r.text());
-    const data = JSON.parse(txt);
-    const first = (Array.isArray(data?.[1]) && data[1][0]) ? data[1][0] : "";
-    if(first){ showSugg(first); return; }
-  }catch{}
-
-  // 3) Fallback duro: primera coincidencia de YouTube
-  try{
-    const items = await searchYouTube(q);
-    if(items[0]?.title){ showSugg(items[0].title); return; }
-  }catch{}
-
-  hideSugg();
-}
-function showSugg(text){
-  suggValue=text;
-  $('#useSuggestion').textContent=text;
-  $('#suggestion').classList.remove('hide');
-}
-function hideSugg(){ suggValue=""; $('#suggestion').classList.add('hide'); }
-
 /* Render UI */
 function shouldShowEq(id){
   try{
     const st = ytPlayer?.getPlayerState?.();
-    return id===playingId && (wasPlaying || st===YT.PlayerState.PLAYING);
+    return id===playingId && (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING || wasPlaying);
   }catch{ return false; }
 }
 function renderResults(){
@@ -276,7 +228,7 @@ function startTimer(){
     $('#cur').textContent=fmt(cur);
     $('#dur').textContent=fmt(dur);
     $('#seek').value=dur? Math.floor((cur/dur)*1000) : 0;
-    refreshIndicators();
+    refreshIndicators(); // mantiene viva la EQ
   },250);
 }
 function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
@@ -321,25 +273,16 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-/* UI wiring */
-$('#q').addEventListener('input',e=>{
-  const v=e.target.value.trim();
-  clearTimeout(suggTimer);
-  suggTimer=setTimeout(()=>fetchSuggestion(v),250);
-});
+/* Búsqueda: Enter dispara búsqueda */
 $('#q').addEventListener('keydown',e=>{
   if(e.key==='Enter'){
-    const base=e.target.value.trim();
-    const value=(suggValue && suggValue.toLowerCase().startsWith(base.toLowerCase()))?suggValue:base;
+    const value=e.target.value.trim();
     if(!value) return; doSearch(value);
   }
 });
-$('#useSuggestion').addEventListener('click',()=>{
-  const v=suggValue; if(!v) return; $('#q').value=v; hideSugg(); doSearch(v);
-});
 
 async function doSearch(q){
-  hideSugg(); $('#results-count').textContent='Buscando…';
+  $('#results-count').textContent='Buscando…';
   searchItems=await searchYouTube(q);
   searchItemsOriginal=searchItems.slice();
   idx=-1; activeList='search'; renderResults();
