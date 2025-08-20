@@ -1,282 +1,378 @@
-/* ========= Utils ========= */
-const $  = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
-const fmtTime = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
-const uniq = a => [...new Set(a)];
-const esc  = s => String(s||'').replace(/"/g,'&quot;');
+/* =========================
+   SanaveraYou Pro - script.js
+   ========================= */
 
-/* Limpia ruido típico de títulos de videos */
-function cleanTitle(t){
-  if(!t) return "";
-  let s = " " + t + " ";
-  // elimina ( [ { … } ] ) si contienen palabras de video
-  s = s.replace(/[\[\(\{][^\]\)\}]*?(official|oficial|music\s*video|video\s*clip|videoclip|video|mv|lyric[s]?|lyrics|hd|4k)[^\]\)\}]*?[\]\)\}]/gi, " ");
-  // corta sufijos tipo " - Official Video..."
-  s = s.replace(/\s[-–|•]\s*(official|oficial|music\s*video|video\s*clip|videoclip|video|mv|lyric[s]?|lyrics|hd|4k)\b.*$/gi," ");
-  // tags sueltos
-  s = s.replace(/\b(official\s*video|video\s*oficial|music\s*video|videoclip|mv|lyrics?)\b/gi, " ");
-  // espacios sobrantes y separadores residuales
-  s = s.replace(/\s{2,}/g," ").replace(/\s[-–|•]\s*$/," ").trim();
-  return s;
+/* ===== Helpers ===== */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = s => {
+  s = Math.max(0, Math.floor(s || 0));
+  const m = Math.floor(s / 60), ss = s % 60;
+  return `${m}:${String(ss).padStart(2, '0')}`;
+};
+const cleanTitle = t =>
+  (t || "")
+    .replace(/\((official|video|videoclip|mv|lyric|audio|music|clip)[^)]+\)/ig, "")
+    .replace(/\b(official|video|videoclip|mv|lyrics?|audio|music|clip|hd|4k)\b/ig, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+/* ===== State ===== */
+let searchItems = [];            // lista visible (búsqueda)
+let searchItemsOriginal = [];    // para restaurar después del shuffle
+let favItems = JSON.parse(localStorage.getItem('sana.favs') || '[]'); // {id,title,thumb,author}
+let favOriginal = favItems.slice();
+
+let activeList = 'search'; // 'search' | 'fav'
+let idx = -1;
+
+let ytPlayer = null;
+let timeTimer = null;
+let wasPlaying = false;
+let lastTime = 0;
+
+let repeatMode = 'off'; // 'off' | 'all' | 'one'
+let shuffleOn = false;
+
+let suggValue = ""; // sugerencia de Google (una)
+
+/* ===== YouTube IFrame API ===== */
+function loadYTApi() {
+  if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }
+  const s = document.createElement('script');
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
+}
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('player', {
+    width: 300, height: 150, videoId: '',
+    playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
+    events: { onReady: () => {}, onStateChange: onYTState }
+  });
+};
+function onYTState(e) {
+  if (e.data === YT.PlayerState.PLAYING) {
+    startTimer(); $('#btnPlay').classList.add('playing'); wasPlaying = true;
+  }
+  if (e.data === YT.PlayerState.PAUSED) {
+    stopTimer(); $('#btnPlay').classList.remove('playing'); wasPlaying = false;
+  }
+  if (e.data === YT.PlayerState.ENDED) {
+    stopTimer();
+    if (repeatMode === 'one') {
+      ytPlayer.seekTo(0, true); ytPlayer.playVideo(); return;
+    }
+    next();
+  }
 }
 
-/* ========= Estado ========= */
-let items=[], favs=[];
-let ctx={ source:'search', index:-1 }; // 'search' | 'favorites'
-let ytPlayer=null, YT_READY=false;
-let timeTimer=null, wasPlaying=false, lastTime=0, visReloadCooldown=false;
-let repeatMode='off';   // 'off' | 'all' | 'one'
-let shuffleOn=false;
-
-const FAVS_KEY='sy_favs_v3';
-
-/* ========= Búsqueda + sugerencia Google ========= */
-async function searchYouTube(q){
-  setStatus("Buscando…", true);
+/* ===== Search (no API key) ===== */
+async function searchYouTube(q) {
   const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-  const html = await fetch(endpoint,{headers:{'Accept':'text/plain'}}).then(r=>r.text()).catch(()=>null);
-  if(!html){ setStatus("Sin respuesta de YouTube"); return []; }
-  const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m=>m[1])).slice(0,24);
-  const out=[];
-  for(const id of ids){
-    try{
-      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json());
-      out.push({ id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url||`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"Desconocido", url:`https://www.youtube.com/watch?v=${id}` });
-    }catch{
-      out.push({ id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"Desconocido", url:`https://www.youtube.com/watch?v=${id}` });
+  const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } })
+    .then(r => r.text()).catch(() => null);
+  if (!html) return [];
+
+  const ids = Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]);
+  const uniq = [...new Set(ids)].slice(0, 30);
+
+  const out = [];
+  for (const id of uniq) {
+    try {
+      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+        .then(r => r.json());
+      out.push({
+        id,
+        title: cleanTitle(meta.title || `Video ${id}`),
+        thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+        author: meta.author_name || "—"
+      });
+    } catch {
+      out.push({
+        id,
+        title: `Video ${id}`,
+        thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+        author: "—"
+      });
     }
   }
-  setStatus(`Resultados: ${out.length}`);
   return out;
 }
-function setStatus(t, loading=false){ const el=$("#status"); el.textContent=t||""; el.classList.toggle("loading",loading); }
 
-/* Google Suggest (1 sugerencia) */
-let sugTimer=null;
-const suggBox = $("#suggest");
-function showSuggest(text){
-  if(!text){ suggBox.classList.add('hide'); return; }
-  suggBox.textContent = text;
-  suggBox.classList.remove('hide');
-  suggBox.onclick = ()=>{ $("#q").value = text; suggBox.classList.add('hide'); $("#btnSearch").click(); };
+/* ===== Google Suggest (1 sola) ===== */
+async function fetchSuggestion(q) {
+  if (!q || q.length < 2) { hideSugg(); return; }
+  try {
+    const url = `https://r.jina.ai/http://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(q)}`;
+    const txt = await fetch(url, { headers: { 'Accept': 'text/plain' } }).then(r => r.text());
+    const data = JSON.parse(txt); // [q, [sugs]]
+    const s = (data && data[1] && data[1][0]) ? data[1][0] : '';
+    if (s) {
+      suggValue = s;
+      $('#useSuggestion').textContent = s;
+      $('#suggestion').classList.remove('hide');
+    } else hideSugg();
+  } catch {
+    hideSugg();
+  }
 }
-$("#q").addEventListener("input", ()=>{
-  clearTimeout(sugTimer);
-  const val=$("#q").value.trim();
-  if(val.length<3){ showSuggest(""); return; }
-  sugTimer=setTimeout(async()=>{
-    try{
-      const url=`https://suggestqueries.google.com/complete/search?client=firefox&hl=es&q=${encodeURIComponent(val)}`;
-      const res=await fetch(url).then(r=>r.json());
-      const s=(res[1]||[]).find(x=>String(x).toLowerCase().startsWith(val.toLowerCase()));
-      showSuggest(s && s.toLowerCase()!==val.toLowerCase() ? s : "");
-    }catch{ showSuggest(""); }
-  },180);
-});
+function hideSugg() { suggValue = ""; $('#suggestion').classList.add('hide'); }
 
-/* ========= Render búsqueda ========= */
-function renderResults(){
-  const root=$("#results"); root.innerHTML="";
-  items.forEach((it,i)=>{
-    const isCurrent = (ctx.source==='search' && ctx.index===i);
-    const card=document.createElement("div");
-    card.className="card" + (isCurrent ? " active-card" : "");
-    card.innerHTML=`
+/* ===== Render ===== */
+const eqHtml = () => `<span class="eq"><span></span><span></span><span></span></span>`;
+
+function renderResults() {
+  const root = $('#results'); root.innerHTML = '';
+  searchItems.forEach((it, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
       <div class="thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
       <div class="meta">
-        <div class="title">${isCurrent?'<span class="eq"><span></span><span></span><span></span></span>':''}${esc(it.title)}</div>
-        <div class="subtitle">${it.author||""}</div>
+        <div class="title">${it.title}${activeList==='search' && i===idx ? ' ' + eqHtml() : ''}</div>
+        <div class="subtitle">${it.author || ''}</div>
       </div>
-      <button class="heart ${isFav(it.id)?'active':''}" title="${isFav(it.id)?'Quitar de favoritos':'Agregar a favoritos'}" aria-label="Favorito">
-        <svg><use href="${isFav(it.id)?'#ic-heart-fill':'#ic-heart'}"/></svg>
-      </button>`;
-    card.addEventListener('click',()=>playFrom('search',i,true));
-    card.querySelector('.heart').addEventListener('click',ev=>{
-      ev.stopPropagation(); toggleFav(it);
+      <div class="actions">
+        <button class="heart-btn ${isFav(it.id) ? 'active' : ''}" title="Favorito">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z"/></svg>
+        </button>
+      </div>`;
+    card.addEventListener('click', e => {
+      if (e.target.closest('.heart-btn')) return; // no reproducir si tocaron el corazón
+      activeList = 'search'; playIndex(i, true);
+    });
+    card.querySelector('.heart-btn').addEventListener('click', e => {
+      e.stopPropagation(); toggleFav(it); renderResults();
     });
     root.appendChild(card);
   });
+  $('#results-count').textContent = searchItems.length ? `Resultados: ${searchItems.length}` : '';
 }
 
-/* ========= Render favoritos ========= */
-function renderFavs(){
-  const list=$("#favList"); list.innerHTML="";
-  if(!favs.length){
-    const empty=document.createElement('div'); empty.className="subtitle"; empty.style.padding="18px";
-    empty.textContent="Aún no tenés favoritos. Agregá con el corazón desde Búsqueda.";
-    list.appendChild(empty);
-  }else{
-    favs.forEach((it,i)=>{
-      const isCurrent = (ctx.source==='favorites' && ctx.index===i);
-      const row=document.createElement('div');
-      row.className="fav-row"+(isCurrent?' is-current':'');
-      row.innerHTML=`
-        <div class="fav-thumb" style="background-image:url('${it.thumb.replace(/'/g,"%27")}')"></div>
-        <div class="fav-meta">
-          <div class="fav-title">${isCurrent?'<span class="eq"><span></span><span></span><span></span></span>':''}${esc(it.title)}</div>
-          <div class="fav-sub">${it.author||""}</div>
-        </div>
-        <div class="fav-actions"><button class="btn-x" title="Quitar"><svg><use href="#ic-close"/></svg></button></div>`;
-      row.addEventListener('click',e=>{
-        if(e.target.closest('.btn-x')) return;
-        playFrom('favorites',i,true);
-      });
-      row.querySelector('.btn-x').addEventListener('click',e=>{
-        e.stopPropagation(); removeFav(it.id);
-      });
-      list.appendChild(row);
+function renderFavs() {
+  const cur = getActiveArray()[idx] || {};
+  $('#favHero').style.backgroundImage = cur.thumb ? `url('${cur.thumb.replace(/'/g,"%27")}')` : 'none';
+  $('#favNowTitle').textContent = cur.title || '—';
+
+  const root = $('#favList'); root.innerHTML = '';
+  favItems.forEach((it, i) => {
+    const row = document.createElement('div');
+    row.className = `playlist-item ${activeList==='fav' && i===idx ? 'active' : ''}`;
+    row.innerHTML = `
+      <img src="${it.thumb}" alt="">
+      <div class="info">
+        <h3>${it.title}${activeList==='fav' && i===idx ? ' ' + eqHtml() : ''}</h3>
+        <p>${it.author || ''}</p>
+      </div>
+      <button class="remove" title="Quitar">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+      </button>`;
+    row.addEventListener('click', e => {
+      if (e.target.closest('.remove')) return;
+      activeList = 'fav'; playFavIndex(i, true);
     });
-  }
-
-  const cur=getCurrentItem();
-  const header=$("#favHeader");
-  if(cur){
-    header.style.backgroundImage = `linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.75)), url('${cur.thumb.replace(/'/g,"%27")}')`;
-    $("#favNowTitle").textContent = cur.title;
-  }else{
-    header.style.backgroundImage = "";
-    $("#favNowTitle").textContent = "—";
-  }
-}
-
-/* ========= Favoritos (localStorage) ========= */
-function loadFavs(){ try{return JSON.parse(localStorage.getItem(FAVS_KEY)||'[]')}catch{return[]} }
-function saveFavs(){ try{localStorage.setItem(FAVS_KEY, JSON.stringify(favs))}catch{} }
-function isFav(id){ return favs.some(f=>f.id===id); }
-function toggleFav(item){ isFav(item.id)?removeFav(item.id):addFav(item); }
-function addFav(item){ if(isFav(item.id))return; favs.push(item); saveFavs(); renderResults(); renderFavs(); }
-function removeFav(id){
-  favs=favs.filter(f=>f.id!==id); saveFavs();
-  if(ctx.source==='favorites' && ctx.index>=favs.length) ctx.index=favs.length-1;
-  renderResults(); renderFavs();
-}
-
-/* ========= YouTube IFrame ========= */
-function loadYTApi(){
-  if(window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
-  const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
-}
-window.onYouTubeIframeAPIReady=function(){
-  ytPlayer=new YT.Player('player',{
-    width:300,height:150,videoId:'',
-    playerVars:{autoplay:0,controls:0,rel:0,playsinline:1},
-    events:{'onReady':()=>{YT_READY=true},'onStateChange':onYTState}
+    row.querySelector('.remove').addEventListener('click', e => {
+      e.stopPropagation(); removeFav(it.id); renderFavs();
+    });
+    root.appendChild(row);
   });
-};
-function onYTState(e){
-  if(e.data===YT.PlayerState.PLAYING){
-    startTimer(); switchPlayIcon(true); $("#pausedNotice").classList.remove("show"); wasPlaying=true; $("#eqNow").classList.remove('hide');
-  }
-  if(e.data===YT.PlayerState.PAUSED){
-    stopTimer(); switchPlayIcon(false); wasPlaying=false; $("#eqNow").classList.add('hide');
-  }
-  if(e.data===YT.PlayerState.ENDED){
-    stopTimer();
-    const list = getList(ctx.source);
-    if(repeatMode==='one'){ ytPlayer.seekTo(0,true); ytPlayer.playVideo(); return; }
-    if(shuffleOn && list.length>1){
-      let r; do{ r = Math.floor(Math.random()*list.length); }while(r===ctx.index);
-      playFrom(ctx.source, r, true); return;
-    }
-    if(ctx.index+1 < list.length){ next(); }
-    else if(repeatMode==='all' && list.length){ playFrom(ctx.source, 0, true); }
-  }
 }
-function switchPlayIcon(isPlaying){ $("#btnPlayIcon use").setAttribute('href', isPlaying?'#ic-pause':'#ic-play'); }
 
-/* ========= Player Controls ========= */
-function getList(source){ return source==='favorites' ? favs : items; }
-function getCurrentItem(){ const list=getList(ctx.source); return (ctx.index>=0 && ctx.index<list.length) ? list[ctx.index] : null; }
-
-function playFrom(source,index,autoplay=true,startSeconds=0){
-  if(!YT_READY) return;
-  const list=getList(source); if(!list[index]) return;
-  ctx.source=source; ctx.index=index;
-
-  const it=list[index];
-  $("#pCover").style.backgroundImage=`url('${it.thumb.replace(/'/g,"%27")}')`;
-  $("#pTitle").textContent=it.title;
-
-  ytPlayer.loadVideoById({ videoId: it.id, startSeconds, suggestedQuality:'auto' });
-  ytPlayer.setVolume(parseInt($("#vol").value,10)||100);
-  if(!autoplay){ ytPlayer.pauseVideo(); }
-
-  renderResults(); renderFavs();
+/* ===== Favoritos (LS) ===== */
+function isFav(id) { return favItems.some(f => f.id === id); }
+function toggleFav(it) {
+  if (isFav(it.id)) favItems = favItems.filter(f => f.id !== it.id);
+  else favItems.push(it);
+  favOriginal = favItems.slice();
+  localStorage.setItem('sana.favs', JSON.stringify(favItems));
+  if ($('#favModal').classList.contains('show')) renderFavs();
 }
-function togglePlay(){ if(!YT_READY) return; const st=ytPlayer.getPlayerState(); (st===YT.PlayerState.PLAYING)?ytPlayer.pauseVideo():ytPlayer.playVideo(); }
-function prev(){ const list=getList(ctx.source); if(!list.length) return; const i=(ctx.index>0)?ctx.index-1:list.length-1; playFrom(ctx.source,i,true); }
-function next(){ const list=getList(ctx.source); if(!list.length) return; const i=(ctx.index+1)%list.length; playFrom(ctx.source,i,true); }
-function seekToFrac(frac){ if(!YT_READY) return; const d=ytPlayer.getDuration()||0; ytPlayer.seekTo(frac*d,true); }
-function startTimer(){
+function removeFav(id) {
+  favItems = favItems.filter(f => f.id !== id);
+  favOriginal = favItems.slice();
+  localStorage.setItem('sana.favs', JSON.stringify(favItems));
+}
+
+/* ===== Playback ===== */
+function getActiveArray() { return activeList === 'fav' ? favItems : searchItems; }
+
+function playIndex(i, autoplay = false) {
+  const arr = searchItems;
+  if (!arr[i] || !ytPlayer) return;
+  idx = i; activeList = 'search';
+  const it = arr[i];
+  ytPlayer.loadVideoById({ videoId: it.id, startSeconds: 0, suggestedQuality: 'auto' });
+  if (!autoplay) ytPlayer.pauseVideo();
+  updateUI();
+}
+function playFavIndex(i, autoplay = false) {
+  const arr = favItems;
+  if (!arr[i] || !ytPlayer) return;
+  idx = i; activeList = 'fav';
+  const it = arr[i];
+  ytPlayer.loadVideoById({ videoId: it.id, startSeconds: 0, suggestedQuality: 'auto' });
+  if (!autoplay) ytPlayer.pauseVideo();
+  updateUI();
+}
+function togglePlay() {
+  if (!ytPlayer) return;
+  const st = ytPlayer.getPlayerState();
+  if (st === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  else ytPlayer.playVideo();
+}
+function prev() {
+  const arr = getActiveArray(); if (arr.length === 0) return;
+  if (idx > 0) idx--; else idx = (repeatMode === 'all' ? arr.length - 1 : 0);
+  activeList === 'fav' ? playFavIndex(idx, true) : playIndex(idx, true);
+}
+function next() {
+  const arr = getActiveArray(); if (arr.length === 0) return;
+  if (idx < arr.length - 1) idx++;
+  else {
+    if (repeatMode === 'all') idx = 0;
+    else { ytPlayer.pauseVideo(); return; }
+  }
+  activeList === 'fav' ? playFavIndex(idx, true) : playIndex(idx, true);
+}
+function seekToFrac(frac) {
+  const d = ytPlayer?.getDuration?.() || 0;
+  ytPlayer?.seekTo?.(frac * d, true);
+}
+function startTimer() {
   stopTimer();
-  timeTimer=setInterval(()=>{ if(!YT_READY) return;
-    const cur=ytPlayer.getCurrentTime()||0, dur=ytPlayer.getDuration()||0;
-    $("#cur").textContent=fmtTime(cur); $("#dur").textContent=fmtTime(dur);
-    $("#seek").value = dur ? Math.floor((cur/dur)*1000) : 0;
-  },250);
+  timeTimer = setInterval(() => {
+    const cur = ytPlayer.getCurrentTime?.() || 0;
+    const dur = ytPlayer.getDuration?.() || 0;
+    $('#cur').textContent = fmt(cur);
+    $('#dur').textContent = fmt(dur);
+    $('#seek').value = dur ? Math.floor((cur / dur) * 1000) : 0;
+  }, 250);
 }
-function stopTimer(){ clearInterval(timeTimer); timeTimer=null; }
-
-/* ========= Hack de foco (recarga mismo video en el segundo actual) ========= */
-function handleVisibilityChange(){
-  const curItem=getCurrentItem();
-  if(!YT_READY || !curItem) return;
-
-  if(document.visibilityState==="hidden" && wasPlaying){
-    if(visReloadCooldown) return;
-    visReloadCooldown=true; setTimeout(()=>{visReloadCooldown=false},1500);
-
-    lastTime=ytPlayer.getCurrentTime()||0;
-    ytPlayer.loadVideoById({ videoId: curItem.id, startSeconds: lastTime, suggestedQuality:'auto' });
-    ytPlayer.setVolume(parseInt($("#vol").value,10)||100);
-    $("#pausedNotice").classList.remove("show");
-  }else if(document.visibilityState==="visible"){
-    $("#pausedNotice").classList.remove("show");
-  }
+function stopTimer() { clearInterval(timeTimer); timeTimer = null; }
+function updateUI() {
+  renderResults();
+  if ($('#favModal').classList.contains('show')) renderFavs();
 }
 
-/* ========= Wire UI ========= */
-document.addEventListener('DOMContentLoaded', ()=>{
-  favs=loadFavs(); renderFavs();
-
-  $("#btnSearch").addEventListener("click", async()=>{
-    const q=$("#q").value.trim(); if(!q) return;
-    setStatus("Buscando…", true);
-    items=await searchYouTube(q);
-    ctx.source='search'; ctx.index=-1;
-    renderResults();
-  });
-  $("#q").addEventListener("keydown", e=>{
-    if(e.key==="Enter"){ $("#btnSearch").click(); }
-  });
-
-  // Controles
-  $("#btnPlay").onclick=togglePlay;
-  $("#btnPrev").onclick=prev;
-  $("#btnNext").onclick=next;
-  $("#seek").addEventListener("input", e=>{ const v=parseInt(e.target.value,10)/1000; seekToFrac(v); });
-  $("#vol").addEventListener("input", e=>{ if(YT_READY) ytPlayer.setVolume(parseInt(e.target.value,10)); });
-
-  // Repeat/Shuffle
-  $("#btnRepeat").addEventListener('click', ()=>{
-    repeatMode = (repeatMode==='off') ? 'all' : (repeatMode==='all') ? 'one' : 'off';
-    $("#btnRepeat").classList.toggle('active', repeatMode!=='off');
-    $("#btnRepeat").classList.toggle('repeat-one', repeatMode==='one');
-  });
-  $("#btnShuffle").addEventListener('click', ()=>{
-    shuffleOn = !shuffleOn;
-    $("#btnShuffle").classList.toggle('active', shuffleOn);
-  });
-
-  // FABs y modal
-  const favsModal=$("#favsModal");
-  const openFavs = ()=>{ document.body.classList.add('modal-open'); favsModal.classList.add('show'); renderFavs(); };
-  const closeFavs= ()=>{ document.body.classList.remove('modal-open'); favsModal.classList.remove('show'); };
-  $("#fabOpenFavs").addEventListener('click', openFavs);
-  $("#fabBackToSearch").addEventListener('click', closeFavs);
-  $("#closeFavs").addEventListener('click', closeFavs);
-  $("#favsModal .modal-backdrop").addEventListener('click', closeFavs);
-
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-  loadYTApi();
+/* ===== Repeat / Shuffle ===== */
+$('#btnRepeat').addEventListener('click', () => {
+  repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
+  $('#btnRepeat').classList.toggle('active', repeatMode !== 'off');
+  if (repeatMode === 'one') $('#btnRepeat').classList.add('repeat-one');
+  else $('#btnRepeat').classList.remove('repeat-one');
 });
+
+$('#btnShuffle').addEventListener('click', () => {
+  const listName = (activeList === 'fav') ? 'fav' : 'search';
+  const current = getActiveArray()[idx]?.id;
+
+  if (listName === 'search') {
+    if (!shuffleOn) {
+      searchItemsOriginal = searchItems.slice();
+      searchItems = shuffleArray(searchItems);
+      shuffleOn = true;
+    } else {
+      searchItems = searchItemsOriginal.slice();
+      shuffleOn = false;
+    }
+    // reubicar idx para mantener el tema actual
+    if (current) idx = searchItems.findIndex(x => x.id === current);
+    renderResults();
+  } else {
+    if (!shuffleOn) {
+      favOriginal = favItems.slice();
+      favItems = shuffleArray(favItems);
+      shuffleOn = true;
+    } else {
+      favItems = favOriginal.slice();
+      shuffleOn = false;
+    }
+    if (current) idx = favItems.findIndex(x => x.id === current);
+    renderFavs();
+  }
+});
+function shuffleArray(a) {
+  const arr = a.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/* ===== Visibility hack: recarga en el mismo tiempo ===== */
+document.addEventListener('visibilitychange', () => {
+  if (!ytPlayer || idx < 0) return;
+  if (document.visibilityState === 'hidden' && wasPlaying) {
+    lastTime = ytPlayer.getCurrentTime?.() || 0;
+    const arr = getActiveArray();
+    const it = arr[idx];
+    // recarga inmediata en el mismo timestamp
+    ytPlayer.loadVideoById({ videoId: it.id, startSeconds: lastTime, suggestedQuality: 'auto' });
+  }
+});
+
+/* ===== UI wiring ===== */
+$('#q').addEventListener('input', (e) => { fetchSuggestion(e.target.value.trim()); });
+$('#q').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const base = e.target.value.trim();
+    const value = (suggValue && suggValue.toLowerCase().startsWith(base.toLowerCase())) ? suggValue : base;
+    if (!value) return;
+    doSearch(value);
+  }
+});
+$('#useSuggestion').addEventListener('click', () => {
+  const v = suggValue; if (!v) return;
+  $('#q').value = v; hideSugg(); doSearch(v);
+});
+
+async function doSearch(q) {
+  hideSugg();
+  $('#results-count').textContent = 'Buscando…';
+  searchItems = await searchYouTube(q);
+  searchItemsOriginal = searchItems.slice();
+  idx = -1; activeList = 'search';
+  renderResults();
+  $('#results-count').textContent = `Resultados: ${searchItems.length}`;
+}
+
+/* Controles */
+$('#btnPlay').addEventListener('click', togglePlay);
+$('#btnPrev').addEventListener('click', prev);
+$('#btnNext').addEventListener('click', next);
+$('#seek').addEventListener('input', e => {
+  const v = parseInt(e.target.value, 10) / 1000;
+  seekToFrac(v);
+});
+
+/* FABs + Modal Favoritos */
+const favModal = $('#favModal');
+const controlsDock = $('#controlsDock');
+const favContent = $('.modal-content');
+
+$('#fabFavorites').addEventListener('click', () => {
+  // mover la botonera dentro del modal para que siempre esté visible
+  favContent.appendChild(controlsDock);
+  favModal.classList.add('show');
+  document.body.classList.add('modal-open');
+  activeList = 'fav';
+  renderFavs();
+});
+$('#fabBackToSearch').addEventListener('click', closeFavModal);
+$('#closeFav').addEventListener('click', closeFavModal);
+
+function closeFavModal() {
+  // devolver botonera a la vista principal
+  document.body.appendChild(controlsDock);
+  favModal.classList.remove('show');
+  document.body.classList.remove('modal-open');
+  activeList = 'search';
+  renderResults();
+}
+
+/* ===== Init ===== */
+loadYTApi();
+renderResults();
+renderFavs();
+```0
