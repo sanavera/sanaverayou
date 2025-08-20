@@ -73,7 +73,6 @@ main{padding:16px; max-width:1200px; margin:0 auto; flex:1}
 .card .heart.active svg{fill:#000; stroke:#000}
 
 .active-card{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent-dark)}
-@keyframes pulse{0%{box-shadow:0 0 10px var(--accent-dark)} 50%{box-shadow:0 0 15px var(--accent-dark)} 100%{box-shadow:0 0 10px var(--accent-dark)}}
 
 /* Player dock */
 .player{
@@ -119,30 +118,43 @@ input[type="range"]::-moz-range-thumb{
 .fab:active{transform:scale(.97)}
 .fab svg{width:26px; height:26px; fill:#000}
 
-/* Modal Favoritos */
+/* Modal Favoritos — pantalla completa tipo app */
 .modal{position:fixed; inset:0; display:none; z-index:20}
 .modal.show{display:block}
-.modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.45)}
+.modal-backdrop{position:absolute; inset:0; background:#0b0b0b} /* fondo sólido como app */
 .modal-panel{
-  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:min(980px, 94vw); max-height:86vh; background:var(--panel); border:1px solid var(--border);
-  border-radius:18px; box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden; display:flex; flex-direction:column;
+  position:absolute; inset:0; width:100vw; height:100vh; transform:none;
+  max-height:none; background:var(--panel); border:0; border-radius:0;
+  display:flex; flex-direction:column; overflow:hidden;
 }
+/* Hero con fondo del álbum (full width) */
 .fav-header{
-  display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid var(--border);
-  background:linear-gradient(180deg,rgba(255,109,0,.15),transparent 80%);
+  position:relative; min-height:220px; padding:22px 18px; display:flex; align-items:flex-end;
+  background-size:cover; background-position:center;
 }
-.fav-cover{width:64px; height:64px; border-radius:12px; background:#000; background-size:cover; background-position:center; flex-shrink:0}
-.fav-titles{display:flex; flex-direction:column}
-.fav-caption{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px}
-.fav-now{font-size:16px; font-weight:800}
-.fav-list{overflow:auto; padding:8px 8px 12px}
+.fav-header::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.75) 70%);
+}
+.fav-cover{display:none} /* ya usamos el hero de fondo */
+.fav-titles{position:relative; z-index:1}
+.fav-caption{font-size:13px; color:#d8d8d8; text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.fav-now{font-size:22px; font-weight:800; text-shadow:0 3px 10px rgba(0,0,0,.7)}
+/* Lista estilo Spotify */
+.fav-list{overflow:auto; padding:10px 8px 18px; background:linear-gradient(180deg,rgba(0,0,0,.12),transparent), var(--panel)}
 .fav-row{
+  position:relative;
   display:grid; grid-template-columns:52px 1fr auto; align-items:center;
-  gap:12px; padding:10px; border-radius:12px; background:var(--card); border:1px solid var(--border);
+  gap:12px; padding:12px; border-radius:14px; background:var(--card); border:1px solid var(--border);
   margin:8px; cursor:pointer; transition:transform .12s ease, background .12s ease;
 }
 .fav-row:hover{transform:translateY(-2px)}
+.fav-row.is-current{
+  background:#18231a; border-color:#1ed76022;
+}
+.fav-row.is-current::before{
+  content:""; position:absolute; left:0; top:10px; bottom:10px; width:3px; background:#1ed760; border-radius:3px;
+}
 .fav-thumb{width:52px; height:52px; border-radius:10px; background-size:cover; background-position:center}
 .fav-meta{min-width:0}
 .fav-title{font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -160,3 +172,11 @@ input[type="range"]::-moz-range-thumb{
   background:rgba(0,0,0,.8); color:var(--txt); padding:8px 16px; border-radius:8px; font-size:14px; display:none;
 }
 .paused-notice.show{display:block}
+
+/* 🔒 Ocultar por completo el iframe de YouTube (evita que se vea al hacer scroll) */
+#yt-holder{
+  position:fixed !important;
+  width:0 !important; height:0 !important;
+  overflow:hidden !important; opacity:0 !important; pointer-events:none !important;
+  inset:auto !important; clip-path:inset(50%) !important; clip:rect(0 0 0 0) !important;
+}
