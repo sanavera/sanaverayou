@@ -32,6 +32,16 @@ body{
 /* Bloquea scroll del body cuando hay modal */
 body.modal-open{ position:fixed; width:100%; overflow:hidden; }
 
+/* ===== Ocultar por completo el iframe de YouTube ===== */
+#yt-holder,
+#yt-holder iframe,
+#yt-holder div{
+  position:absolute !important;
+  width:1px !important; height:1px !important;
+  left:-10000px !important; top:-10000px !important;
+  opacity:0 !important; pointer-events:none !important;
+}
+
 /* ===== Topbar ===== */
 .topbar{
   position:sticky; top:0; z-index:50;
