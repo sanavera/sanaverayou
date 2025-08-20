@@ -17,10 +17,6 @@
       margin: auto;
       padding: 10px;
     }
-    #status.loading {
-      font-style: italic;
-      color: gray;
-    }
     #results {
       display: flex;
       flex-direction: column;
@@ -93,7 +89,6 @@
     <h2>Buscador de música</h2>
     <input id="q" placeholder="Escribí tu mensaje o #Nombre de canción" style="width:70%">
     <button id="btnSearch">Buscar</button>
-    <div id="status"></div>
     <div id="results"></div>
 
     <div id="playerWrap">
@@ -108,9 +103,8 @@
         <span id="dur">0:00</span>
         <input type="range" id="seek" min="0" max="1000" value="0">
         <input type="range" id="vol" min="0" max="100" value="100">
-        <button id="btnFullscreen">⛶</button>
       </div>
-      <div id="pausedNotice">⏸ Pausado (fuera de foco)</div>
+      <div id="pausedNotice">⏸ Secuencia de fuera de foco activada</div>
     </div>
   </div>
 
@@ -126,40 +120,19 @@
   let idx = -1;
   let ytPlayer = null;
   let timeTimer = null;
-  let wasPlaying = false;
-  let forcePlayTimer = null;
-  let alreadySeeked = false; // ✅ flag para evitar múltiples seeks
-
-  function startForcePlay(){
-    stopForcePlay();
-    forcePlayTimer = setInterval(() => {
-      if (YT_READY && ytPlayer) {
-        try { ytPlayer.playVideo(); } catch(e){}
-      }
-    }, 500);
-  }
-  function stopForcePlay(){
-    if (forcePlayTimer){
-      clearInterval(forcePlayTimer);
-      forcePlayTimer = null;
-    }
-  }
+  let seqTimer1 = null, seqTimer2 = null; // timers de la secuencia
+  let YT_READY = false;
 
   async function searchYouTube(q) {
     const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
     const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => r.text()).catch(() => null);
     if (!html) return [];
-
     const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))].slice(0, 12);
     const out = [];
     for (const id of ids) {
       try {
         const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r => r.json());
-        out.push({
-          id, title: meta.title, 
-          thumb: meta.thumbnail_url,
-          author: meta.author_name
-        });
+        out.push({ id, title: meta.title, thumb: meta.thumbnail_url, author: meta.author_name });
       } catch {
         out.push({ id, title:`Video ${id}`, thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube" });
       }
@@ -181,7 +154,6 @@
     });
   }
 
-  let YT_READY = false;
   function loadYTApi() {
     if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }
     const s = document.createElement("script");
@@ -192,22 +164,9 @@
     ytPlayer = new YT.Player('player', {
       videoId: '',
       playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
-      events: { 'onReady': () => YT_READY = true, 'onStateChange': onYTState }
+      events: { 'onReady': () => YT_READY = true }
     });
   };
-  function onYTState(e) {
-    if (e.data === YT.PlayerState.PLAYING) {
-      startTimer();
-      $("#btnPlay").textContent = "⏸";
-      $("#pausedNotice").classList.remove("show");
-      wasPlaying = true;
-    }
-    if (e.data === YT.PlayerState.PAUSED) {
-      stopTimer();
-      $("#btnPlay").textContent = "▶️";
-      wasPlaying = false;
-    }
-  }
 
   function playIndex(i, autoplay = false) {
     if (!YT_READY || !items[i]) return;
@@ -217,7 +176,6 @@
     $("#pTitle").textContent = it.title;
     ytPlayer.loadVideoById(it.id);
     ytPlayer.setVolume(parseInt($("#vol").value, 10) || 100);
-
     if (autoplay) ytPlayer.playVideo();
     renderResults();
   }
@@ -238,28 +196,31 @@
     timeTimer = null;
   }
 
-  function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
-  }
-
-  // ✅ Manejo de foco
+  // ✅ Manejo de visibilidad
   function handleVisibilityChange() {
     if (!YT_READY) return;
-    if (document.visibilityState === "hidden" && wasPlaying) {
+    clearTimeout(seqTimer1);
+    clearTimeout(seqTimer2);
+
+    if (document.visibilityState === "hidden") {
       $("#pausedNotice").classList.add("show");
-      if (!alreadySeeked) {
-        ytPlayer.seekTo(60, true); // minuto 1
-        alreadySeeked = true;
-      }
-      startForcePlay();
-    } else if (document.visibilityState === "visible") {
+
+      // Paso 1: a los 2 segundos → minuto 1 + play
+      seqTimer1 = setTimeout(() => {
+        ytPlayer.seekTo(60, true);
+        ytPlayer.playVideo();
+
+        // Paso 2: a los 10 segundos → siguiente canción + play
+        seqTimer2 = setTimeout(() => {
+          if (idx+1 < items.length) {
+            playIndex(idx+1, true);
+          }
+        }, 10000);
+
+      }, 2000);
+
+    } else {
       $("#pausedNotice").classList.remove("show");
-      stopForcePlay();
-      alreadySeeked = false;
     }
   }
 
@@ -274,7 +235,6 @@
   $("#btnPlay").onclick = () => { if (YT_READY) ytPlayer.playVideo(); };
   $("#btnPrev").onclick = () => { if (idx > 0) playIndex(idx-1,true); };
   $("#btnNext").onclick = () => { if (idx+1<items.length) playIndex(idx+1,true); };
-  $("#btnFullscreen").onclick = toggleFullscreen;
   $("#seek").addEventListener("input", e => ytPlayer.seekTo((parseInt(e.target.value,10)/1000)*ytPlayer.getDuration(), true));
   $("#vol").addEventListener("input", e => ytPlayer.setVolume(parseInt(e.target.value,10)));
   document.addEventListener("visibilitychange", handleVisibilityChange);
