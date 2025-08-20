@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Topbar (logo chico + input) -->
+  <!-- Topbar -->
   <header class="topbar">
     <div class="brand-compact">
       <img id="miniLogo" src="logo.png" alt="Logo" />
@@ -16,17 +16,18 @@
     <div id="resultsCount" class="muted"></div>
   </header>
 
-  <!-- Resultados de búsqueda -->
+  <!-- Resultados -->
   <main id="main">
     <section id="results" class="results"></section>
   </main>
 
-  <!-- FAB ir a Favoritos -->
+  <!-- FAB abrir favoritos -->
   <button id="fabFavorites" class="fab" aria-label="Abrir favoritos">
-    <i class="i-heart"></i>
+    <!-- Heart SVG -->
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
   </button>
 
-  <!-- Modal Favoritos (pantalla completa, con su propia botonera) -->
+  <!-- Modal Favoritos -->
   <div id="favoritesModal" class="modal" aria-hidden="true">
     <div class="modal-content">
       <div class="fav-hero" id="favHero">
@@ -41,14 +42,26 @@
         <ul id="favList" class="fav-list"></ul>
       </section>
 
-      <!-- Botonera fija en favoritos -->
+      <!-- Controles en favoritos -->
       <footer class="controls-section" id="favControls">
         <div class="controls">
-          <button id="btnRepeatFav" class="btn" title="Repetir"><i class="i-repeat"></i></button>
-          <button id="btnPrevFav" class="btn"><i class="i-prev"></i></button>
-          <button id="btnPlayFav" class="btn btn-play"><i class="i-play"></i><i class="i-pause"></i></button>
-          <button id="btnNextFav" class="btn"><i class="i-next"></i></button>
-          <button id="btnShuffleFav" class="btn" title="Aleatorio"><i class="i-shuffle"></i></button>
+          <button id="btnRepeatFav" class="btn" title="Repetir">
+            <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 0 1 0-12zm10 4h-2v2h2a4 4 0 0 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 0 0 0-4z"/></svg>
+          </button>
+          <button id="btnPrevFav" class="btn" title="Anterior">
+            <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 6v12L9 12l11-6z"/></svg>
+          </button>
+          <button id="btnPlayFav" class="btn btn-play" title="Reproducir/Pausar">
+            <!-- play/pause se alternan por CSS -->
+            <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+          </button>
+          <button id="btnNextFav" class="btn" title="Siguiente">
+            <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 6v12l11-6L4 6z"/></svg>
+          </button>
+          <button id="btnShuffleFav" class="btn" title="Aleatorio">
+            <svg viewBox="0 0 24 24"><path d="M17 3h4v4h-2V6h-2a5 5 0 0 0-4.243 2.343l-1.1 1.65A7 7 0 0 1 7 12H3v-2h4a5 5 0 0 0 4.243-2.343l1.1-1.65A7 7 0 0 1 17 4V3zm0 10h2v-1h2v4h-4v-1a5 5 0 0 1-4.243-2.343l-1.1-1.65A7 7 0 0 0 7 9H3V7h4a9 9 0 0 1 7.2 3.6l1.1 1.65A3 3 0 0 0 17 13z"/></svg>
+          </button>
         </div>
         <div class="progress-container">
           <input id="seekFav" class="seek-bar" type="range" min="0" max="1000" value="0" />
@@ -58,20 +71,31 @@
       </footer>
     </div>
 
-    <!-- FAB para volver al buscador -->
+    <!-- FAB volver a buscador -->
     <button id="fabBackToSearch" class="fab fab-alt" aria-label="Volver a buscar">
-      <i class="i-search"></i>
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/></svg>
     </button>
   </div>
 
-  <!-- Botonera fija en búsqueda -->
+  <!-- Controles en búsqueda -->
   <footer class="controls-section" id="searchControls">
     <div class="controls">
-      <button id="btnRepeat" class="btn" title="Repetir"><i class="i-repeat"></i></button>
-      <button id="btnPrev" class="btn"><i class="i-prev"></i></button>
-      <button id="btnPlay" class="btn btn-play"><i class="i-play"></i><i class="i-pause"></i></button>
-      <button id="btnNext" class="btn"><i class="i-next"></i></button>
-      <button id="btnShuffle" class="btn" title="Aleatorio"><i class="i-shuffle"></i></button>
+      <button id="btnRepeat" class="btn" title="Repetir">
+        <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 0 1 0-12zm10 4h-2v2h2a4 4 0 0 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 0 0 0-4z"/></svg>
+      </button>
+      <button id="btnPrev" class="btn" title="Anterior">
+        <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 6v12L9 12l11-6z"/></svg>
+      </button>
+      <button id="btnPlay" class="btn btn-play" title="Reproducir/Pausar">
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+      </button>
+      <button id="btnNext" class="btn" title="Siguiente">
+        <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 6v12l11-6L4 6z"/></svg>
+      </button>
+      <button id="btnShuffle" class="btn" title="Aleatorio">
+        <svg viewBox="0 0 24 24"><path d="M17 3h4v4h-2V6h-2a5 5 0 0 0-4.243 2.343l-1.1 1.65A7 7 0 0 1 7 12H3v-2h4a5 5 0 0 0 4.243-2.343l1.1-1.65A7 7 0 0 1 17 4V3zm0 10h2v-1h2v4h-4v-1a5 5 0 0 1-4.243-2.343l-1.1-1.65A7 7 0 0 0 7 9H3V7h4a9 9 0 0 1 7.2 3.6l1.1 1.65A3 3 0 0 0 17 13z"/></svg>
+      </button>
     </div>
     <div class="progress-container">
       <input id="seek" class="seek-bar" type="range" min="0" max="1000" value="0" />
@@ -80,7 +104,7 @@
     <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
   </footer>
 
-  <!-- YouTube oculto (forzado) -->
+  <!-- YouTube oculto -->
   <div id="yt-holder"><div id="player"></div></div>
 
 <script src="script.js"></script>
