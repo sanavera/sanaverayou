@@ -21,93 +21,132 @@ let YT_READY = false;
 let wasPlaying = false;
 let timer = null;
 let repeatOne = false;
-
-// Caché para búsquedas
-const searchCache = new Map();
+let searchCache = new Map();
+let isLoadingMore = false;
+let lastQuery = "";
+let allIds = [];
+let loadedIds = new Set();
+const BATCH_SIZE = 6; // Videos por lote inicial
+const INFINITE_BATCH_SIZE = 6; // Videos por carga infinita
 
 /* ====== Búsqueda (sin API key) ====== */
-async function searchYouTube(q) {
-  setCount("Buscando…");
+async function searchYouTube(q, append = false) {
+  if (!append) {
+    setCount("Buscando…");
+    items = [];
+    loadedIds.clear();
+    $("#results").innerHTML = "";
+  } else {
+    if (isLoadingMore) return;
+    isLoadingMore = true;
+    setCount(`Cargando más… (${items.length} mostrados)`);
+  }
 
   // Verificar caché
-  if (searchCache.has(q)) {
-    setCount(`Resultados: ${searchCache.get(q).length} (desde caché)`);
-    return searchCache.get(q);
+  if (!append && searchCache.has(q)) {
+    items = searchCache.get(q);
+    renderResults();
+    setCount(`Resultados: ${items.length} (desde caché)`);
+    return;
   }
 
-  const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-  const html = await fetch(endpoint, { headers: { Accept: "text/plain" } })
-    .then(r => r.text())
-    .catch(() => null);
+  if (!append) {
+    lastQuery = q;
+    const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+    const html = await fetch(endpoint, { headers: { Accept: "text/plain" } })
+      .then(r => r.text())
+      .catch(() => null);
 
-  if (!html) {
-    setCount("Sin respuesta de YouTube");
-    return [];
+    if (!html) {
+      setCount("Sin respuesta de YouTube");
+      isLoadingMore = false;
+      return;
+    }
+
+    allIds = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m => m[1])).slice(0, 50); // Límite total de 50 videos
   }
 
-  const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m => m[1])).slice(0, 12); // Reduje a 12 para mayor velocidad
-  const out = [];
+  // Tomar el siguiente lote de IDs
+  const idsToLoad = allIds
+    .filter(id => !loadedIds.has(id))
+    .slice(0, append ? INFINITE_BATCH_SIZE : BATCH_SIZE);
 
-  // Paralelizar solicitudes a noembed.com
-  const metaPromises = ids.map(id =>
-    fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
-      .then(r => r.json())
-      .then(meta => ({
+  if (idsToLoad.length === 0) {
+    setCount(`Resultados: ${items.length} (no hay más)`);
+    isLoadingMore = false;
+    return;
+  }
+
+  // Procesar cada ID de forma progresiva
+  for (const id of idsToLoad) {
+    try {
+      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+        .then(r => r.json());
+      const track = {
         id,
         title: cleanTitle(meta.title || `Video ${id}`),
         thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
         author: meta.author_name || "YouTube"
-      }))
-      .catch(() => ({
+      };
+      items.push(track);
+      loadedIds.add(id);
+      appendTrackToResults(track, items.length - 1); // Renderizar inmediatamente
+      setCount(`Resultados: ${items.length}`);
+    } catch {
+      const track = {
         id,
         title: cleanTitle(`Video ${id}`),
         thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
         author: "YouTube"
-      }))
-  );
+      };
+      items.push(track);
+      loadedIds.add(id);
+      appendTrackToResults(track, items.length - 1); // Renderizar inmediatamente
+      setCount(`Resultados: ${items.length}`);
+    }
+  }
 
-  const results = await Promise.all(metaPromises);
-  out.push(...results);
+  // Guardar en caché solo cuando no es append
+  if (!append) searchCache.set(q, [...items]);
 
-  // Guardar en caché
-  searchCache.set(q, out);
-  setCount(`Resultados: ${out.length}`);
-  return out;
+  isLoadingMore = false;
+  setCount(`Resultados: ${items.length}`);
 }
 
-function setCount(t) { $("#resultsCount").textContent = t || ""; }
-
 /* ====== Render ====== */
+function appendTrackToResults(track, index) {
+  const root = $("#results");
+  const li = document.createElement("article");
+  li.className = "card";
+  li.dataset.trackId = track.id;
+  li.innerHTML = `
+    <img class="thumb" src="${track.thumb}" alt="" />
+    <div class="meta">
+      <div class="title-line">
+        <span class="title-text">${track.title}</span>
+        <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+      </div>
+      <div class="subtitle">${track.author || ""}</div>
+    </div>
+    <div class="actions">
+      <button class="icon-btn heart ${isFav(track.id) ? 'active' : ''}" title="Favorito">${HEART_SVG}</button>
+    </div>`;
+  li.addEventListener("click", e => {
+    if (e.target.closest(".heart")) {
+      toggleFav(track);
+      e.stopPropagation();
+      return;
+    }
+    playIndex(index, true);
+  });
+  root.appendChild(li);
+  refreshIndicators();
+}
+
 function renderResults() {
   const root = $("#results");
   root.innerHTML = "";
-  items.forEach((it, i) => {
-    const li = document.createElement("article");
-    li.className = "card";
-    li.dataset.trackId = it.id;
-    li.innerHTML = `
-      <img class="thumb" src="${it.thumb}" alt="" />
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${it.author || ""}</div>
-      </div>
-      <div class="actions">
-        <button class="icon-btn heart ${isFav(it.id) ? 'active' : ''}" title="Favorito">${HEART_SVG}</button>
-      </div>`;
-    li.addEventListener("click", e => {
-      if (e.target.closest(".heart")) {
-        toggleFav(it);
-        e.stopPropagation();
-        return;
-      }
-      playIndex(i, true);
-    });
-    root.appendChild(li);
-  });
-  refreshIndicators();
+  items.forEach((it, i) => appendTrackToResults(it, i));
 }
 
 function renderFavs() {
@@ -281,12 +320,19 @@ $("#searchInput").addEventListener("keydown", async e => {
   if (e.key === "Enter") {
     const q = $("#searchInput").value.trim();
     if (!q) return;
-    items = await searchYouTube(q);
-    idx = -1;
-    renderResults();
+    await searchYouTube(q);
   }
 });
 
+/* Carga infinita al hacer scroll */
+$("#results").addEventListener("scroll", async () => {
+  const root = $("#results");
+  if (root.scrollTop + root.clientHeight >= root.scrollHeight - 50 && !isLoadingMore) {
+    await searchYouTube(lastQuery, true);
+  }
+});
+
+/* Controles favoritos y búsqueda */
 $("#fabFavorites").onclick = () => openFavs();
 $("#fabBackToSearch").onclick = () => closeFavs();
 $("#btnCloseFavs").onclick = () => closeFavs();
@@ -294,7 +340,6 @@ $("#btnCloseFavs").onclick = () => closeFavs();
 function openFavs() { $("#favoritesModal").classList.add("show"); document.body.classList.add("modal-open"); renderFavs(); }
 function closeFavs() { $("#favoritesModal").classList.remove("show"); document.body.classList.remove("modal-open"); }
 
-/* Controles búsqueda */
 $("#btnPlay").onclick = togglePlay;
 $("#btnPrev").onclick = prev;
 $("#btnNext").onclick = next;
@@ -305,7 +350,6 @@ $("#btnRepeat").onclick = () => {
 };
 $("#seek").addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
 
-/* Controles favoritos (espejo) */
 $("#btnPlayFav").onclick = togglePlay;
 $("#btnPrevFav").onclick = prev;
 $("#btnNextFav").onclick = next;
