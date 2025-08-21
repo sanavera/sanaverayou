@@ -28,6 +28,7 @@ let allIds = [];
 let loadedIds = new Set();
 const BATCH_SIZE = 6;
 const INFINITE_BATCH_SIZE = 6;
+let suggestionTimeout = null;
 
 /* ====== Búsqueda (sin API key) ====== */
 async function searchYouTube(q, append = false) {
@@ -47,7 +48,6 @@ async function searchYouTube(q, append = false) {
     setCount(`Cargando más… (${items.length} mostrados)`);
   }
 
-  // Verificar caché
   if (!append && searchCache.has(q)) {
     console.log("searchYouTube: Resultados desde caché", q);
     items = searchCache.get(q);
@@ -120,6 +120,40 @@ async function searchYouTube(q, append = false) {
   if (!append) searchCache.set(q, [...items]);
   isLoadingMore = false;
   setCount(`Resultados: ${items.length}`);
+}
+
+/* ====== Sugerencias ====== */
+async function fetchSuggestion(query) {
+  console.log("fetchSuggestion: Solicitando sugerencia para", query);
+  if (query.length < 2) {
+    $("#suggestion").textContent = "";
+    $("#suggestion").classList.remove("visible");
+    console.log("fetchSuggestion: Consulta demasiado corta, ocultando");
+    return;
+  }
+
+  try {
+    const encodedQuery = encodeURIComponent(query);
+    const url = `https://suggestqueries.google.com/complete/search?hl=en&ds=yt&client=youtube&hjson=t&cp=1&q=${encodedQuery}`;
+    const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    console.log("fetchSuggestion: Respuesta recibida", response.status);
+    if (response.ok) {
+      const json = await response.json();
+      const suggestions = json[1].map(item => item[0]);
+      const suggestion = suggestions[0] || ""; // Tomar solo la primera sugerencia
+      $("#suggestion").textContent = suggestion;
+      $("#suggestion").classList.toggle("visible", suggestion !== "");
+      console.log("fetchSuggestion: Sugerencia establecida", suggestion);
+    } else {
+      console.error("fetchSuggestion: Error HTTP", response.status);
+      $("#suggestion").textContent = "";
+      $("#suggestion").classList.remove("visible");
+    }
+  } catch (e) {
+    console.error("fetchSuggestion: Error", e);
+    $("#suggestion").textContent = "";
+    $("#suggestion").classList.remove("visible");
+  }
 }
 
 /* ====== Render ====== */
@@ -358,6 +392,8 @@ function setupSearchInput() {
     console.error("setupSearchInput: #searchInput no encontrado");
     return;
   }
+
+  // Evento para búsqueda con Enter
   searchInput.addEventListener("keydown", async e => {
     if (e.key === "Enter") {
       const q = searchInput.value.trim();
@@ -366,9 +402,36 @@ function setupSearchInput() {
         console.log("searchInput: Búsqueda vacía, ignorando");
         return;
       }
+      clearTimeout(suggestionTimeout);
+      $("#suggestion").textContent = "";
+      $("#suggestion").classList.remove("visible");
       await searchYouTube(q);
     }
   });
+
+  // Evento para sugerencias mientras se escribe
+  searchInput.addEventListener("input", () => {
+    clearTimeout(suggestionTimeout);
+    const query = searchInput.value.trim();
+    suggestionTimeout = setTimeout(() => fetchSuggestion(query), 300);
+  });
+
+  // Evento para seleccionar la sugerencia
+  const suggestionEl = $("#suggestion");
+  if (suggestionEl) {
+    suggestionEl.addEventListener("click", () => {
+      const suggestion = suggestionEl.textContent;
+      if (suggestion) {
+        searchInput.value = suggestion;
+        clearTimeout(suggestionTimeout);
+        suggestionEl.textContent = "";
+        suggestionEl.classList.remove("visible");
+        searchYouTube(suggestion);
+      }
+    });
+  } else {
+    console.error("setupSearchInput: #suggestion no encontrado");
+  }
 }
 
 /* Carga infinita al hacer scroll */
