@@ -68,14 +68,12 @@ body.modal-open {
   backdrop-filter: blur(24px) saturate(180%);
   border-bottom: 1px solid var(--border-subtle);
   padding: 16px var(--side-pad);
-  position: relative; /* Añadido para posicionar la sugerencia */
 }
 
 .brand-compact {
   display: flex;
   align-items: center;
   gap: 16px;
-  position: relative; /* Añadido para contener la sugerencia */
 }
 
 #miniLogo {
@@ -120,36 +118,6 @@ body.modal-open {
   font-weight: 600;
   font-size: 14px;
   color: var(--text-secondary);
-}
-
-/* Sugerencia */
-.suggestion {
-  display: none;
-  position: absolute;
-  top: calc(100% + 8px); /* Justo debajo del input */
-  left: 58px; /* Alineado con el input, después del logo */
-  right: 16px; /* Margen derecho */
-  background: var(--surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
-  cursor: pointer;
-  z-index: 100;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: var(--shadow-sm);
-  transition: var(--transition-fast);
-}
-
-.suggestion.visible {
-  display: block;
-}
-
-.suggestion:hover {
-  background: var(--surface-hover);
-  border-color: var(--accent);
-  transform: translateY(-1px);
 }
 
 /* Search Results - Clean List Style */
@@ -701,9 +669,4 @@ body.modal-open {
   .fab-alt {
     bottom: 135px;
   }
-
-  .suggestion {
-    left: 48px; /* Ajustado para pantallas pequeñas */
-    right: 12px;
-  }
-}
+} 
