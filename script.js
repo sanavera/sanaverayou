@@ -10,13 +10,12 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ").trim();
 
 const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
-const LOADING_SVG = `<svg viewBox="0 0 24 24" class="loading-spinner"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="31.416" stroke-dashoffset="31.416"><animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/><animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/></circle></svg>`;
 
 /* ====== Estado ====== */
-let items = [];               // resultados (buscador)
+let items = [];               // resultados de búsqueda (independientes de favoritos)
 let favs = [];                // favoritos
 let idx = -1;                 // índice en items
-let currentTrack = null;      // canción actual (puede venir de búsqueda o de favoritos)
+let currentTrack = null;      // tema en reproducción (puede venir de búsqueda o de favoritos)
 
 let ytPlayer = null;
 let YT_READY = false;
@@ -25,233 +24,38 @@ let timer = null;
 
 let repeatOne = false;
 
-/* ====== Paginación / búsqueda MEJORADA ====== */
-const PAGE_SIZE = 10; // ✨ Reducido de 24 a 10 para cargas más rápidas
-const PIPED_MIRRORS = [
-  "https://piped.video",
-  "https://pipedapi.kavin.rocks",
-  "https://piped.privacy.com.de"
-];
+/* ====== Búsqueda (sin API key) ====== */
+async function searchYouTube(q){
+  setCount("Buscando…");
+  const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const html = await fetch(endpoint,{headers:{Accept:"text/plain"}}).then(r=>r.text()).catch(()=>null);
+  if(!html){ setCount("Sin respuesta de YouTube"); return []; }
 
-let paging = { 
-  query: "", 
-  page: 0, 
-  loading: false, 
-  hasMore: false, 
-  mode: "piped",
-  totalLoaded: 0 // ✨ Contador total
-};
-
-let searchAbort = null;
-const scrapeCache = new Map();
-const pageCache = new Map();
-
-function cacheKey(q, page){ return `sanyou:q=${q}:p=${page}`; }
-function cacheGet(q, page){
-  const k = cacheKey(q,page);
-  if(pageCache.has(k)) return pageCache.get(k);
-  try{
-    const raw = sessionStorage.getItem(k);
-    if(!raw) return null;
-    const obj = JSON.parse(raw);
-    if(Date.now()-obj.ts > 10*60*1000) return null; // 10 min
-    return obj.data;
-  }catch{ return null; }
-}
-function cacheSet(q, page, data){
-  const k = cacheKey(q,page);
-  pageCache.set(k, data);
-  try{ sessionStorage.setItem(k, JSON.stringify({ts:Date.now(), data})) }catch{}
-}
-
-// ✨ NUEVA función para mostrar loading
-function showLoadingIndicator() {
-  const existing = $("#loadingIndicator");
-  if (existing) return;
-
-  const loader = document.createElement("div");
-  loader.id = "loadingIndicator";
-  loader.className = "loading-indicator";
-  loader.innerHTML = `
-    <div class="loading-content">
-      ${LOADING_SVG}
-      <span>Cargando más canciones...</span>
-    </div>
-  `;
-  $("#results").appendChild(loader);
-}
-
-function hideLoadingIndicator() {
-  const loader = $("#loadingIndicator");
-  if (loader) loader.remove();
-}
-
-async function startSearch(q){
-  // cancelar búsqueda anterior
-  if(searchAbort) try{ searchAbort.abort(); }catch{}
-  searchAbort = new AbortController();
-
-  paging = { query:q, page:0, loading:false, hasMore:true, mode:"piped", totalLoaded:0 };
-  items = []; idx = -1; currentTrack = currentTrack && currentTrack.from==="fav" ? currentTrack : null;
-
-  const resultsContainer = $("#results");
-  resultsContainer.innerHTML = "";
-  setCount("🔍 Buscando...");
-  
-  // ✨ Carga inicial más rápida
-  await loadNextPage();
-  setCount(`📍 ${paging.totalLoaded} resultados${paging.hasMore ? ' (cargando más...)' : ''}`);
-}
-
-async function loadNextPage(){
-  if(paging.loading || !paging.hasMore) return;
-  
-  // ✨ Mostrar indicador de carga
-  paging.loading = true;
-  showLoadingIndicator();
-  
-  const nextPage = paging.page + 1;
-
-  // cache por página
-  const cached = cacheGet(paging.query, nextPage);
-  if(cached){
-    appendResults(cached);
-    items = items.concat(cached);
-    paging.page = nextPage;
-    paging.totalLoaded += cached.length;
-    paging.hasMore = cached.length >= PAGE_SIZE; // ✨ Lógica mejorada
-    paging.loading = false;
-    hideLoadingIndicator();
-    updateSearchStatus();
-    return;
-  }
-
-  let chunk = [];
-  let hasMore = false;
-
-  try {
-    // 1) PIPED con mirrors
-    const res = await fetchPiped(paging.query, nextPage, searchAbort.signal);
-    chunk = res.items; 
-    hasMore = res.hasMore;
-    paging.mode = "piped";
-  } catch {
-    try {
-      // 2) fallback scrape
-      const res2 = await fetchScrape(paging.query, nextPage, PAGE_SIZE, searchAbort.signal);
-      chunk = res2.items; 
-      hasMore = res2.hasMore;
-      paging.mode = "scrape";
-    } catch (err) {
-      console.error("Error cargando resultados:", err);
-      paging.loading = false;
-      hideLoadingIndicator();
-      if (paging.totalLoaded === 0) {
-        setCount("❌ Error al buscar. Intenta de nuevo.");
-      }
-      return;
-    }
-  }
-
-  cacheSet(paging.query, nextPage, chunk);
-  appendResults(chunk);
-  items = items.concat(chunk);
-  paging.page = nextPage;
-  paging.totalLoaded += chunk.length;
-  paging.hasMore = hasMore && chunk.length >= PAGE_SIZE;
-  paging.loading = false;
-  hideLoadingIndicator();
-  updateSearchStatus();
-}
-
-// ✨ Nueva función para actualizar el contador
-function updateSearchStatus() {
-  const hasMore = paging.hasMore ? ' • Scroll para más' : '';
-  setCount(`🎵 ${paging.totalLoaded} canciones${hasMore}`);
-}
-
-async function fetchPiped(q, page, signal){
-  let lastErr = null;
-  for(const base of PIPED_MIRRORS){
-    const url = `${base}/api/v1/search?q=${encodeURIComponent(q)}&page=${page}&region=AR&filter=videos`;
+  const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1])).slice(0,24);
+  const out = [];
+  for(const id of ids){
     try{
-      const r = await fetch(url, {signal, headers:{Accept:"application/json"}});
-      if(!r.ok) { lastErr = new Error(`HTTP ${r.status}`); continue; }
-      const data = await r.json();
-      // algunos mirrors devuelven array directo, otros {items:[]}
-      const arr = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
-      const out = arr
-        .slice(0, PAGE_SIZE) // ✨ Limitar a PAGE_SIZE
-        .map(it=>{
-          const id = it.id || it.videoId || (it.url && new URL(it.url, "https://dummy").searchParams.get("v"));
-          if(!id) return null;
-          const thumb = it.thumbnail || (it.thumbnails && it.thumbnails[0] && it.thumbnails[0].url) || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-          const author = it.uploader || it.uploaderName || it.author || "";
-          const title = cleanTitle(it.title || it.name || `Video ${id}`);
-          return { id, title, thumb, author };
-        })
-        .filter(Boolean);
-      return { items: out, hasMore: out.length >= PAGE_SIZE };
-    }catch(e){ lastErr = e; continue; }
-  }
-  throw lastErr || new Error("Piped falló");
-}
-
-async function fetchScrape(q, page, pageSize, signal){
-  if(!scrapeCache.has(q)){
-    const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-    const html = await fetch(url, {signal, headers:{Accept:"text/plain"}}).then(r=>r.text());
-    const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1]));
-    scrapeCache.set(q, ids);
-  }
-  const ids = scrapeCache.get(q);
-  const start = (page-1)*pageSize;
-  const slice = ids.slice(start, start+pageSize);
-
-  const metas = await mapLimit(slice, 6, async (id)=>{
-    try{
-      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`, {signal}).then(r=>r.json());
-      return { id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"" };
+      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json());
+      out.push({ id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"YouTube" });
     }catch{
-      return { id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"" };
+      out.push({ id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube" });
     }
-  });
-  return { items: metas, hasMore: start+pageSize < ids.length };
-}
-
-async function mapLimit(arr, limit, worker){
-  const out = new Array(arr.length);
-  let i = 0;
-  const pool = new Set();
-  async function fill(){
-    while(i < arr.length && pool.size < limit){
-      const idx = i++;
-      const p = Promise.resolve(worker(arr[idx])).then(res=>{ out[idx]=res; }).finally(()=>pool.delete(p));
-      pool.add(p);
-    }
-    if(pool.size === 0) return;
-    await Promise.race(pool);
-    return fill();
   }
-  await fill();
-  await Promise.all([...pool]);
+  setCount(`Resultados: ${out.length}`);
   return out;
 }
-
-/* ====== Render ====== */
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
-function appendResults(chunk){
+/* ====== Render ====== */
+function renderResults(){
   const root = $("#results");
-  // ✨ Remover loading indicator si existe antes de agregar resultados
-  hideLoadingIndicator();
-  
-  for(const it of chunk){
+  root.innerHTML = "";
+  items.forEach((it, i)=>{
     const li = document.createElement("article");
     li.className = "card";
     li.dataset.trackId = it.id;
     li.innerHTML = `
-      <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="" />
+      <img class="thumb" src="${it.thumb}" alt="" />
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${it.title}</span>
@@ -268,47 +72,11 @@ function appendResults(chunk){
         e.stopPropagation();
         return;
       }
-      const pos = items.findIndex(x=>x.id===it.id);
-      playIndex(pos>=0?pos:0, true);
+      playIndex(i, true); // reproducir desde búsqueda
     });
-    
-    // ✨ Animación sutil al aparecer
-    li.style.opacity = '0';
-    li.style.transform = 'translateY(10px)';
     root.appendChild(li);
-    
-    // Trigger animation
-    requestAnimationFrame(() => {
-      li.style.transition = 'all 0.3s ease-out';
-      li.style.opacity = '1';
-      li.style.transform = 'translateY(0)';
-    });
-  }
-  refreshIndicators();
-}
-
-/* ====== Favoritos ====== */
-const LS_KEY = "sanayera_favs_v1";
-function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_KEY)||"[]"); }catch{ favs=[]; } }
-function saveFavs(){ localStorage.setItem(LS_KEY, JSON.stringify(favs)); }
-function isFav(id){ return favs.some(f=>f.id===id); }
-function toggleFav(track){
-  if(isFav(track.id)){ favs = favs.filter(f=>f.id!==track.id); }
-  else{ favs.unshift(track); }
-  saveFavs();
-  renderFavs();
-  // reflejar corazón en resultados ya pintados
-  $$("#results .card").forEach(c=>{
-    if(c.dataset.trackId===track.id){
-      const btn = c.querySelector(".heart");
-      if(btn) btn.classList.toggle("active", isFav(track.id));
-    }
   });
-}
-function removeFav(id){
-  favs = favs.filter(f=>f.id!==id);
-  saveFavs();
-  renderFavs();
+  refreshIndicators();
 }
 
 function renderFavs(){
@@ -327,7 +95,8 @@ function renderFavs(){
         </div>
         <div class="subtitle">${it.author||""}</div>
       </div>
-      <button class="remove-btn" title="Quitar">✕</button>`;
+      <button class="remove-btn" title="Quitar">✕</button>
+    `;
     li.addEventListener("click", e=>{
       if(e.target.closest(".remove-btn")){
         removeFav(it.id);
@@ -340,6 +109,25 @@ function renderFavs(){
   });
   updateHero(currentTrack);
   refreshIndicators();
+}
+
+/* ====== Favoritos ====== */
+const LS_KEY = "sanayera_favs_v1";
+function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_KEY)||"[]"); }catch{ favs=[]; } }
+function saveFavs(){ localStorage.setItem(LS_KEY, JSON.stringify(favs)); }
+function isFav(id){ return favs.some(f=>f.id===id); }
+function toggleFav(track){
+  if(isFav(track.id)){ favs = favs.filter(f=>f.id!==track.id); }
+  else{ favs.unshift(track); } // siempre al frente
+  saveFavs();
+  renderResults();
+  renderFavs();
+}
+function removeFav(id){
+  favs = favs.filter(f=>f.id!==id);
+  saveFavs();
+  renderFavs();
+  renderResults();
 }
 
 /* ====== YouTube IFrame API ====== */
@@ -379,7 +167,7 @@ function updateHero(track){
 function playIndex(i, autoplay=false){
   if(!YT_READY || !items[i]) return;
   idx = i;
-  currentTrack = {...items[i], from:"search"};
+  currentTrack = items[i];
   ytPlayer.loadVideoById({videoId:currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
   if(!autoplay) ytPlayer.pauseVideo();
   startTimer();
@@ -389,8 +177,8 @@ function playIndex(i, autoplay=false){
 
 function playFromFav(track, autoplay=false){
   if(!YT_READY || !track) return;
-  currentTrack = {...track, from:"fav"};
-  idx = items.findIndex(x=>x.id===track.id); // puede ser -1
+  currentTrack = track;
+  idx = items.findIndex(x=>x.id===track.id); // puede quedar -1
   ytPlayer.loadVideoById({videoId:track.id, startSeconds:0, suggestedQuality:"auto"});
   if(!autoplay) ytPlayer.pauseVideo();
   startTimer();
@@ -447,7 +235,7 @@ function refreshIndicators(){
   });
 }
 
-/* ====== Truco: seguir sonando al perder foco ====== */
+/* ====== Visibilidad (truco recarga) ====== */
 document.addEventListener("visibilitychange", ()=>{
   if(!YT_READY || !currentTrack) return;
   if(document.visibilityState==="hidden" && wasPlaying){
@@ -457,40 +245,14 @@ document.addEventListener("visibilitychange", ()=>{
   }
 });
 
-/* ====== Scroll infinito MEJORADO ====== */
-let scrollTimer = null;
-function setupInfiniteScroll(){
-  const resultsContainer = $("#results");
-  if (!resultsContainer) return;
-
-  // ✨ Detectar scroll con throttling optimizado
-  window.addEventListener('scroll', () => {
-    if (scrollTimer) return;
-    
-    scrollTimer = setTimeout(() => {
-      scrollTimer = null;
-      
-      // ✨ Detectar cuando está cerca del final (no al final exacto)
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
-      
-      // ✨ Cargar cuando falta 800px para llegar al final
-      const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
-      
-      if (distanceFromBottom < 800 && paging.hasMore && !paging.loading) {
-        loadNextPage();
-      }
-    }, 100); // ✨ Throttle más responsive
-  }, { passive: true });
-}
-
 /* ====== UI ====== */
 $("#searchInput").addEventListener("keydown", async e=>{
   if(e.key==="Enter"){
     const q = $("#searchInput").value.trim();
     if(!q) return;
-    await startSearch(q);
+    items = await searchYouTube(q);
+    idx = -1;
+    renderResults();
   }
 });
 
@@ -523,4 +285,3 @@ $("#seekFav").addEventListener("input", e=> { $("#seek").value = e.target.value;
 loadFavs();
 renderFavs();
 loadYTApi();
-setupInfiniteScroll();
