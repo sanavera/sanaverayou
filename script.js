@@ -26,7 +26,7 @@ let timer = null;
 let repeatOne = false;
 
 /* ====== Paginación / búsqueda MEJORADA ====== */
-const PAGE_SIZE = 10; // ✨ Reducido de 24 a 10 para cargas más rápidas
+const PAGE_SIZE = 10;
 const PIPED_MIRRORS = [
   "https://piped.video",
   "https://pipedapi.kavin.rocks",
@@ -38,13 +38,13 @@ let paging = {
   page: 0, 
   loading: false, 
   hasMore: false, 
-  mode: "piped",
-  totalLoaded: 0 // ✨ Contador total
+  mode: "piped",     // "piped" | "fast" | "scrape"
+  totalLoaded: 0
 };
 
 let searchAbort = null;
-const scrapeCache = new Map();
-const pageCache = new Map();
+const scrapeCache = new Map(); // q -> array de IDs (cuando scrapeamos)
+const pageCache = new Map();   // cache por (q,page) de items simples
 
 function cacheKey(q, page){ return `sanyou:q=${q}:p=${page}`; }
 function cacheGet(q, page){
@@ -64,112 +64,101 @@ function cacheSet(q, page, data){
   try{ sessionStorage.setItem(k, JSON.stringify({ts:Date.now(), data})) }catch{}
 }
 
-// ✨ NUEVA función para mostrar loading
+/* ====== Loading UI ====== */
 function showLoadingIndicator() {
   const existing = $("#loadingIndicator");
   if (existing) return;
-
   const loader = document.createElement("div");
   loader.id = "loadingIndicator";
   loader.className = "loading-indicator";
-  loader.innerHTML = `
-    <div class="loading-content">
-      ${LOADING_SVG}
-      <span>Cargando más canciones...</span>
-    </div>
-  `;
+  loader.innerHTML = `<div class="loading-content">${LOADING_SVG}<span>Cargando más canciones...</span></div>`;
   $("#results").appendChild(loader);
 }
-
 function hideLoadingIndicator() {
   const loader = $("#loadingIndicator");
   if (loader) loader.remove();
 }
 
-async function startSearch(q){
-  // cancelar búsqueda anterior
-  if(searchAbort) try{ searchAbort.abort(); }catch{}
-  searchAbort = new AbortController();
+/* ====== Helpers de red ====== */
+function withTimeout(promise, ms=1200){
+  return Promise.race([
+    promise,
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")), ms))
+  ]);
+}
+const tag = (p, name) => p.then(val => ({ ok:true, name, val })).catch(err => ({ ok:false, name, err }));
 
-  paging = { query:q, page:0, loading:false, hasMore:true, mode:"piped", totalLoaded:0 };
-  items = []; idx = -1; currentTrack = currentTrack && currentTrack.from==="fav" ? currentTrack : null;
+/* ====== FAST: scrap directo de YouTube (ytInitialData) ====== */
+async function fetchFastYouTube(q, signal){
+  const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const html = await fetch(url, { signal, headers:{ Accept: "text/plain" } }).then(r=>r.text());
 
-  const resultsContainer = $("#results");
-  resultsContainer.innerHTML = "";
-  setCount("🔍 Buscando...");
-  
-  // ✨ Carga inicial más rápida
-  await loadNextPage();
-  setCount(`📍 ${paging.totalLoaded} resultados${paging.hasMore ? ' (cargando más...)' : ''}`);
+  const data = extractYtInitialData(html);
+  const vids = collectVideoRenderers(data);
+
+  // cacheamos todos los IDs por si necesitamos servir más desde este pool
+  const ids = vids.map(v => v?.videoId).filter(Boolean);
+  if(ids.length) scrapeCache.set(q, ids);
+
+  const out = vids.slice(0, PAGE_SIZE).map(v => {
+    const id = v.videoId;
+    const title = cleanTitle(joinRuns(v.title?.runs) || v.title?.simpleText || `Video ${id}`);
+    const author = joinRuns(v.ownerText?.runs) || v.longBylineText?.runs?.[0]?.text || "";
+    const thumb = bestThumb(v) || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+    return { id, title, thumb, author };
+  });
+
+  return { items: out, hasMore: vids.length > PAGE_SIZE };
 }
 
-async function loadNextPage(){
-  if(paging.loading || !paging.hasMore) return;
-  
-  // ✨ Mostrar indicador de carga
-  paging.loading = true;
-  showLoadingIndicator();
-  
-  const nextPage = paging.page + 1;
+function extractYtInitialData(html){
+  // Buscamos "ytInitialData" y extraemos el objeto JSON con conteo de llaves
+  const key = "ytInitialData";
+  const i = html.indexOf(key);
+  if(i < 0) throw new Error("ytInitialData no encontrado");
 
-  // cache por página
-  const cached = cacheGet(paging.query, nextPage);
-  if(cached){
-    appendResults(cached);
-    items = items.concat(cached);
-    paging.page = nextPage;
-    paging.totalLoaded += cached.length;
-    paging.hasMore = cached.length >= PAGE_SIZE; // ✨ Lógica mejorada
-    paging.loading = false;
-    hideLoadingIndicator();
-    updateSearchStatus();
-    return;
-  }
+  // encontrar el primer '{' después de la clave
+  let j = html.indexOf("{", i);
+  if(j < 0) throw new Error("No se encontró inicio de JSON");
 
-  let chunk = [];
-  let hasMore = false;
-
-  try {
-    // 1) PIPED con mirrors
-    const res = await fetchPiped(paging.query, nextPage, searchAbort.signal);
-    chunk = res.items; 
-    hasMore = res.hasMore;
-    paging.mode = "piped";
-  } catch {
-    try {
-      // 2) fallback scrape
-      const res2 = await fetchScrape(paging.query, nextPage, PAGE_SIZE, searchAbort.signal);
-      chunk = res2.items; 
-      hasMore = res2.hasMore;
-      paging.mode = "scrape";
-    } catch (err) {
-      console.error("Error cargando resultados:", err);
-      paging.loading = false;
-      hideLoadingIndicator();
-      if (paging.totalLoaded === 0) {
-        setCount("❌ Error al buscar. Intenta de nuevo.");
-      }
-      return;
+  // balanceo de llaves
+  let depth = 0, k = j;
+  for(; k < html.length; k++){
+    const ch = html[k];
+    if(ch === "{") depth++;
+    else if(ch === "}") {
+      depth--;
+      if(depth === 0){ k++; break; }
     }
   }
-
-  cacheSet(paging.query, nextPage, chunk);
-  appendResults(chunk);
-  items = items.concat(chunk);
-  paging.page = nextPage;
-  paging.totalLoaded += chunk.length;
-  paging.hasMore = hasMore && chunk.length >= PAGE_SIZE;
-  paging.loading = false;
-  hideLoadingIndicator();
-  updateSearchStatus();
+  if(depth !== 0) throw new Error("JSON incompleto");
+  const json = html.slice(j, k);
+  return JSON.parse(json);
 }
 
-// ✨ Nueva función para actualizar el contador
-function updateSearchStatus() {
-  const hasMore = paging.hasMore ? ' • Scroll para más' : '';
-  setCount(`🎵 ${paging.totalLoaded} canciones${hasMore}`);
+function collectVideoRenderers(obj){
+  const out = [];
+  (function walk(x){
+    if(!x || typeof x !== "object") return;
+    if(x.videoRenderer && x.videoRenderer.videoId){
+      out.push(x.videoRenderer);
+      return; // evitamos visitar profundo dentro del videoRenderer
+    }
+    for(const k in x){ if(Object.prototype.hasOwnProperty.call(x,k)) walk(x[k]); }
+  })(obj);
+  return out;
+}
+function joinRuns(runs){
+  if(!Array.isArray(runs)) return "";
+  return runs.map(r=>r?.text||"").join("");
+}
+function bestThumb(vr){
+  const arr = vr?.thumbnail?.thumbnails || [];
+  if(!arr.length) return null;
+  return arr[arr.length-1].url || arr[0].url;
 }
 
+/* ====== Piped ====== */
 async function fetchPiped(q, page, signal){
   let lastErr = null;
   for(const base of PIPED_MIRRORS){
@@ -178,12 +167,11 @@ async function fetchPiped(q, page, signal){
       const r = await fetch(url, {signal, headers:{Accept:"application/json"}});
       if(!r.ok) { lastErr = new Error(`HTTP ${r.status}`); continue; }
       const data = await r.json();
-      // algunos mirrors devuelven array directo, otros {items:[]}
       const arr = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
       const out = arr
-        .slice(0, PAGE_SIZE) // ✨ Limitar a PAGE_SIZE
+        .slice(0, PAGE_SIZE)
         .map(it=>{
-          const id = it.id || it.videoId || (it.url && new URL(it.url, "https://dummy").searchParams.get("v"));
+          const id = it.id || it.videoId || (it.url && new URL(it.url, "https://x").searchParams.get("v"));
           if(!id) return null;
           const thumb = it.thumbnail || (it.thumbnails && it.thumbnails[0] && it.thumbnails[0].url) || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
           const author = it.uploader || it.uploaderName || it.author || "";
@@ -197,45 +185,27 @@ async function fetchPiped(q, page, signal){
   throw lastErr || new Error("Piped falló");
 }
 
-async function fetchScrape(q, page, pageSize, signal){
-  if(!scrapeCache.has(q)){
+/* ====== Scrape fallback paginado por IDs (sin noembed) ====== */
+async function fetchScrapeByIds(q, page, pageSize){
+  let ids = scrapeCache.get(q);
+  if(!ids){
+    // 1ra vez: traemos html y llenamos pool de IDs
     const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-    const html = await fetch(url, {signal, headers:{Accept:"text/plain"}}).then(r=>r.text());
-    const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1]));
+    const html = await fetch(url, { headers:{Accept:"text/plain"} }).then(r=>r.text());
+    const data = extractYtInitialData(html);
+    const vids = collectVideoRenderers(data);
+    ids = vids.map(v => v.videoId).filter(Boolean);
     scrapeCache.set(q, ids);
   }
-  const ids = scrapeCache.get(q);
   const start = (page-1)*pageSize;
   const slice = ids.slice(start, start+pageSize);
-
-  const metas = await mapLimit(slice, 6, async (id)=>{
-    try{
-      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`, {signal}).then(r=>r.json());
-      return { id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"" };
-    }catch{
-      return { id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"" };
-    }
-  });
-  return { items: metas, hasMore: start+pageSize < ids.length };
-}
-
-async function mapLimit(arr, limit, worker){
-  const out = new Array(arr.length);
-  let i = 0;
-  const pool = new Set();
-  async function fill(){
-    while(i < arr.length && pool.size < limit){
-      const idx = i++;
-      const p = Promise.resolve(worker(arr[idx])).then(res=>{ out[idx]=res; }).finally(()=>pool.delete(p));
-      pool.add(p);
-    }
-    if(pool.size === 0) return;
-    await Promise.race(pool);
-    return fill();
-  }
-  await fill();
-  await Promise.all([...pool]);
-  return out;
+  const out = slice.map(id => ({
+    id,
+    title: cleanTitle(`Video ${id}`), // no tenemos título del pool? opcionalmente podríamos guardarlo
+    thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+    author: ""
+  }));
+  return { items: out, hasMore: start+pageSize < ids.length };
 }
 
 /* ====== Render ====== */
@@ -243,9 +213,8 @@ function setCount(t){ $("#resultsCount").textContent = t||""; }
 
 function appendResults(chunk){
   const root = $("#results");
-  // ✨ Remover loading indicator si existe antes de agregar resultados
   hideLoadingIndicator();
-  
+  const frag = document.createDocumentFragment();
   for(const it of chunk){
     const li = document.createElement("article");
     li.className = "card";
@@ -271,19 +240,16 @@ function appendResults(chunk){
       const pos = items.findIndex(x=>x.id===it.id);
       playIndex(pos>=0?pos:0, true);
     });
-    
-    // ✨ Animación sutil al aparecer
     li.style.opacity = '0';
     li.style.transform = 'translateY(10px)';
-    root.appendChild(li);
-    
-    // Trigger animation
+    frag.appendChild(li);
     requestAnimationFrame(() => {
       li.style.transition = 'all 0.3s ease-out';
       li.style.opacity = '1';
       li.style.transform = 'translateY(0)';
     });
   }
+  root.appendChild(frag);
   refreshIndicators();
 }
 
@@ -297,7 +263,6 @@ function toggleFav(track){
   else{ favs.unshift(track); }
   saveFavs();
   renderFavs();
-  // reflejar corazón en resultados ya pintados
   $$("#results .card").forEach(c=>{
     if(c.dataset.trackId===track.id){
       const btn = c.querySelector(".heart");
@@ -314,6 +279,7 @@ function removeFav(id){
 function renderFavs(){
   const ul = $("#favList");
   ul.innerHTML = "";
+  const frag = document.createDocumentFragment();
   favs.forEach((it)=>{
     const li = document.createElement("li");
     li.className = "fav-item";
@@ -336,8 +302,9 @@ function renderFavs(){
       }
       playFromFav(it, true);
     });
-    ul.appendChild(li);
+    frag.appendChild(li);
   });
+  ul.appendChild(frag);
   updateHero(currentTrack);
   refreshIndicators();
 }
@@ -457,32 +424,138 @@ document.addEventListener("visibilitychange", ()=>{
   }
 });
 
-/* ====== Scroll infinito MEJORADO ====== */
+/* ====== Scroll infinito ====== */
 let scrollTimer = null;
 function setupInfiniteScroll(){
-  const resultsContainer = $("#results");
-  if (!resultsContainer) return;
-
-  // ✨ Detectar scroll con throttling optimizado
   window.addEventListener('scroll', () => {
     if (scrollTimer) return;
-    
     scrollTimer = setTimeout(() => {
       scrollTimer = null;
-      
-      // ✨ Detectar cuando está cerca del final (no al final exacto)
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const windowHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
-      
-      // ✨ Cargar cuando falta 800px para llegar al final
       const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
-      
       if (distanceFromBottom < 800 && paging.hasMore && !paging.loading) {
         loadNextPage();
       }
-    }, 100); // ✨ Throttle más responsive
+    }, 100);
   }, { passive: true });
+}
+
+/* ====== Búsqueda ====== */
+async function startSearch(q){
+  // cancelar búsqueda anterior
+  if(searchAbort) try{ searchAbort.abort(); }catch{}
+  searchAbort = new AbortController();
+
+  paging = { query:q, page:0, loading:false, hasMore:true, mode:"piped", totalLoaded:0 };
+  items = []; idx = -1;
+  if(currentTrack && currentTrack.from!=="fav") currentTrack = null;
+
+  $("#results").innerHTML = "";
+  setCount("🔍 Buscando...");
+
+  // Página 1: RACE entre FAST YouTube y Piped con timeout
+  showLoadingIndicator();
+
+  const fastP = tag(fetchFastYouTube(q, searchAbort.signal), "fast");
+  const pipedP = tag(withTimeout(fetchPiped(q, 1, searchAbort.signal), 1200), "piped");
+
+  let first;
+  try{
+    first = await Promise.race([fastP, pipedP]);
+  }catch{
+    first = await fastP; // fallback
+  }
+
+  if(first.ok && first.val.items.length){
+    appendResults(first.val.items);
+    items = items.concat(first.val.items);
+    paging.page = 1;
+    paging.totalLoaded += first.val.items.length;
+    paging.hasMore = true; // intentaremos seguir cargando
+    paging.mode = first.name; // "fast" o "piped"
+  }else{
+    // si el primero no trajo nada, intentamos el otro
+    const other = first.name === "fast" ? await pipedP : await fastP;
+    if(other.ok && other.val.items.length){
+      appendResults(other.val.items);
+      items = items.concat(other.val.items);
+      paging.page = 1;
+      paging.totalLoaded += other.val.items.length;
+      paging.hasMore = true;
+      paging.mode = other.name;
+    }else{
+      hideLoadingIndicator();
+      setCount("❌ Sin resultados.");
+      return;
+    }
+  }
+
+  updateSearchStatus();
+}
+
+async function loadNextPage(){
+  if(paging.loading || !paging.hasMore) return;
+  paging.loading = true;
+  showLoadingIndicator();
+
+  const nextPage = paging.page + 1;
+
+  // cache
+  const cached = cacheGet(paging.query, nextPage);
+  if(cached){
+    appendResults(cached);
+    items = items.concat(cached);
+    paging.page = nextPage;
+    paging.totalLoaded += cached.length;
+    paging.hasMore = cached.length >= PAGE_SIZE;
+    paging.loading = false;
+    hideLoadingIndicator();
+    updateSearchStatus();
+    return;
+  }
+
+  let chunk = [];
+  let hasMore = false;
+
+  try{
+    // Preferimos PIPED para páginas 2+ (paginación real)
+    const piped = await withTimeout(fetchPiped(paging.query, nextPage, searchAbort.signal), 1500);
+    chunk = piped.items;
+    hasMore = piped.hasMore;
+    paging.mode = "piped";
+  }catch{
+    // Fallback: servir IDs del scrape pool (si tenemos)
+    try{
+      const scr = await fetchScrapeByIds(paging.query, nextPage, PAGE_SIZE);
+      chunk = scr.items;
+      hasMore = scr.hasMore;
+      paging.mode = "scrape";
+    }catch(e){
+      console.error("Next page error:", e);
+      paging.loading = false;
+      hideLoadingIndicator();
+      updateSearchStatus();
+      return;
+    }
+  }
+
+  cacheSet(paging.query, nextPage, chunk);
+  appendResults(chunk);
+  items = items.concat(chunk);
+  paging.page = nextPage;
+  paging.totalLoaded += chunk.length;
+  paging.hasMore = hasMore && chunk.length >= PAGE_SIZE;
+  paging.loading = false;
+  hideLoadingIndicator();
+  updateSearchStatus();
+}
+
+// contador
+function updateSearchStatus() {
+  const more = paging.hasMore ? ' • Scroll para más' : '';
+  setCount(`🎵 ${paging.totalLoaded} canciones${more}`);
 }
 
 /* ====== UI ====== */
