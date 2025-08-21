@@ -26,24 +26,30 @@ let isLoadingMore = false;
 let lastQuery = "";
 let allIds = [];
 let loadedIds = new Set();
-const BATCH_SIZE = 6; // Videos por lote inicial
-const INFINITE_BATCH_SIZE = 6; // Videos por carga infinita
+const BATCH_SIZE = 6;
+const INFINITE_BATCH_SIZE = 6;
 
 /* ====== Búsqueda (sin API key) ====== */
 async function searchYouTube(q, append = false) {
+  console.log("searchYouTube: Iniciando búsqueda", { query: q, append });
+  setCount("Buscando…");
+
   if (!append) {
-    setCount("Buscando…");
     items = [];
     loadedIds.clear();
     $("#results").innerHTML = "";
+    console.log("searchYouTube: Limpiando resultados previos");
+  } else if (isLoadingMore) {
+    console.log("searchYouTube: Ya está cargando más, saliendo");
+    return;
   } else {
-    if (isLoadingMore) return;
     isLoadingMore = true;
     setCount(`Cargando más… (${items.length} mostrados)`);
   }
 
   // Verificar caché
   if (!append && searchCache.has(q)) {
+    console.log("searchYouTube: Resultados desde caché", q);
     items = searchCache.get(q);
     renderResults();
     setCount(`Resultados: ${items.length} (desde caché)`);
@@ -52,33 +58,36 @@ async function searchYouTube(q, append = false) {
 
   if (!append) {
     lastQuery = q;
+    console.log("searchYouTube: Solicitando a jina.ai", q);
     const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-    const html = await fetch(endpoint, { headers: { Accept: "text/plain" } })
-      .then(r => r.text())
-      .catch(() => null);
-
-    if (!html) {
-      setCount("Sin respuesta de YouTube");
+    try {
+      const html = await fetch(endpoint, { headers: { Accept: "text/plain" } }).then(r => r.text());
+      console.log("searchYouTube: Respuesta de jina.ai recibida", html.length);
+      allIds = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m => m[1])).slice(0, 50);
+      console.log("searchYouTube: IDs extraídos", allIds.length);
+    } catch (e) {
+      console.error("searchYouTube: Error en jina.ai", e);
+      setCount("Error al conectar con YouTube");
       isLoadingMore = false;
       return;
     }
-
-    allIds = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m => m[1])).slice(0, 50); // Límite total de 50 videos
   }
 
-  // Tomar el siguiente lote de IDs
   const idsToLoad = allIds
     .filter(id => !loadedIds.has(id))
     .slice(0, append ? INFINITE_BATCH_SIZE : BATCH_SIZE);
 
+  console.log("searchYouTube: IDs a procesar", idsToLoad);
+
   if (idsToLoad.length === 0) {
     setCount(`Resultados: ${items.length} (no hay más)`);
     isLoadingMore = false;
+    console.log("searchYouTube: No hay más IDs para cargar");
     return;
   }
 
-  // Procesar cada ID de forma progresiva
   for (const id of idsToLoad) {
+    console.log("searchYouTube: Procesando ID", id);
     try {
       const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
         .then(r => r.json());
@@ -90,9 +99,11 @@ async function searchYouTube(q, append = false) {
       };
       items.push(track);
       loadedIds.add(id);
-      appendTrackToResults(track, items.length - 1); // Renderizar inmediatamente
+      appendTrackToResults(track, items.length - 1);
       setCount(`Resultados: ${items.length}`);
-    } catch {
+      console.log("searchYouTube: Track añadido", track.title);
+    } catch (e) {
+      console.error("searchYouTube: Error al obtener metadatos", id, e);
       const track = {
         id,
         title: cleanTitle(`Video ${id}`),
@@ -101,21 +112,34 @@ async function searchYouTube(q, append = false) {
       };
       items.push(track);
       loadedIds.add(id);
-      appendTrackToResults(track, items.length - 1); // Renderizar inmediatamente
+      appendTrackToResults(track, items.length - 1);
       setCount(`Resultados: ${items.length}`);
     }
   }
 
-  // Guardar en caché solo cuando no es append
   if (!append) searchCache.set(q, [...items]);
-
   isLoadingMore = false;
   setCount(`Resultados: ${items.length}`);
 }
 
 /* ====== Render ====== */
+function setCount(t) {
+  console.log("setCount:", t);
+  const countEl = $("#resultsCount");
+  if (countEl) {
+    countEl.textContent = t || "";
+  } else {
+    console.error("setCount: #resultsCount no encontrado");
+  }
+}
+
 function appendTrackToResults(track, index) {
+  console.log("appendTrackToResults: Añadiendo track", track.title, index);
   const root = $("#results");
+  if (!root) {
+    console.error("appendTrackToResults: #results no encontrado");
+    return;
+  }
   const li = document.createElement("article");
   li.className = "card";
   li.dataset.trackId = track.id;
@@ -144,13 +168,23 @@ function appendTrackToResults(track, index) {
 }
 
 function renderResults() {
+  console.log("renderResults: Renderizando todos los resultados", items.length);
   const root = $("#results");
+  if (!root) {
+    console.error("renderResults: #results no encontrado");
+    return;
+  }
   root.innerHTML = "";
   items.forEach((it, i) => appendTrackToResults(it, i));
 }
 
 function renderFavs() {
+  console.log("renderFavs: Renderizando favoritos", favs.length);
   const ul = $("#favList");
+  if (!ul) {
+    console.error("renderFavs: #favList no encontrado");
+    return;
+  }
   ul.innerHTML = "";
   favs.forEach((it) => {
     const li = document.createElement("li");
@@ -183,8 +217,8 @@ function renderFavs() {
 
 /* ====== Favoritos ====== */
 const LS_KEY = "sanayera_favs_v1";
-function loadFavs() { try { favs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { favs = []; } }
-function saveFavs() { localStorage.setItem(LS_KEY, JSON.stringify(favs)); }
+function loadFavs() { try { favs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { favs = []; } console.log("loadFavs:", favs.length); }
+function saveFavs() { localStorage.setItem(LS_KEY, JSON.stringify(favs)); console.log("saveFavs:", favs.length); }
 function isFav(id) { return favs.some(f => f.id === id); }
 function toggleFav(track) {
   if (isFav(track.id)) { favs = favs.filter(f => f.id !== track.id); }
@@ -206,12 +240,14 @@ function loadYTApi() {
   const s = document.createElement("script");
   s.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(s);
+  console.log("loadYTApi: Cargando YouTube API");
 }
 window.onYouTubeIframeAPIReady = function () {
+  console.log("onYouTubeIframeAPIReady: YouTube API lista");
   ytPlayer = new YT.Player("player", {
     width: 300, height: 150, videoId: "",
     playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
-    events: { onReady: () => { YT_READY = true; }, onStateChange: onYTState }
+    events: { onReady: () => { YT_READY = true; console.log("YouTube Player listo"); }, onStateChange: onYTState }
   });
 };
 function onYTState(e) {
@@ -316,29 +352,64 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ====== UI ====== */
-$("#searchInput").addEventListener("keydown", async e => {
-  if (e.key === "Enter") {
-    const q = $("#searchInput").value.trim();
-    if (!q) return;
-    await searchYouTube(q);
+function setupSearchInput() {
+  const searchInput = $("#searchInput");
+  if (!searchInput) {
+    console.error("setupSearchInput: #searchInput no encontrado");
+    return;
   }
-});
+  searchInput.addEventListener("keydown", async e => {
+    if (e.key === "Enter") {
+      const q = searchInput.value.trim();
+      console.log("searchInput: Enter presionado", q);
+      if (!q) {
+        console.log("searchInput: Búsqueda vacía, ignorando");
+        return;
+      }
+      await searchYouTube(q);
+    }
+  });
+}
 
 /* Carga infinita al hacer scroll */
-$("#results").addEventListener("scroll", async () => {
+function setupScroll() {
   const root = $("#results");
-  if (root.scrollTop + root.clientHeight >= root.scrollHeight - 50 && !isLoadingMore) {
-    await searchYouTube(lastQuery, true);
+  if (!root) {
+    console.error("setupScroll: #results no encontrado");
+    return;
   }
-});
+  root.addEventListener("scroll", async () => {
+    if (root.scrollTop + root.clientHeight >= root.scrollHeight - 50 && !isLoadingMore) {
+      console.log("setupScroll: Disparando carga infinita");
+      await searchYouTube(lastQuery, true);
+    }
+  });
+}
 
 /* Controles favoritos y búsqueda */
 $("#fabFavorites").onclick = () => openFavs();
 $("#fabBackToSearch").onclick = () => closeFavs();
 $("#btnCloseFavs").onclick = () => closeFavs();
 
-function openFavs() { $("#favoritesModal").classList.add("show"); document.body.classList.add("modal-open"); renderFavs(); }
-function closeFavs() { $("#favoritesModal").classList.remove("show"); document.body.classList.remove("modal-open"); }
+function openFavs() {
+  const modal = $("#favoritesModal");
+  if (modal) {
+    modal.classList.add("show");
+    document.body.classList.add("modal-open");
+    renderFavs();
+  } else {
+    console.error("openFavs: #favoritesModal no encontrado");
+  }
+}
+function closeFavs() {
+  const modal = $("#favoritesModal");
+  if (modal) {
+    modal.classList.remove("show");
+    document.body.classList.remove("modal-open");
+  } else {
+    console.error("closeFavs: #favoritesModal no encontrado");
+  }
+}
 
 $("#btnPlay").onclick = togglePlay;
 $("#btnPrev").onclick = prev;
@@ -357,6 +428,9 @@ $("#btnRepeatFav").onclick = () => $("#btnRepeat").click();
 $("#seekFav").addEventListener("input", e => { $("#seek").value = e.target.value; $("#seek").dispatchEvent(new Event("input")); });
 
 /* ====== Init ====== */
+console.log("Inicializando aplicación");
 loadFavs();
 renderFavs();
 loadYTApi();
+setupSearchInput();
+setupScroll();
