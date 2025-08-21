@@ -541,7 +541,7 @@ body.modal-open {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 20px var(--side-pad) calc(var(--controls-h) + 40px);
+  padding: 20px var(--side-pad) calc(var(--controls-h) + 60px);
 }
 
 .fav-list {
