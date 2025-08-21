@@ -10,6 +10,7 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ").trim();
 
 const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+const LOADING_SVG = `<svg viewBox="0 0 24 24" class="loading-spinner"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="31.416" stroke-dashoffset="31.416"><animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/><animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/></circle></svg>`;
 
 /* ====== Estado ====== */
 let items = [];               // resultados (buscador)
@@ -24,25 +25,31 @@ let timer = null;
 
 let repeatOne = false;
 
-/* ====== Paginación / búsqueda ====== */
-const PAGE_SIZE = 24;
+/* ====== Paginación / búsqueda MEJORADA ====== */
+const PAGE_SIZE = 10; // ✨ Reducido de 24 a 10 para cargas más rápidas
 const PIPED_MIRRORS = [
   "https://piped.video",
   "https://pipedapi.kavin.rocks",
   "https://piped.privacy.com.de"
 ];
 
-let paging = { query:"", page:0, loading:false, hasMore:false, mode:"piped" };
+let paging = { 
+  query: "", 
+  page: 0, 
+  loading: false, 
+  hasMore: false, 
+  mode: "piped",
+  totalLoaded: 0 // ✨ Contador total
+};
+
 let searchAbort = null;
-const scrapeCache = new Map();        // query -> ids[]
-const pageCache = new Map();          // cache en memoria (rápida)
+const scrapeCache = new Map();
+const pageCache = new Map();
 
 function cacheKey(q, page){ return `sanyou:q=${q}:p=${page}`; }
 function cacheGet(q, page){
-  // primero memoria
   const k = cacheKey(q,page);
   if(pageCache.has(k)) return pageCache.get(k);
-  // sessionStorage con TTL
   try{
     const raw = sessionStorage.getItem(k);
     if(!raw) return null;
@@ -57,24 +64,52 @@ function cacheSet(q, page, data){
   try{ sessionStorage.setItem(k, JSON.stringify({ts:Date.now(), data})) }catch{}
 }
 
+// ✨ NUEVA función para mostrar loading
+function showLoadingIndicator() {
+  const existing = $("#loadingIndicator");
+  if (existing) return;
+
+  const loader = document.createElement("div");
+  loader.id = "loadingIndicator";
+  loader.className = "loading-indicator";
+  loader.innerHTML = `
+    <div class="loading-content">
+      ${LOADING_SVG}
+      <span>Cargando más canciones...</span>
+    </div>
+  `;
+  $("#results").appendChild(loader);
+}
+
+function hideLoadingIndicator() {
+  const loader = $("#loadingIndicator");
+  if (loader) loader.remove();
+}
+
 async function startSearch(q){
   // cancelar búsqueda anterior
   if(searchAbort) try{ searchAbort.abort(); }catch{}
   searchAbort = new AbortController();
 
-  paging = { query:q, page:0, loading:false, hasMore:true, mode:"piped" };
+  paging = { query:q, page:0, loading:false, hasMore:true, mode:"piped", totalLoaded:0 };
   items = []; idx = -1; currentTrack = currentTrack && currentTrack.from==="fav" ? currentTrack : null;
 
-  $("#results").innerHTML = "";
-  setCount("Buscando…");
-  // primer batch
+  const resultsContainer = $("#results");
+  resultsContainer.innerHTML = "";
+  setCount("🔍 Buscando...");
+  
+  // ✨ Carga inicial más rápida
   await loadNextPage();
-  setCount(`Resultados: ${items.length}${paging.hasMore?'…':''}`);
+  setCount(`📍 ${paging.totalLoaded} resultados${paging.hasMore ? ' (cargando más...)' : ''}`);
 }
 
 async function loadNextPage(){
   if(paging.loading || !paging.hasMore) return;
+  
+  // ✨ Mostrar indicador de carga
   paging.loading = true;
+  showLoadingIndicator();
+  
   const nextPage = paging.page + 1;
 
   // cache por página
@@ -83,36 +118,56 @@ async function loadNextPage(){
     appendResults(cached);
     items = items.concat(cached);
     paging.page = nextPage;
-    paging.hasMore = cached.length > 0;
+    paging.totalLoaded += cached.length;
+    paging.hasMore = cached.length >= PAGE_SIZE; // ✨ Lógica mejorada
     paging.loading = false;
-    keepSentinelAtEnd();
-    setCount(`Resultados: ${items.length}${paging.hasMore?'…':''}`);
+    hideLoadingIndicator();
+    updateSearchStatus();
     return;
   }
 
   let chunk = [];
   let hasMore = false;
 
-  // 1) PIPED con mirrors
-  try{
+  try {
+    // 1) PIPED con mirrors
     const res = await fetchPiped(paging.query, nextPage, searchAbort.signal);
-    chunk = res.items; hasMore = res.hasMore;
+    chunk = res.items; 
+    hasMore = res.hasMore;
     paging.mode = "piped";
-  }catch{
-    // 2) fallback scrape (una sola descarga grande por query y paginamos localmente)
-    const res2 = await fetchScrape(paging.query, nextPage, PAGE_SIZE, searchAbort.signal);
-    chunk = res2.items; hasMore = res2.hasMore;
-    paging.mode = "scrape";
+  } catch {
+    try {
+      // 2) fallback scrape
+      const res2 = await fetchScrape(paging.query, nextPage, PAGE_SIZE, searchAbort.signal);
+      chunk = res2.items; 
+      hasMore = res2.hasMore;
+      paging.mode = "scrape";
+    } catch (err) {
+      console.error("Error cargando resultados:", err);
+      paging.loading = false;
+      hideLoadingIndicator();
+      if (paging.totalLoaded === 0) {
+        setCount("❌ Error al buscar. Intenta de nuevo.");
+      }
+      return;
+    }
   }
 
   cacheSet(paging.query, nextPage, chunk);
   appendResults(chunk);
   items = items.concat(chunk);
   paging.page = nextPage;
-  paging.hasMore = hasMore && chunk.length>0;
+  paging.totalLoaded += chunk.length;
+  paging.hasMore = hasMore && chunk.length >= PAGE_SIZE;
   paging.loading = false;
-  keepSentinelAtEnd();
-  setCount(`Resultados: ${items.length}${paging.hasMore?'…':''}`);
+  hideLoadingIndicator();
+  updateSearchStatus();
+}
+
+// ✨ Nueva función para actualizar el contador
+function updateSearchStatus() {
+  const hasMore = paging.hasMore ? ' • Scroll para más' : '';
+  setCount(`🎵 ${paging.totalLoaded} canciones${hasMore}`);
 }
 
 async function fetchPiped(q, page, signal){
@@ -126,6 +181,7 @@ async function fetchPiped(q, page, signal){
       // algunos mirrors devuelven array directo, otros {items:[]}
       const arr = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
       const out = arr
+        .slice(0, PAGE_SIZE) // ✨ Limitar a PAGE_SIZE
         .map(it=>{
           const id = it.id || it.videoId || (it.url && new URL(it.url, "https://dummy").searchParams.get("v"));
           if(!id) return null;
@@ -135,7 +191,7 @@ async function fetchPiped(q, page, signal){
           return { id, title, thumb, author };
         })
         .filter(Boolean);
-      return { items: out, hasMore: out.length>0 };
+      return { items: out, hasMore: out.length >= PAGE_SIZE };
     }catch(e){ lastErr = e; continue; }
   }
   throw lastErr || new Error("Piped falló");
@@ -187,6 +243,9 @@ function setCount(t){ $("#resultsCount").textContent = t||""; }
 
 function appendResults(chunk){
   const root = $("#results");
+  // ✨ Remover loading indicator si existe antes de agregar resultados
+  hideLoadingIndicator();
+  
   for(const it of chunk){
     const li = document.createElement("article");
     li.className = "card";
@@ -212,18 +271,20 @@ function appendResults(chunk){
       const pos = items.findIndex(x=>x.id===it.id);
       playIndex(pos>=0?pos:0, true);
     });
+    
+    // ✨ Animación sutil al aparecer
+    li.style.opacity = '0';
+    li.style.transform = 'translateY(10px)';
     root.appendChild(li);
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+      li.style.transition = 'all 0.3s ease-out';
+      li.style.opacity = '1';
+      li.style.transform = 'translateY(0)';
+    });
   }
   refreshIndicators();
-}
-
-function keepSentinelAtEnd(){
-  const s = $("#scrollSentinel");
-  if(s && s.parentElement !== document.body){
-    // que quede después de la lista
-    s.remove();
-    $("#main").appendChild(s);
-  }
 }
 
 /* ====== Favoritos ====== */
@@ -396,20 +457,32 @@ document.addEventListener("visibilitychange", ()=>{
   }
 });
 
-/* ====== Scroll infinito ====== */
-let io = null;
+/* ====== Scroll infinito MEJORADO ====== */
+let scrollTimer = null;
 function setupInfiniteScroll(){
-  const sentinel = $("#scrollSentinel");
-  if(!sentinel) return;
-  if(io) io.disconnect();
-  io = new IntersectionObserver((entries)=>{
-    for(const e of entries){
-      if(e.isIntersecting){
+  const resultsContainer = $("#results");
+  if (!resultsContainer) return;
+
+  // ✨ Detectar scroll con throttling optimizado
+  window.addEventListener('scroll', () => {
+    if (scrollTimer) return;
+    
+    scrollTimer = setTimeout(() => {
+      scrollTimer = null;
+      
+      // ✨ Detectar cuando está cerca del final (no al final exacto)
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      
+      // ✨ Cargar cuando falta 800px para llegar al final
+      const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
+      
+      if (distanceFromBottom < 800 && paging.hasMore && !paging.loading) {
         loadNextPage();
       }
-    }
-  }, { root: null, rootMargin: "800px", threshold: 0 });
-  io.observe(sentinel);
+    }, 100); // ✨ Throttle más responsive
+  }, { passive: true });
 }
 
 /* ====== UI ====== */
