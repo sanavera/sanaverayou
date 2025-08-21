@@ -125,34 +125,40 @@ async function searchYouTube(q, append = false) {
 /* ====== Sugerencias ====== */
 async function fetchSuggestion(query) {
   console.log("fetchSuggestion: Solicitando sugerencia para", query);
+  const suggestionEl = $("#suggestion");
+  if (!suggestionEl) {
+    console.error("fetchSuggestion: #suggestion no encontrado");
+    return;
+  }
+
   if (query.length < 2) {
-    $("#suggestion").textContent = "";
-    $("#suggestion").classList.remove("visible");
+    suggestionEl.textContent = "";
+    suggestionEl.classList.remove("visible");
     console.log("fetchSuggestion: Consulta demasiado corta, ocultando");
     return;
   }
 
   try {
     const encodedQuery = encodeURIComponent(query);
-    const url = `https://suggestqueries.google.com/complete/search?hl=en&ds=yt&client=youtube&hjson=t&cp=1&q=${encodedQuery}`;
+    const url = `https://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&cp=1&q=${encodedQuery}`;
     const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
     console.log("fetchSuggestion: Respuesta recibida", response.status);
     if (response.ok) {
       const json = await response.json();
       const suggestions = json[1].map(item => item[0]);
       const suggestion = suggestions[0] || ""; // Tomar solo la primera sugerencia
-      $("#suggestion").textContent = suggestion;
-      $("#suggestion").classList.toggle("visible", suggestion !== "");
+      suggestionEl.textContent = suggestion;
+      suggestionEl.classList.toggle("visible", suggestion !== "");
       console.log("fetchSuggestion: Sugerencia establecida", suggestion);
     } else {
       console.error("fetchSuggestion: Error HTTP", response.status);
-      $("#suggestion").textContent = "";
-      $("#suggestion").classList.remove("visible");
+      suggestionEl.textContent = "";
+      suggestionEl.classList.remove("visible");
     }
   } catch (e) {
     console.error("fetchSuggestion: Error", e);
-    $("#suggestion").textContent = "";
-    $("#suggestion").classList.remove("visible");
+    suggestionEl.textContent = "";
+    suggestionEl.classList.remove("visible");
   }
 }
 
@@ -365,7 +371,7 @@ function stopTimer() { clearInterval(timer); timer = null; }
 
 /* ====== Indicadores (EQ) ====== */
 function refreshIndicators() {
-  const playing = YT_READY && (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING || ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING);
+  const playing = YT_READY && (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
   $$("#results .card").forEach(card => {
     card.classList.toggle("is-playing", playing && card.dataset.trackId === curId);
@@ -406,6 +412,17 @@ function setupSearchInput() {
       $("#suggestion").textContent = "";
       $("#suggestion").classList.remove("visible");
       await searchYouTube(q);
+    } else if (e.key === "ArrowDown" && $("#suggestion").classList.contains("visible")) {
+      e.preventDefault();
+      const suggestion = $("#suggestion").textContent;
+      if (suggestion) {
+        searchInput.value = suggestion;
+        searchInput.setSelectionRange(suggestion.length, suggestion.length);
+        clearTimeout(suggestionTimeout);
+        $("#suggestion").textContent = "";
+        $("#suggestion").classList.remove("visible");
+        await searchYouTube(suggestion);
+      }
     }
   });
 
@@ -416,13 +433,14 @@ function setupSearchInput() {
     suggestionTimeout = setTimeout(() => fetchSuggestion(query), 300);
   });
 
-  // Evento para seleccionar la sugerencia
+  // Evento para seleccionar la sugerencia con clic
   const suggestionEl = $("#suggestion");
   if (suggestionEl) {
     suggestionEl.addEventListener("click", () => {
       const suggestion = suggestionEl.textContent;
       if (suggestion) {
         searchInput.value = suggestion;
+        searchInput.setSelectionRange(suggestion.length, suggestion.length);
         clearTimeout(suggestionTimeout);
         suggestionEl.textContent = "";
         suggestionEl.classList.remove("visible");
