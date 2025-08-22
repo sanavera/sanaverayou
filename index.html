@@ -1,107 +1,135 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SanaveraYou Pro</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SanaveraYou • Pro</title>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Topbar -->
+
+  <!-- Header (neumórfico) -->
   <header class="topbar">
     <div class="brand-compact">
-      <img id="miniLogo" src="https://i.imgur.com/HmNn2sP.png" alt="Logo" />
+      <img id="miniLogo" src="https://picsum.photos/seed/sanavera/96" alt="Logo" />
       <div class="search-container">
         <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
+        <div id="resultsCount" class="muted"></div>
       </div>
     </div>
-    <div id="resultsCount" class="muted"></div>
   </header>
 
-  <!-- Resultados -->
-  <main id="main">
-    <section id="results" class="results">
-      <!-- items -->
+  <!-- Vistas -->
+  <main id="views">
+    <!-- BÚSQUEDA -->
+    <section id="view-search" class="view active">
+      <section id="results" class="results"></section>
       <div id="sentinel" aria-hidden="true"></div>
     </section>
-  </main>
 
-  <!-- Modal Favoritos -->
-  <div id="favoritesModal" class="modal" aria-hidden="true">
-    <div class="modal-content">
+    <!-- FAVORITOS -->
+    <section id="view-favs" class="view">
       <div class="fav-hero" id="favHero">
         <div class="fav-hero-text">
           <p class="muted up">TUS FAVORITOS</p>
           <h2 id="favNowTitle">—</h2>
         </div>
-        <button id="btnCloseFavs" class="closer" aria-label="Cerrar">×</button>
       </div>
-
       <section class="fav-list-wrap">
         <ul id="favList" class="fav-list"></ul>
       </section>
+    </section>
 
-      <!-- Controles en favoritos -->
-      <footer class="controls-section" id="favControls">
-        <div class="controls">
-          <button id="btnGoSearchFav" class="btn" title="Ir al buscador" aria-label="Ir al buscador">
-            <!-- ícono búsqueda -->
-            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/></svg>
-          </button>
-          <button id="btnRepeatFav" class="btn" title="Repetir uno">
-            <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 1 1 0-12zm10 4h-2v2h2a4 4 0 1 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 1 0 0-4z"/></svg>
-          </button>
-          <button id="btnPrevFav" class="btn" title="Anterior">
-            <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 6v12L9 12l11-6z"/></svg>
-          </button>
-          <button id="btnPlayFav" class="btn btn-play" title="Reproducir/Pausar">
-            <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-            <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-          </button>
-          <button id="btnNextFav" class="btn" title="Siguiente">
-            <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 6v12l11-6L4 6z"/></svg>
-          </button>
-        </div>
-        <div class="progress-container">
-          <input id="seekFav" class="seek-bar" type="range" min="0" max="1000" value="0" />
-          <div class="time-info"><span id="curFav">0:00</span><span id="durFav">0:00</span></div>
-        </div>
-        <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
-      </footer>
+    <!-- PLAYLISTS -->
+    <section id="view-playlists" class="view">
+      <header class="section-head">
+        <h3>Playlists</h3>
+        <button id="btnNewPlaylist" class="pill">Nueva</button>
+      </header>
+      <ul id="plList" class="pl-list"></ul>
+      <div id="plEmpty" class="empty muted">Aún no hay playlists. Creá la primera ✨</div>
+      <section id="plDetail" class="pl-detail hide">
+        <header class="section-head">
+          <h3 id="plTitle">Playlist</h3>
+          <div class="pl-actions">
+            <button id="btnPlayPlaylist" class="pill">Reproducir</button>
+            <button id="btnCloseDetail" class="pill ghost">Cerrar</button>
+          </div>
+        </header>
+        <ul id="plTracks" class="fav-list"></ul>
+      </section>
+    </section>
+
+    <!-- REPRODUCTOR -->
+    <section id="view-player" class="view now-playing">
+      <div id="npHero" class="np-hero">
+        <button id="npPlay" class="np-play" aria-label="Play/Pause">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+        <button id="npMenu" class="np-menu" aria-label="Menú">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
+      </div>
+      <div class="np-meta">
+        <div id="npTitle" class="np-title">Elegí una canción</div>
+        <div id="npSub" class="np-sub muted">—</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Seekbar Dock (siempre visible) -->
+  <section id="seekDock" class="seek-dock">
+    <input id="seek" class="seek-bar" type="range" min="0" max="1000" value="0" />
+    <div class="time-info"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+    <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
+  </section>
+
+  <!-- Barra inferior de navegación -->
+  <nav id="bottomNav" class="bottom-nav">
+    <button data-view="view-search" class="nav-btn active">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
+      <span>Búsqueda</span>
+    </button>
+    <button data-view="view-favs" class="nav-btn">
+      <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      <span>Favoritos</span>
+    </button>
+    <button data-view="view-playlists" class="nav-btn">
+      <svg viewBox="0 0 24 24"><path d="M3 6h14v2H3V6zm0 4h14v2H3v-2zm0 4h10v2H3v-2zm16-8h2v10h-2V6zm0 12h2v2h-2v-2z"/></svg>
+      <span>Playlists</span>
+    </button>
+    <button data-view="view-player" class="nav-btn">
+      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
+      <span>Reproductor</span>
+    </button>
+  </nav>
+
+  <!-- Sheet menú 3 puntos -->
+  <div id="menuSheet" class="sheet">
+    <div class="sheet-content">
+      <button id="mFav" class="sheet-item">Añadir/Quitar de Favoritos</button>
+      <button id="mPl" class="sheet-item">Añadir a Playlist…</button>
+      <button id="mClose" class="sheet-item ghost">Cerrar</button>
     </div>
   </div>
 
-  <!-- Controles en búsqueda -->
-  <footer class="controls-section" id="searchControls">
-    <div class="controls">
-      <button id="btnOpenFavs" class="btn" title="Abrir favoritos" aria-label="Abrir favoritos">
-        <!-- corazón -->
-        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>
-      </button>
-      <button id="btnRepeat" class="btn" title="Repetir uno">
-        <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 1 1 0-12zm10 4h-2v2h2a4 4 0 1 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 1 0 0-4z"/></svg>
-      </button>
-      <button id="btnPrev" class="btn" title="Anterior">
-        <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 6v12L9 12l11-6z"/></svg>
-      </button>
-      <button id="btnPlay" class="btn btn-play" title="Reproducir/Pausar">
-        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-      </button>
-      <button id="btnNext" class="btn" title="Siguiente">
-        <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 6v12l11-6L4 6z"/></svg>
-      </button>
+  <!-- Sheet seleccionar/crear playlist -->
+  <div id="playlistSheet" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-title">Agregar a playlist</div>
+      <div id="plChoices" class="sheet-list"></div>
+      <div class="sheet-row">
+        <input id="plNewName" placeholder="Nombre nueva playlist" />
+        <button id="plCreate" class="pill">Crear</button>
+      </div>
+      <button id="plCancel" class="sheet-item ghost">Cancelar</button>
     </div>
-    <div class="progress-container">
-      <input id="seek" class="seek-bar" type="range" min="0" max="1000" value="0" />
-      <div class="time-info"><span id="cur">0:00</span><span id="dur">0:00</span></div>
-    </div>
-    <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
-  </footer>
+  </div>
 
   <!-- YouTube oculto -->
   <div id="yt-holder"><div id="player"></div></div>
 
-  <script src="script.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
