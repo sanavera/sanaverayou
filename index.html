@@ -10,7 +10,7 @@
   <!-- Topbar -->
   <header class="topbar">
     <div class="brand-compact">
-      <img id="miniLogo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Escudo_del_Club_Atl%C3%A9tico_Independiente.svg/1945px-Escudo_del_Club_Atl%C3%A9tico_Independiente.svg.png" alt="Logo" />
+      <img id="miniLogo" src="https://i.imgur.com/HmNn2sP.png" alt="Logo" />
       <div class="search-container">
         <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
       </div>
@@ -20,9 +20,10 @@
 
   <!-- Resultados -->
   <main id="main">
-    <section id="results" class="results"></section>
-    <!-- sentinel para scroll infinito -->
-    <div id="sentinel" class="sentinel" aria-hidden="true"></div>
+    <section id="results" class="results">
+      <!-- items -->
+      <div id="sentinel" aria-hidden="true"></div>
+    </section>
   </main>
 
   <!-- Modal Favoritos -->
@@ -40,16 +41,15 @@
         <ul id="favList" class="fav-list"></ul>
       </section>
 
-      <!-- Controles en favoritos (incluye botón para ir a búsqueda) -->
+      <!-- Controles en favoritos -->
       <footer class="controls-section" id="favControls">
         <div class="controls">
-          <!-- nuevo: volver a buscar -->
-          <button id="btnGoSearch" class="btn btn-nav" title="Ir al buscador">
+          <button id="btnGoSearchFav" class="btn" title="Ir al buscador" aria-label="Ir al buscador">
+            <!-- ícono búsqueda -->
             <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/></svg>
           </button>
-
-          <button id="btnRepeatFav" class="btn" title="Repetir">
-            <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 0 1 0-12zm10 4h-2v2h2a4 4 0 0 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 0 0 0-4z"/></svg>
+          <button id="btnRepeatFav" class="btn" title="Repetir uno">
+            <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 1 1 0-12zm10 4h-2v2h2a4 4 0 1 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 1 0 0-4z"/></svg>
           </button>
           <button id="btnPrevFav" class="btn" title="Anterior">
             <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 6v12L9 12l11-6z"/></svg>
@@ -71,16 +71,15 @@
     </div>
   </div>
 
-  <!-- Controles en búsqueda (incluye botón para abrir favoritos) -->
+  <!-- Controles en búsqueda -->
   <footer class="controls-section" id="searchControls">
     <div class="controls">
-      <!-- nuevo: abrir favoritos -->
-      <button id="btnGoFavorites" class="btn btn-nav" title="Abrir favoritos">
-        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      <button id="btnOpenFavs" class="btn" title="Abrir favoritos" aria-label="Abrir favoritos">
+        <!-- corazón -->
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>
       </button>
-
-      <button id="btnRepeat" class="btn" title="Repetir">
-        <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 0 1 0-12zm10 4h-2v2h2a4 4 0 0 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 0 0 0-4z"/></svg>
+      <button id="btnRepeat" class="btn" title="Repetir uno">
+        <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 1 1 0-12zm10 4h-2v2h2a4 4 0 1 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 1 0 0-4z"/></svg>
       </button>
       <button id="btnPrev" class="btn" title="Anterior">
         <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 6v12L9 12l11-6z"/></svg>
