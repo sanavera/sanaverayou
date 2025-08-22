@@ -50,7 +50,7 @@ $("#searchInput").addEventListener("keydown", async e=>{
   if(e.key!=="Enter") return;
   const q = e.target.value.trim(); if(!q) return;
   await startSearch(q);
-  // OJO: NO cambiamos de pestaña; nos quedamos en Búsqueda como pediste
+  // Nos quedamos en Búsqueda
 });
 
 function setCount(t){ $("#resultsCount").textContent = t||""; }
@@ -64,7 +64,7 @@ async function startSearch(q){
   $("#results").innerHTML = "";
   setCount("Buscando…");
 
-  await loadNextPage(); // primera página
+  await loadNextPage();
 }
 
 async function loadNextPage(){
@@ -179,35 +179,26 @@ function appendResults(chunk){
         </button>
       </div>`;
 
-    // Play al tocar la tarjeta
     card.addEventListener("click", e=>{
-      if(e.target.closest(".more") || e.target.closest(".card-play")) return; // se manejan aparte
+      if(e.target.closest(".more") || e.target.closest(".card-play")) return;
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
-      // NO cambiamos de vista
     });
 
-    // Play/Pause overlay en la imagen
     card.querySelector(".card-play").onclick = (e)=>{
       e.stopPropagation();
-      // si ya suena este, toggle; si no, lo cargo
-      if(currentTrack?.id === it.id){
-        togglePlay();
-      }else{
+      if(currentTrack?.id === it.id){ togglePlay(); }
+      else{
         const pos = items.findIndex(x=>x.id===it.id);
         playFromSearch(pos>=0?pos:0, true);
       }
       refreshIndicators();
     };
 
-    // Sheet de opciones (agregar a fav / playlist)
     card.querySelector(".more").onclick = (e)=>{
-      e.stopPropagation();
-      selectedTrack = it;
-      openMenuFor(selectedTrack);
+      e.stopPropagation(); selectedTrack = it; openMenuFor(selectedTrack);
     };
 
-    // animación de aparición
     card.style.opacity='0'; card.style.transform='translateY(10px)';
     root.appendChild(card);
     requestAnimationFrame(()=>{ card.style.transition='all .25s ease-out'; card.style.opacity='1'; card.style.transform='translateY(0)'; });
@@ -226,6 +217,7 @@ function toggleFav(track){
   saveFavs();
   renderFavs();
 }
+
 function removeFav(id){ favs = favs.filter(f=>f.id!==id); saveFavs(); renderFavs(); }
 
 function renderFavs(){
@@ -234,7 +226,13 @@ function renderFavs(){
     const li = document.createElement("li");
     li.className = "fav-item"; li.dataset.trackId = it.id;
     li.innerHTML = `
-      <img class="thumb" src="${it.thumb}" alt="">
+      <div class="thumb-wrap">
+        <img class="thumb" src="${it.thumb}" alt="">
+        <button class="card-play" title="Play/Pause">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+      </div>
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${it.title}</span>
@@ -243,11 +241,23 @@ function renderFavs(){
         <div class="subtitle">${it.author||""}</div>
       </div>
       <button class="remove-btn" title="Quitar">✕</button>`;
+
+    // Reproducir (sin navegar al reproductor)
     li.addEventListener("click", e=>{
-      if(e.target.closest(".remove-btn")){ removeFav(it.id); e.stopPropagation(); return; }
+      if(e.target.closest(".remove-btn") || e.target.closest(".card-play")) return;
       playFromFav(it, true);
-      switchView("view-player"); // acá sí tiene sentido entrar al player
     });
+
+    // Play/pause overlay
+    li.querySelector(".card-play").onclick = (e)=>{
+      e.stopPropagation();
+      if(currentTrack?.id === it.id){ togglePlay(); }
+      else{ playFromFav(it, true); }
+      refreshIndicators();
+    };
+
+    li.querySelector(".remove-btn").onclick = (e)=>{ e.stopPropagation(); removeFav(it.id); };
+
     ul.appendChild(li);
   });
   updateHero(currentTrack);
@@ -281,7 +291,7 @@ function renderPlaylists(){
         <button class="pill" data-act="play">Reproducir</button>
       </div>`;
     li.querySelector('[data-act="open"]').onclick = ()=>{
-      showPlaylistInPlayer(pl.id);      // muestra lista en Player
+      showPlaylistInPlayer(pl.id);
       switchView("view-player");
     };
     li.querySelector('[data-act="play"]').onclick = ()=>{
@@ -309,7 +319,6 @@ $("#btnNewPlaylist").onclick = ()=>{
 
 /* ========= Menú 3 puntos (sheet) ========= */
 function openMenuFor(track){
-  // configurar texto de favoritos
   $("#mFav").textContent = isFav(track.id) ? "Quitar de Favoritos" : "Añadir a Favoritos";
   $("#menuSheet").classList.add("show");
 }
@@ -423,7 +432,9 @@ function showPlaylistInPlayer(plId){
   pl.tracks.forEach((t,i)=>{
     const li = document.createElement("li"); li.className="queue-item"; li.dataset.trackId=t.id;
     li.innerHTML = `
-      <img class="thumb" src="${t.thumb}" alt="">
+      <div class="thumb-wrap">
+        <img class="thumb" src="${t.thumb}" alt="">
+      </div>
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${t.title}</span>
@@ -451,9 +462,16 @@ function refreshIndicators(){
     if(btn) btn.classList.toggle("playing", playing && isCur);
   });
   // favoritos
-  $$("#favList .fav-item").forEach(li=> li.classList.toggle("is-playing", playing && li.dataset.trackId===curId));
+  $$("#favList .fav-item").forEach(li=>{
+    const isCur = li.dataset.trackId===curId;
+    li.classList.toggle("is-playing", playing && isCur);
+    const btn = li.querySelector(".card-play");
+    if(btn) btn.classList.toggle("playing", playing && isCur);
+  });
   // queue en player
-  $$("#queueList .queue-item").forEach(li=> li.classList.toggle("is-playing", playing && li.dataset.trackId===curId));
+  $$("#queueList .queue-item").forEach(li=>{
+    li.classList.toggle("is-playing", playing && li.dataset.trackId===curId);
+  });
 }
 
 /* ========= Visibilidad (truco recarga) ========= */
