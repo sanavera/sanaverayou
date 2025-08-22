@@ -1,5 +1,5 @@
-/* ===== Utilidades ===== */
-const $  = s => document.querySelector(s);
+/* ========== Helpers & constants ========== */
+const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s=Math.max(0,Math.floor(s||0)); const m=Math.floor(s/60), ss=s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const uniq = a => [...new Set(a)];
@@ -9,171 +9,348 @@ const cleanTitle = t => (t||"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
   .replace(/\s{2,}/g," ").trim();
 
-const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+const HEART_SVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+const DotsSVG  = `<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>`;
+const PlaySVG  = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+const PauseSVG = `<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>`;
 
-/* ===== Estado ===== */
-let items = [];
-let favs  = [];
-let playlists = []; // [{id,name,items:[track]}]
-let idx = -1;
-let currentTrack = null;
+/* ========== App state ========== */
+let items = [];          // resultados búsqueda (paginados)
+let favs  = [];          // favoritos
+let playlists = [];      // [{id,name,cover,items:[track]}]
 
-let ytPlayer = null;
-let YT_READY = false;
-let wasPlaying = false;
-let timer = null;
-let repeatOne = false;
+let queue = [];          // cola actual que se ve en Reproductor
+let qIndex = -1;         // índice en cola
+let current = null;      // track actual (obj)
 
-/* ===== Búsqueda simple (scrape + noembed) ===== */
-let lastQuery = "";
-let allIds = [];
-let loadedIds = new Set();
-const BATCH_SIZE = 6;
-const INFINITE_BATCH = 6;
+const LS_FAVS = "sanyou_favs_v1";
+const LS_PLS  = "sanyou_pls_v1";
 
-function setCount(t){ const el=$("#resultsCount"); if(el) el.textContent=t||""; }
+/* YouTube */
+let ytPlayer = null, YT_READY = false, timer=null, wasPlaying=false;
 
-async function searchYouTube(q, append=false){
-  if(!append){
-    setCount("Buscando…");
-    lastQuery = q;
-    items = [];
-    loadedIds.clear();
-    $("#results").innerHTML = "";
-    try{
-      const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-      const html = await fetch(url,{headers:{Accept:"text/plain"}}).then(r=>r.text());
-      allIds = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1])).slice(0,60);
-    }catch{
-      setCount("Error al conectar con YouTube"); return;
-    }
+/* Search paging */
+const PAGE_SIZE = 10;
+const PIPED_MIRRORS = ["https://piped.video","https://pipedapi.kavin.rocks","https://piped.privacy.com.de"];
+let paging = { query:"", page:0, hasMore:false, loading:false, mode:"piped" };
+let searchAbort = null;
+const pageCache = new Map();
+const scrapeCache = new Map();
+
+const cacheKey = (q,p)=>`sanyou:q=${q}:p=${p}`;
+const cacheGet = (q,p)=> pageCache.get(cacheKey(q,p)) || (()=>{
+  try{ const raw=sessionStorage.getItem(cacheKey(q,p)); if(!raw) return null;
+       const o=JSON.parse(raw); if(Date.now()-o.ts>10*60*1000) return null; return o.data; }catch{return null}
+})();
+const cacheSet = (q,p,data)=>{ pageCache.set(cacheKey(q,p),data); try{ sessionStorage.setItem(cacheKey(q,p), JSON.stringify({ts:Date.now(),data})) }catch{} };
+
+/* ========== Views / Tabbar ========== */
+function switchView(id){
+  $$('.view').forEach(v=>v.classList.toggle('active', v.id===id));
+  $$('.tab').forEach(t=>t.classList.toggle('active', t.id.replace('tab','view-')===id));
+  window.scrollTo({top:0, behavior:'instant'});
+}
+$('#tabSearch').onclick   = ()=>switchView('view-search');
+$('#tabFavorites').onclick= ()=>{ renderFavs(); switchView('view-favorites'); };
+$('#tabPlaylists').onclick= ()=>{ renderPlaylists(); switchView('view-playlists'); };
+$('#tabPlayer').onclick   = ()=>{ renderQueue(); switchView('view-player'); };
+
+/* ========== Load/save ========== */
+function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_FAVS)||'[]'); }catch{ favs=[]; } }
+function saveFavs(){ localStorage.setItem(LS_FAVS, JSON.stringify(favs)); }
+function loadPlaylists(){ try{ playlists = JSON.parse(localStorage.getItem(LS_PLS)||'[]'); }catch{ playlists=[]; } }
+function savePlaylists(){ localStorage.setItem(LS_PLS, JSON.stringify(playlists)); }
+
+/* ========== Search ========== */
+function setCount(t){ $('#resultsCount').textContent = t||''; }
+
+async function startSearch(q){
+  if(searchAbort) try{ searchAbort.abort(); }catch{}
+  searchAbort = new AbortController();
+
+  paging = {query:q, page:0, hasMore:true, loading:false, mode:"piped"};
+  items = []; $('#results').innerHTML = '';
+  setCount('Buscando…');
+
+  // first page quick
+  await loadNextPage();
+}
+
+async function loadNextPage(){
+  if(paging.loading || !paging.hasMore) return;
+  paging.loading = true;
+  const next = paging.page + 1;
+  let chunk=[], hasMore=false;
+
+  // cache
+  const cached = cacheGet(paging.query,next);
+  if(cached){ chunk=cached; hasMore=chunk.length>=PAGE_SIZE; addResults(chunk); paging.page=next; paging.hasMore=hasMore; paging.loading=false; setCount(`🎵 ${items.length} canciones`); return; }
+
+  try{
+    const r = await fetchPiped(paging.query, next, searchAbort.signal);
+    chunk = r.items; hasMore = r.hasMore; paging.mode="piped";
+  }catch{
+    const r2 = await fetchScrape(paging.query, next, PAGE_SIZE, searchAbort.signal);
+    chunk = r2.items; hasMore = r2.hasMore; paging.mode="scrape";
   }
 
-  const chunk = allIds.filter(id=>!loadedIds.has(id)).slice(0, append?INFINITE_BATCH:BATCH_SIZE);
-  if(!chunk.length){ setCount(`Resultados: ${items.length}`); return; }
+  cacheSet(paging.query,next,chunk);
+  addResults(chunk);
+  paging.page = next; paging.hasMore = hasMore; paging.loading=false;
+  setCount(`🎵 ${items.length} canciones${paging.hasMore?' • Scroll para más':''}`);
+}
 
-  for(const id of chunk){
+async function fetchPiped(q,page,signal){
+  let last=null;
+  for(const base of PIPED_MIRRORS){
+    const url = `${base}/api/v1/search?q=${encodeURIComponent(q)}&page=${page}&region=AR&filter=videos`;
+    try{
+      const r = await fetch(url,{signal,headers:{Accept:'application/json'}});
+      if(!r.ok){ last=new Error(`HTTP ${r.status}`); continue; }
+      const data = await r.json();
+      const arr = Array.isArray(data) ? data : (Array.isArray(data.items)?data.items:[]);
+      const out = arr.slice(0,PAGE_SIZE).map(it=>{
+        const id = it.id || it.videoId || (it.url && new URL(it.url,'https://d').searchParams.get('v'));
+        if(!id) return null;
+        const thumb = it.thumbnail || (it.thumbnails && it.thumbnails[0]?.url) || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+        const author = it.uploader || it.uploaderName || it.author || '';
+        const title = cleanTitle(it.title || it.name || `Video ${id}`);
+        return {id, title, thumb, author};
+      }).filter(Boolean);
+      return {items:out, hasMore: out.length>=PAGE_SIZE};
+    }catch(e){ last=e; continue; }
+  }
+  throw last || new Error('Piped fail');
+}
+
+async function fetchScrape(q,page,pageSize,signal){
+  if(!scrapeCache.has(q)){
+    const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+    const html = await fetch(url,{signal,headers:{Accept:"text/plain"}}).then(r=>r.text());
+    const ids = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1]));
+    scrapeCache.set(q, ids);
+  }
+  const ids = scrapeCache.get(q);
+  const start = (page-1)*pageSize;
+  const slice = ids.slice(start, start+pageSize);
+
+  const metas = await mapLimit(slice, 6, async (id)=>{
     try{
       const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`).then(r=>r.json());
-      const t = { id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"YouTube" };
-      items.push(t); loadedIds.add(id); appendResultCard(t, items.length-1); setCount(`Resultados: ${items.length}`);
+      return { id, title: cleanTitle(meta.title||`Video ${id}`), thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author: meta.author_name||"" };
     }catch{
-      const t = { id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"YouTube" };
-      items.push(t); loadedIds.add(id); appendResultCard(t, items.length-1); setCount(`Resultados: ${items.length}`);
+      return { id, title: cleanTitle(`Video ${id}`), thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"" };
     }
-  }
+  });
+  return {items:metas, hasMore: start+pageSize < ids.length};
 }
 
-function appendResultCard(track, i){
-  const root=$("#results"); if(!root) return;
-  const li=document.createElement("article");
-  li.className="card";
-  li.dataset.trackId=track.id;
-  li.innerHTML=`
-    <img class="thumb" src="${track.thumb}" alt="">
-    <div class="meta">
-      <div class="title-line">
-        <span class="title-text">${track.title}</span>
-        <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+async function mapLimit(arr,limit,worker){
+  const out = new Array(arr.length); let i=0; const pool=new Set();
+  async function fill(){
+    while(i<arr.length && pool.size<limit){
+      const idx=i++; const p=Promise.resolve(worker(arr[idx])).then(res=>out[idx]=res).finally(()=>pool.delete(p));
+      pool.add(p);
+    }
+    if(pool.size===0) return;
+    await Promise.race(pool); return fill();
+  }
+  await fill(); await Promise.all([...pool]); return out;
+}
+
+/* Append chunk to DOM */
+function addResults(chunk){
+  const root = $('#results');
+  for(const it of chunk){
+    items.push(it);
+    const li = document.createElement('article');
+    li.className='card'; li.dataset.id=it.id;
+
+    li.innerHTML = `
+      <div class="thumb-wrap">
+        <img class="thumb" src="${it.thumb}" alt="">
+        <div class="play-overlay"><button class="btn-playimg" title="Play">${PlaySVG}</button></div>
       </div>
-      <div class="subtitle">${track.author||""}</div>
-    </div>
-    <div class="actions">
-      <button class="icon-btn heart ${isFav(track.id)?'active':''}" title="Favorito">${HEART_SVG}</button>
-    </div>`;
-  li.addEventListener("click", e=>{
-    if(e.target.closest(".heart")){ toggleFav(track); e.stopPropagation(); return; }
-    playIndex(i, true);
-  });
-  root.appendChild(li);
+      <div class="meta">
+        <div class="title">${it.title}</div>
+        <div class="sub">${it.author||''}</div>
+        <div class="eq" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn heart ${isFav(it.id)?'active':''}" title="Favorito">${HEART_SVG}</button>
+        <button class="icon-btn menu-btn" title="Más">${DotsSVG}</button>
+      </div>
+    `;
+
+    // play/pause from image
+    li.querySelector('.btn-playimg').onclick = (e)=>{ e.stopPropagation(); playFromList(items, items.findIndex(x=>x.id===it.id), true); };
+    // heart
+    li.querySelector('.heart').onclick = (e)=>{ e.stopPropagation(); toggleFav(it); li.querySelector('.heart').classList.toggle('active', isFav(it.id)); };
+    // menu
+    li.querySelector('.menu-btn').onclick = (e)=>{ e.stopPropagation(); openTrackMenu(it); };
+
+    root.appendChild(li);
+  }
   refreshIndicators();
 }
-function renderResults(){ const root=$("#results"); if(!root) return; root.innerHTML=""; items.forEach((t,i)=>appendResultCard(t,i)); }
 
-/* ===== Favoritos ===== */
-const LS_FAVS="sanayera_favs_v1";
-function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_FAVS)||"[]"); }catch{ favs=[]; } }
-function saveFavs(){ localStorage.setItem(LS_FAVS, JSON.stringify(favs)); }
+/* ========== Favorites ========== */
 function isFav(id){ return favs.some(f=>f.id===id); }
-function toggleFav(track){
-  if(isFav(track.id)) favs=favs.filter(f=>f.id!==track.id);
-  else favs.unshift(track);
-  saveFavs(); renderFavs();
-  $$("#results .card").forEach(c=>{ if(c.dataset.trackId===track.id){ c.querySelector(".heart")?.classList.toggle("active", isFav(track.id)); }});
-}
-function removeFav(id){ favs=favs.filter(f=>f.id!==id); saveFavs(); renderFavs(); }
+function toggleFav(t){ if(isFav(t.id)) favs=favs.filter(f=>f.id!==t.id); else favs.unshift(t); saveFavs(); renderFavs(); }
 function renderFavs(){
-  const ul=$("#favList"); if(!ul) return; ul.innerHTML="";
-  favs.forEach(it=>{
-    const li=document.createElement("li");
-    li.className="fav-item"; li.dataset.trackId=it.id;
-    li.innerHTML=`
-      <img class="thumb" src="${it.thumb}" alt="">
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${it.author||""}</div>
+  const ul = $('#favList'); ul.innerHTML='';
+  favs.forEach(t=>{
+    const li = document.createElement('li'); li.className='row'; li.dataset.id=t.id;
+    li.innerHTML = `
+      <div class="thumb-wrap">
+        <img class="thumb" src="${t.thumb}" alt="">
+        <div class="play-overlay"><button class="btn-playimg">${PlaySVG}</button></div>
       </div>
-      <button class="remove-btn" title="Quitar">✕</button>`;
-    li.addEventListener("click", e=>{
-      if(e.target.closest(".remove-btn")){ removeFav(it.id); e.stopPropagation(); return; }
-      playFromFav(it, true);
-    });
+      <div class="meta">
+        <div class="title">${t.title}</div>
+        <div class="sub">${t.author||''}</div>
+        <div class="eq"><span></span><span></span><span></span></div>
+      </div>
+      <button class="icon-btn menu-btn">${DotsSVG}</button>
+    `;
+    li.querySelector('.btn-playimg').onclick = (e)=>{ e.stopPropagation(); playFromList(favs, favs.findIndex(x=>x.id===t.id), true); };
+    li.querySelector('.menu-btn').onclick = (e)=>{ e.stopPropagation(); openFavItemMenu(t); };
     ul.appendChild(li);
   });
-  updateHero(currentTrack); refreshIndicators();
+  refreshIndicators();
 }
 
-/* ===== Playlists (simple localStorage) ===== */
-const LS_PL="sanayera_playlists_v1";
-function loadPlaylists(){ try{ playlists=JSON.parse(localStorage.getItem(LS_PL)||"[]"); }catch{ playlists=[]; } }
-function savePlaylists(){ localStorage.setItem(LS_PL, JSON.stringify(playlists)); }
-
-function coverOf(list){ return list.items?.[0]?.thumb || "https://dummyimage.com/120x120/242731/ffffff&text=♪"; }
-
+/* ========== Playlists ========== */
 function renderPlaylists(){
-  const wrap=$("#playlistsWrap"); if(!wrap) return; wrap.innerHTML="";
+  const ul = $('#plList'); ul.innerHTML='';
+  $('#plEmpty').style.display = playlists.length? 'none':'block';
   playlists.forEach(pl=>{
-    const li=document.createElement("div");
-    li.className="pl-card"; li.dataset.plId=pl.id;
-    li.innerHTML=`
-      <img class="pl-cover" src="${coverOf(pl)}" alt="">
-      <div style="min-width:0">
-        <div class="pl-name">${pl.name}</div>
-        <div class="pl-info">${(pl.items?.length||0)} temas</div>
+    const li = document.createElement('li'); li.className='pl-item'; li.dataset.id=pl.id;
+    li.innerHTML = `
+      <img class="cover" src="${pl.cover || 'https://i.imgur.com/0mKXo3T.png'}" alt="">
+      <div class="meta" style="flex:1;min-width:0">
+        <div class="title">${pl.name}</div>
+        <div class="sub">${pl.items.length} temas</div>
       </div>
-      <div class="pl-actions">
-        <button class="more-btn more" title="Más">
-          <svg viewBox="0 0 24 24"><path d="M12 7a2 2 0 110-4 2 2 0 010 4zm0 7a2 2 0 110-4 2 2 0 010 4zm0 7a2 2 0 110-4 2 2 0 010 4z"/></svg>
-        </button>
-      </div>`;
-    // 👉 Tocar la tarjeta = Abrir (como pediste)
-    li.addEventListener("click",(e)=>{
-      if(e.target.closest(".more")) return;
-      showPlaylistInPlayer(pl.id);
-      switchView("view-player");
+      <button class="icon-btn menu-btn" title="Opciones">${DotsSVG}</button>
+    `;
+    // Click en card -> abrir directo
+    li.addEventListener('click', (e)=>{
+      if(e.target.closest('.menu-btn')) return;
+      openPlaylist(pl.id, {play:false});   // cargar cola sin autoplay
+      switchView('view-player');
     });
-    wrap.appendChild(li);
+    li.querySelector('.menu-btn').onclick = (e)=>{ e.stopPropagation(); openPlaylistMenu(pl); };
+    ul.appendChild(li);
   });
 }
-function showPlaylistInPlayer(plId){
-  const pl = playlists.find(p=>p.id===plId);
-  if(!pl || !pl.items || !pl.items.length) return;
-  items = pl.items.slice();
-  idx = 0;
-  playIndex(0, true);
+$('#btnNewPlaylist').onclick = ()=> {
+  const name = prompt('Nombre de la nueva playlist:','Mi playlist');
+  if(!name) return;
+  const id = 'pl_' + Math.random().toString(36).slice(2,9);
+  playlists.unshift({id, name, cover:'', items:[]});
+  savePlaylists(); renderPlaylists();
+};
+
+function addTrackToPlaylist(track){
+  if(!playlists.length){
+    const ok = confirm('No hay playlists. ¿Crear una?');
+    if(!ok) return;
+    $('#btnNewPlaylist').click();
+    if(!playlists.length) return;
+  }
+  // elegir
+  const names = playlists.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+  const idx = parseInt(prompt(`Agregar a playlist:\n${names}\n\nEscribí el número:`),10)-1;
+  if(isNaN(idx) || idx<0 || idx>=playlists.length) return;
+  const pl = playlists[idx];
+  if(!pl.items.some(x=>x.id===track.id)) pl.items.unshift(track);
+  if(!pl.cover) pl.cover = track.thumb;
+  savePlaylists(); renderPlaylists();
 }
 
-/* ===== YouTube IFrame API ===== */
+function openPlaylist(id,{play=false}={}){
+  const pl = playlists.find(p=>p.id===id); if(!pl) return;
+  queue = pl.items.slice(); qIndex = queue.length?0:-1; current = queue[qIndex]||null;
+  $('#queueTitle').textContent = pl.name;
+  renderQueue();
+  switchView('view-player');
+  if(play && current) playFromList(queue, 0, true);
+}
+
+function renderQueue(){
+  const ul = $('#queueList'); ul.innerHTML='';
+  queue.forEach((t,i)=>{
+    const li = document.createElement('li'); li.className='row'; li.dataset.id=t.id;
+    li.innerHTML = `
+      <div class="thumb-wrap">
+        <img class="thumb" src="${t.thumb}" alt="">
+        <div class="play-overlay"><button class="btn-playimg">${PlaySVG}</button></div>
+      </div>
+      <div class="meta">
+        <div class="title">${t.title}</div>
+        <div class="sub">${t.author||''}</div>
+        <div class="eq"><span></span><span></span><span></span></div>
+      </div>
+      <button class="icon-btn menu-btn">${DotsSVG}</button>
+    `;
+    li.querySelector('.btn-playimg').onclick = (e)=>{ e.stopPropagation(); playFromList(queue, i, true); };
+    li.querySelector('.menu-btn').onclick   = (e)=>{ e.stopPropagation(); openTrackMenu(t); };
+    ul.appendChild(li);
+  });
+  refreshIndicators();
+}
+
+/* ========== Menús (action sheet) ========== */
+const sheet = $('#sheet'), sheetList = $('#sheetList');
+$('#sheetCancel').onclick = closeSheet;
+sheet.querySelector('.sheet-backdrop').onclick = closeSheet;
+
+function openSheetWith(actions){
+  sheetList.innerHTML='';
+  actions.forEach(({label,fn,danger})=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<button ${danger?'style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35)"':''}>${label}</button>`;
+    li.firstChild.onclick = ()=>{ closeSheet(); setTimeout(fn, 10); };
+    sheetList.appendChild(li);
+  });
+  sheet.classList.remove('hidden');
+}
+function closeSheet(){ sheet.classList.add('hidden'); }
+
+function openTrackMenu(t){
+  const acts = [
+    {label: isFav(t.id)?'Quitar de favoritos':'Agregar a favoritos', fn: ()=> toggleFav(t)},
+    {label: 'Agregar a playlist…', fn: ()=> addTrackToPlaylist(t)},
+    {label: 'Abrir en reproductor', fn: ()=> { queue=[t]; qIndex=0; current=t; renderQueue(); switchView('view-player'); playFromList(queue,0,true); } }
+  ];
+  openSheetWith(acts);
+}
+function openFavItemMenu(t){
+  const acts = [
+    {label:'Eliminar de favoritos', fn: ()=> { favs=favs.filter(x=>x.id!==t.id); saveFavs(); renderFavs(); }, danger:true},
+    {label:'Agregar a playlist…', fn: ()=> addTrackToPlaylist(t)}
+  ];
+  openSheetWith(acts);
+}
+function openPlaylistMenu(pl){
+  const acts = [
+    {label:'Abrir', fn: ()=> { openPlaylist(pl.id,{play:false}); switchView('view-player'); }},
+    {label:'Reproducir', fn: ()=> { openPlaylist(pl.id,{play:true}); }},
+    {label:'Renombrar', fn: ()=> { const n=prompt('Nuevo nombre:',pl.name); if(n){ pl.name=n; savePlaylists(); renderPlaylists(); } }},
+    {label:'Eliminar', fn: ()=> { if(confirm('¿Eliminar playlist?')){ playlists = playlists.filter(p=>p.id!==pl.id); savePlaylists(); renderPlaylists(); } }, danger:true}
+  ];
+  openSheetWith(acts);
+}
+
+/* ========== Player control ========== */
 function loadYTApi(){
   if(window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
-  const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
+  const s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s);
 }
-window.onYouTubeIframeAPIReady=function(){
-  ytPlayer=new YT.Player("player",{
-    width:300,height:150,videoId:"",
+window.onYouTubeIframeAPIReady = function(){
+  ytPlayer = new YT.Player('player',{
+    width:300,height:150,videoId:'',
     playerVars:{autoplay:0,controls:0,rel:0,playsinline:1},
     events:{ onReady:()=>{YT_READY=true}, onStateChange:onYTState }
   });
@@ -181,153 +358,104 @@ window.onYouTubeIframeAPIReady=function(){
 function onYTState(e){
   const st=e.data;
   const playing=(st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING);
-  $("#btnPlay")?.classList.toggle("playing", playing);
-  $("#btnPlayFav")?.classList.toggle("playing", playing);
-  setMiniPlayingState(playing);
-  wasPlaying=playing;
+  $('#npToggle').classList.toggle('playing', playing);
+  wasPlaying = playing;
   if(st===YT.PlayerState.ENDED){
-    if(repeatOne){ ytPlayer.seekTo(0,true); ytPlayer.playVideo(); }
-    else{ next(); }
+    // siguiente en cola
+    if(qIndex+1<queue.length) playFromList(queue, qIndex+1, true);
   }
   refreshIndicators();
 }
 
-/* ===== Reproducción ===== */
-function updateHero(track){
-  const t=track||currentTrack;
-  $("#favHero") && ($("#favHero").style.backgroundImage = t ? `url(${t.thumb})` : "none");
-  $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "—");
-  updateMiniNow(t);
-}
-function playIndex(i, autoplay=false){
-  if(!YT_READY || !items[i]) return;
-  idx=i; currentTrack=items[i];
-  ytPlayer.loadVideoById({videoId:currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
+function playFromList(list, index, autoplay=false){
+  if(!YT_READY || !list[index]) return;
+  queue = list.slice(); qIndex=index; current=queue[qIndex];
+  ytPlayer.loadVideoById({videoId:current.id, startSeconds:0, suggestedQuality:'auto'});
   if(!autoplay) ytPlayer.pauseVideo();
-  startTimer(); updateHero(currentTrack); refreshIndicators();
+  renderQueue(); updateNowPlayingPill(); startTimer();
 }
-function playFromFav(track, autoplay=false){
-  if(!YT_READY || !track) return;
-  currentTrack=track;
-  idx = items.findIndex(x=>x.id===track.id);
-  ytPlayer.loadVideoById({videoId:track.id, startSeconds:0, suggestedQuality:"auto"});
-  if(!autoplay) ytPlayer.pauseVideo();
-  startTimer(); updateHero(track); refreshIndicators();
-}
+
 function togglePlay(){
   if(!YT_READY) return;
   const st=ytPlayer.getPlayerState();
   (st===YT.PlayerState.PLAYING) ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
 }
-function prev(){
-  if(idx>=0 && idx-1>=0){ playIndex(idx-1,true); return; }
-  const pos=favs.findIndex(f=>f.id===currentTrack?.id);
-  if(pos>0) playFromFav(favs[pos-1], true);
-}
-function next(){
-  if(idx>=0 && idx+1<items.length){ playIndex(idx+1,true); return; }
-  const pos=favs.findIndex(f=>f.id===currentTrack?.id);
-  if(pos>=0 && pos+1<favs.length) playFromFav(favs[pos+1], true);
-}
-function seekToFrac(frac){
-  if(!YT_READY) return;
-  const d=ytPlayer.getDuration()||0;
-  ytPlayer.seekTo(frac*d,true);
-}
+$('#npToggle').onclick = togglePlay;
+
 function startTimer(){
   stopTimer();
-  timer=setInterval(()=>{
+  timer = setInterval(()=>{
     if(!YT_READY) return;
-    const cur=ytPlayer.getCurrentTime()||0;
-    const dur=ytPlayer.getDuration()||0;
-    $("#cur") && ($("#cur").textContent=fmt(cur));
-    $("#dur") && ($("#dur").textContent=fmt(dur));
-    $("#seek") && ($("#seek").value = dur ? Math.floor((cur/dur)*1000) : 0);
-    $("#curFav") && ($("#curFav").textContent=fmt(cur));
-    $("#durFav") && ($("#durFav").textContent=fmt(dur));
-    $("#seekFav") && ($("#seekFav").value = $("#seek")?.value || 0);
-    setMiniPlayingState(ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
+    const cur=ytPlayer.getCurrentTime()||0, dur=ytPlayer.getDuration()||0;
+    $('#cur').textContent = fmt(cur); $('#dur').textContent = fmt(dur);
+    $('#seek').value = dur ? Math.floor((cur/dur)*1000) : 0;
     refreshIndicators();
   },250);
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
+$('#seek').addEventListener('input', e=>{
+  if(!YT_READY) return;
+  const d=ytPlayer.getDuration()||0; ytPlayer.seekTo((parseInt(e.target.value,10)/1000)*d, true);
+});
 
 function refreshIndicators(){
-  const playing=YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
-  const curId=currentTrack?.id || "";
-  $$("#results .card").forEach(card=> card.classList.toggle("is-playing", playing && card.dataset.trackId===curId));
-  $$("#favList .fav-item").forEach(li=> li.classList.toggle("is-playing", playing && li.dataset.trackId===curId));
+  const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
+  const curId = current?.id || '';
+  // in results
+  $$('#results .card').forEach(c=>{
+    c.classList.toggle('is-playing', playing && c.dataset.id===curId);
+  });
+  // favs
+  $$('#favList .row').forEach(c=>{
+    c.classList.toggle('is-playing', playing && c.dataset.id===curId);
+  });
+  // queue
+  $$('#queueList .row').forEach(c=>{
+    c.classList.toggle('is-playing', playing && c.dataset.id===curId);
+  });
 }
-document.addEventListener("visibilitychange", ()=>{
-  if(!YT_READY || !currentTrack) return;
-  if(document.visibilityState==="hidden" && wasPlaying){
-    const t=ytPlayer.getCurrentTime()||0;
-    ytPlayer.loadVideoById({videoId:currentTrack.id, startSeconds:t, suggestedQuality:"auto"});
+
+function updateNowPlayingPill(){
+  const has = !!current;
+  $('#nowPlaying').classList.toggle('hidden', !has);
+  if(!has) return;
+  $('#npThumb').src = current.thumb;
+  $('#npTitle').textContent = current.title;
+}
+
+/* keep playing when visibility changes (mobile hack) */
+document.addEventListener('visibilitychange', ()=>{
+  if(!YT_READY || !current) return;
+  if(document.visibilityState==='hidden' && wasPlaying){
+    const t = ytPlayer.getCurrentTime()||0;
+    ytPlayer.loadVideoById({videoId:current.id, startSeconds:t, suggestedQuality:"auto"});
     ytPlayer.playVideo();
   }
 });
 
-/* ===== Mini Now Playing (header) ===== */
-function mountMiniNowPlaying(){
-  const host=document.querySelector(".topbar");
-  if(!host || $("#miniNow")) return;
-  const bar=document.createElement("div");
-  bar.id="miniNow"; bar.className="mini-nowplaying hide";
-  bar.innerHTML=`
-    <img id="miniThumb" class="mini-thumb" alt="">
-    <div class="mini-meta">
-      <div id="miniTitle" class="mini-title">—</div>
-      <div id="miniSub" class="mini-sub">—</div>
-    </div>
-    <button id="miniPlay" class="mini-btn" title="Play/Pausa">
-      <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-      <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-    </button>`;
-  host.appendChild(bar);
-  $("#miniPlay").onclick=(e)=>{ e.stopPropagation(); togglePlay(); };
-  bar.addEventListener("click",(e)=>{ if(e.target.closest("#miniPlay")) return; switchView("view-player"); });
+/* ========== Infinite scroll ========== */
+const sentinel = $('#sentinel');
+if('IntersectionObserver' in window){
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting) loadNextPage();
+    });
+  }, {root:null, rootMargin:'1200px 0px 0px 0px', threshold:0});
+  io.observe(sentinel);
 }
-function updateMiniNow(t){
-  const bar=$("#miniNow"); if(!bar) return;
-  if(!t){ bar.classList.add("hide"); return; }
-  $("#miniThumb").src=t.thumb;
-  $("#miniTitle").textContent=t.title||"—";
-  $("#miniSub").textContent=t.author||"—";
-  bar.classList.remove("hide");
-}
-function setMiniPlayingState(p){ $("#miniPlay")?.classList.toggle("playing", !!p); }
 
-/* ===== UI ===== */
-function setupSearchInput(){
-  const input=$("#searchInput"); if(!input) return;
-  input.addEventListener("keydown", async e=>{
-    if(e.key==="Enter"){
-      const q=input.value.trim(); if(!q) return;
-      await searchYouTube(q,false);
-    }
-  });
-}
-function setupInfiniteScroll(){
-  window.addEventListener("scroll", throttle(()=>{
-    const scrolled = window.scrollY + window.innerHeight;
-    if(scrolled > document.body.scrollHeight - 800){
-      if(lastQuery) searchYouTube(lastQuery, true);
-    }
-  },120), {passive:true});
-}
-function throttle(fn,ms){ let t=null; return (...a)=>{ if(t) return; t=setTimeout(()=>{ t=null; fn(...a); },ms); }; }
+/* ========== Search input ========== */
+$('#searchInput').addEventListener('keydown', (e)=>{
+  if(e.key==='Enter'){
+    const q = $('#searchInput').value.trim();
+    if(!q) return;
+    startSearch(q);
+    switchView('view-search');
+  }
+});
 
-/* Si usás vistas por id */
-function switchView(id){ $$(".view").forEach(v=> v.style.display = (v.id===id) ? "block" : "none"); }
-
-/* ===== Init ===== */
-loadFavs();
-loadPlaylists();
-renderFavs();
-renderPlaylists();
+/* ========== Init ========== */
+loadFavs(); loadPlaylists(); renderFavs(); renderPlaylists(); renderQueue();
 loadYTApi();
-setupSearchInput();
-setupInfiniteScroll();
-mountMiniNowPlaying();
-
-window.app = { toggleFav, showPlaylistInPlayer, switchView };
+updateNowPlayingPill();
+setCount('');
