@@ -10,17 +10,17 @@ const cleanTitle = t => (t||"")
   .replace(/\s{2,}/g," ").trim();
 
 /* ========= Estado ========= */
-let items = [];            // resultados de búsqueda
+let items = [];            // resultados
 let favs  = [];            // favoritos
 let playlists = [];        // [{id,name,tracks:[]}]
 let queue = null;          // cola actual
-let queueType = null;      // 'search' | 'favs' | 'playlist'
+let queueType = null;      // 'search'|'favs'|'playlist'
 let qIdx = -1;
 let currentTrack = null;
 
 let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
-
-let selectedTrack = null;  // para el sheet (desde card o desde player)
+let selectedTrack = null;        // para sheets desde cards/favs
+let selectedPlaylistId = null;   // para sheet de playlists
 
 /* ========= Paginación / búsqueda ========= */
 const PAGE_SIZE = 12;
@@ -34,7 +34,7 @@ let searchAbort = null;
 const pageCache = new Map();
 const cacheKey = (q,p) => `sanyou:q=${q}:p=${p}`;
 
-/* ========= Views & Nav ========= */
+/* ========= Nav ========= */
 function switchView(id){
   $$(".view").forEach(v=>v.classList.remove("active"));
   $("#"+id).classList.add("active");
@@ -50,9 +50,7 @@ $("#searchInput").addEventListener("keydown", async e=>{
   if(e.key!=="Enter") return;
   const q = e.target.value.trim(); if(!q) return;
   await startSearch(q);
-  // Nos quedamos en Búsqueda
 });
-
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
 async function startSearch(q){
@@ -86,15 +84,15 @@ async function loadNextPage(){
 
   let chunk = [], hasMore = false, lastErr = null;
 
-  // 1) Piped
+  // 1) Piped (con mirrors)
   for(const base of PIPED_MIRRORS){
     const url = `${base}/api/v1/search?q=${encodeURIComponent(paging.query)}&page=${next}&filter=videos&region=AR`;
     try{
       const r = await fetch(url, {signal:searchAbort.signal, headers:{Accept:"application/json"}});
-      if(!r.ok) { lastErr = new Error(`HTTP ${r.status}`); continue; }
+      if(!r.ok){ lastErr = new Error(`HTTP ${r.status}`); continue; }
       const data = await r.json();
       const arr = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
-      chunk = arr.slice(0, PAGE_SIZE).map(it=>{
+      chunk = arr.slice(0,PAGE_SIZE).map(it=>{
         const id = it.id || it.videoId || (it.url && new URL(it.url,"https://x").searchParams.get("v"));
         if(!id) return null;
         const thumb = it.thumbnail || (it.thumbnails && it.thumbnails[0] && it.thumbnails[0].url) || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
@@ -103,9 +101,9 @@ async function loadNextPage(){
         return { id, title, thumb, author };
       }).filter(Boolean);
       hasMore = chunk.length >= PAGE_SIZE;
-      paging.mode = "piped";
+      paging.mode="piped";
       break;
-    }catch(e){ lastErr = e; continue; }
+    }catch(e){ lastErr = e; }
   }
 
   // 2) Fallback scrape
@@ -122,21 +120,19 @@ async function loadNextPage(){
           return { id, title: cleanTitle(`Video ${id}`), thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`, author:"" };
         }
       });
-      chunk = metas; hasMore = idsAll.length > next*PAGE_SIZE; paging.mode = "scrape";
+      chunk = metas; hasMore = idsAll.length > next*PAGE_SIZE; paging.mode="scrape";
     }catch(e){ lastErr = e; }
   }
 
   if(!chunk.length && lastErr){
     setCount("❌ Error al buscar. Intenta de nuevo.");
-    paging.loading = false; paging.hasMore = false; return;
+    paging.loading=false; paging.hasMore=false; return;
   }
 
   pageCache.set(ck, chunk);
   appendResults(chunk);
   items = items.concat(chunk);
-  paging.page = next;
-  paging.hasMore = hasMore;
-  paging.loading = false;
+  paging.page = next; paging.hasMore = hasMore; paging.loading=false;
   setCount(`🎵 ${items.length} canciones${paging.hasMore?' • baja para más':''}`);
 }
 
@@ -144,7 +140,8 @@ async function mapLimit(arr, limit, worker){
   const out = new Array(arr.length); let i=0; const pool=new Set();
   async function fill(){
     while(i<arr.length && pool.size<limit){
-      const idx=i++; const p=Promise.resolve(worker(arr[idx])).then(v=>out[idx]=v).finally(()=>pool.delete(p)); pool.add(p);
+      const idx=i++; const p=Promise.resolve(worker(arr[idx])).then(v=>out[idx]=v).finally(()=>pool.delete(p));
+      pool.add(p);
     }
     if(!pool.size) return; await Promise.race(pool); return fill();
   }
@@ -179,12 +176,14 @@ function appendResults(chunk){
         </button>
       </div>`;
 
+    // Tap en card -> reproducir pero quedarse en Búsqueda
     card.addEventListener("click", e=>{
       if(e.target.closest(".more") || e.target.closest(".card-play")) return;
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
     });
 
+    // Play/Pause overlay
     card.querySelector(".card-play").onclick = (e)=>{
       e.stopPropagation();
       if(currentTrack?.id === it.id){ togglePlay(); }
@@ -195,8 +194,21 @@ function appendResults(chunk){
       refreshIndicators();
     };
 
+    // Menú 3 puntos (track)
     card.querySelector(".more").onclick = (e)=>{
-      e.stopPropagation(); selectedTrack = it; openMenuFor(selectedTrack);
+      e.stopPropagation(); selectedTrack = it;
+      openActionSheet({
+        title: "Opciones",
+        actions: [
+          { id:"fav", label: isFav(it.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
+          { id:"pl",  label:"Agregar a playlist" },
+          { id:"cancel", label:"Cancelar", ghost:true }
+        ],
+        onAction: (id)=>{
+          if(id==="fav"){ toggleFav(it); }
+          if(id==="pl"){ openPlaylistSheet(it); }
+        }
+      });
     };
 
     card.style.opacity='0'; card.style.transform='translateY(10px)';
@@ -214,11 +226,8 @@ function isFav(id){ return favs.some(f=>f.id===id); }
 function toggleFav(track){
   if(isFav(track.id)) favs = favs.filter(f=>f.id!==track.id);
   else favs.unshift(track);
-  saveFavs();
-  renderFavs();
+  saveFavs(); renderFavs(); refreshIndicators();
 }
-
-function removeFav(id){ favs = favs.filter(f=>f.id!==id); saveFavs(); renderFavs(); }
 
 function renderFavs(){
   const ul = $("#favList"); ul.innerHTML="";
@@ -240,15 +249,19 @@ function renderFavs(){
         </div>
         <div class="subtitle">${it.author||""}</div>
       </div>
-      <button class="remove-btn" title="Quitar">✕</button>`;
+      <div class="actions">
+        <button class="icon-btn more" title="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
+      </div>`;
 
-    // Reproducir (sin navegar al reproductor)
+    // Tap -> reproducir en favoritos (sin navegar)
     li.addEventListener("click", e=>{
-      if(e.target.closest(".remove-btn") || e.target.closest(".card-play")) return;
+      if(e.target.closest(".more") || e.target.closest(".card-play")) return;
       playFromFav(it, true);
     });
 
-    // Play/pause overlay
+    // Play/Pause overlay
     li.querySelector(".card-play").onclick = (e)=>{
       e.stopPropagation();
       if(currentTrack?.id === it.id){ togglePlay(); }
@@ -256,7 +269,22 @@ function renderFavs(){
       refreshIndicators();
     };
 
-    li.querySelector(".remove-btn").onclick = (e)=>{ e.stopPropagation(); removeFav(it.id); };
+    // Menú 3 puntos (favorito)
+    li.querySelector(".more").onclick = (e)=>{
+      e.stopPropagation(); selectedTrack = it;
+      openActionSheet({
+        title: it.title,
+        actions: [
+          { id:"remove", label:"Quitar de Favoritos" },
+          { id:"pl",     label:"Agregar a playlist" },
+          { id:"cancel", label:"Cancelar", ghost:true }
+        ],
+        onAction:(id)=>{
+          if(id==="remove"){ toggleFav(it); }
+          if(id==="pl"){ openPlaylistSheet(it); }
+        }
+      });
+    };
 
     ul.appendChild(li);
   });
@@ -284,31 +312,42 @@ function renderPlaylists(){
           <div class="subtitle">${pl.tracks.length} temas</div>
         </div>
       </div>
-      <div class="pl-actions">
-        <button class="pill ghost" data-act="rename">Renombrar</button>
-        <button class="pill danger" data-act="delete">Eliminar</button>
-        <button class="pill ghost" data-act="open">Abrir</button>
-        <button class="pill" data-act="play">Reproducir</button>
-      </div>`;
-    li.querySelector('[data-act="open"]').onclick = ()=>{
-      showPlaylistInPlayer(pl.id);
-      switchView("view-player");
+      <button class="icon-btn more" title="Opciones">
+        <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+      </button>`;
+
+    li.querySelector(".more").onclick = ()=>{
+      selectedPlaylistId = pl.id;
+      openActionSheet({
+        title: pl.name,
+        actions:[
+          { id:"open",   label:"Abrir" },
+          { id:"play",   label:"Reproducir" },
+          { id:"rename", label:"Renombrar" },
+          { id:"delete", label:"Eliminar" , danger:true },
+          { id:"cancel", label:"Cancelar", ghost:true }
+        ],
+        onAction:(id)=>{
+          const P = playlists.find(p=>p.id===pl.id);
+          if(!P) return;
+          if(id==="open"){ showPlaylistInPlayer(P.id); switchView("view-player"); }
+          if(id==="play"){ playPlaylist(P.id); switchView("view-player"); }
+          if(id==="rename"){
+            const name = prompt("Nuevo nombre:", P.name)?.trim();
+            if(name){ P.name=name; savePlaylists(); renderPlaylists(); }
+          }
+          if(id==="delete"){
+            if(confirm(`Eliminar playlist "${P.name}"?`)){
+              playlists = playlists.filter(x=>x.id!==P.id); savePlaylists(); renderPlaylists();
+            }
+          }
+        }
+      });
     };
-    li.querySelector('[data-act="play"]').onclick = ()=>{
-      playPlaylist(pl.id); switchView("view-player");
-    };
-    li.querySelector('[data-act="rename"]').onclick = ()=>{
-      const name = prompt("Nuevo nombre:", pl.name)?.trim();
-      if(!name) return; pl.name = name; savePlaylists(); renderPlaylists();
-    };
-    li.querySelector('[data-act="delete"]').onclick = ()=>{
-      if(!confirm(`Eliminar playlist "${pl.name}"?`)) return;
-      playlists = playlists.filter(p=>p.id!==pl.id); savePlaylists(); renderPlaylists();
-    };
+
     list.appendChild(li);
   });
 }
-
 $("#btnNewPlaylist").onclick = ()=>{
   const name = prompt("Nombre de la playlist:")?.trim();
   if(!name) return;
@@ -317,25 +356,27 @@ $("#btnNewPlaylist").onclick = ()=>{
   savePlaylists(); renderPlaylists();
 };
 
-/* ========= Menú 3 puntos (sheet) ========= */
-function openMenuFor(track){
-  $("#mFav").textContent = isFav(track.id) ? "Quitar de Favoritos" : "Añadir a Favoritos";
-  $("#menuSheet").classList.add("show");
+/* ========= Sheets genéricos ========= */
+function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
+  const sheet = $("#menuSheet");
+  sheet.innerHTML = `
+    <div class="sheet-content">
+      <div class="sheet-title">${title}</div>
+      ${actions.map(a=>`
+        <button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">
+          ${a.label}
+        </button>
+      `).join("")}
+    </div>`;
+  sheet.classList.add("show");
+  sheet.onclick = (e)=>{
+    if(e.target===sheet){ sheet.classList.remove("show"); return; }
+    const btn = e.target.closest(".sheet-item"); if(!btn) return;
+    const id = btn.dataset.id;
+    sheet.classList.remove("show");
+    if(id) onAction(id);
+  };
 }
-$("#npMenu").onclick = ()=>{ if(currentTrack){ selectedTrack = currentTrack; openMenuFor(currentTrack); } };
-$("#mClose").onclick = ()=> $("#menuSheet").classList.remove("show");
-$("#menuSheet").addEventListener("click", e=>{ if(e.target.id==="menuSheet") $("#menuSheet").classList.remove("show"); });
-
-$("#mFav").onclick = ()=>{
-  if(!selectedTrack) return;
-  toggleFav(selectedTrack);
-  $("#menuSheet").classList.remove("show");
-};
-$("#mPl").onclick = ()=>{
-  if(!selectedTrack) return;
-  $("#menuSheet").classList.remove("show");
-  openPlaylistSheet(selectedTrack);
-};
 
 function openPlaylistSheet(track){
   const sheet = $("#playlistSheet"); sheet.classList.add("show");
@@ -355,7 +396,7 @@ function openPlaylistSheet(track){
     const id = "pl_"+Date.now().toString(36);
     const pl = {id, name, tracks:[track]};
     playlists.unshift(pl); savePlaylists(); renderPlaylists();
-    $("#plNewName").value = ""; sheet.classList.remove("show");
+    $("#plNewName").value=""; sheet.classList.remove("show");
   };
   $("#plCancel").onclick = ()=> sheet.classList.remove("show");
   sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
@@ -382,7 +423,6 @@ function playCurrent(autoplay=false){
   updateHero(currentTrack);
   refreshIndicators();
 }
-
 function playFromSearch(i, autoplay=false){ setQueue(items, "search", i); playCurrent(autoplay); }
 function playFromFav(track, autoplay=false){
   const i = favs.findIndex(f=>f.id===track.id);
@@ -392,7 +432,6 @@ function playFromPlaylist(plId, i, autoplay=false){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   setQueue(pl.tracks, "playlist", i); playCurrent(autoplay);
 }
-
 function playPlaylist(id){ const pl = playlists.find(p=>p.id===id); if(!pl||!pl.tracks.length) return; playFromPlaylist(pl.id, 0, true); }
 
 function togglePlay(){
@@ -423,7 +462,7 @@ function startTimer(){
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
-/* ========= Queue en Player (para playlists) ========= */
+/* ========= Queue en Player ========= */
 function showPlaylistInPlayer(plId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   const panel = $("#queuePanel"); panel.classList.remove("hide");
@@ -434,6 +473,10 @@ function showPlaylistInPlayer(plId){
     li.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" src="${t.thumb}" alt="">
+        <button class="card-play" title="Play">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
       </div>
       <div class="meta">
         <div class="title-line">
@@ -449,32 +492,31 @@ function showPlaylistInPlayer(plId){
 }
 function hideQueuePanel(){ $("#queuePanel").classList.add("hide"); $("#queueList").innerHTML=""; }
 
-/* ========= Indicadores / EQ ========= */
+/* ========= Indicadores ========= */
 function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
 
-  // tarjetas de búsqueda
   $$("#results .card").forEach(c=>{
     const isCur = c.dataset.trackId===curId;
     c.classList.toggle("is-playing", playing && isCur);
     const btn = c.querySelector(".card-play");
     if(btn) btn.classList.toggle("playing", playing && isCur);
   });
-  // favoritos
+
   $$("#favList .fav-item").forEach(li=>{
     const isCur = li.dataset.trackId===curId;
     li.classList.toggle("is-playing", playing && isCur);
     const btn = li.querySelector(".card-play");
     if(btn) btn.classList.toggle("playing", playing && isCur);
   });
-  // queue en player
+
   $$("#queueList .queue-item").forEach(li=>{
     li.classList.toggle("is-playing", playing && li.dataset.trackId===curId);
   });
 }
 
-/* ========= Visibilidad (truco recarga) ========= */
+/* ========= Visibilidad ========= */
 document.addEventListener("visibilitychange", ()=>{
   if(!YT_READY || !currentTrack) return;
   if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
@@ -506,7 +548,7 @@ window.onYouTubeIframeAPIReady = function(){
   });
 };
 
-/* ========= Infinite scroll con sentinel ========= */
+/* ========= Infinite scroll ========= */
 const io = new IntersectionObserver((entries)=>{
   for(const en of entries){ if(en.isIntersecting){ loadNextPage(); } }
 },{ root:null, rootMargin:"800px 0px", threshold:0 });
