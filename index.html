@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- Header (neumórfico) -->
+  <!-- Header -->
   <header class="topbar">
     <div class="brand-compact">
       <img id="miniLogo" src="https://picsum.photos/seed/sanavera/96" alt="Logo" />
@@ -44,24 +44,25 @@
     <section id="view-playlists" class="view">
       <header class="section-head">
         <h3>Playlists</h3>
-        <button id="btnNewPlaylist" class="pill">Nueva</button>
+        <div class="pl-actions">
+          <button id="btnNewPlaylist" class="pill">Nueva</button>
+        </div>
       </header>
       <ul id="plList" class="pl-list"></ul>
       <div id="plEmpty" class="empty muted">Aún no hay playlists. Creá la primera ✨</div>
-      <section id="plDetail" class="pl-detail hide">
-        <header class="section-head">
-          <h3 id="plTitle">Playlist</h3>
-          <div class="pl-actions">
-            <button id="btnPlayPlaylist" class="pill">Reproducir</button>
-            <button id="btnCloseDetail" class="pill ghost">Cerrar</button>
-          </div>
-        </header>
-        <ul id="plTracks" class="fav-list"></ul>
-      </section>
     </section>
 
     <!-- REPRODUCTOR -->
     <section id="view-player" class="view now-playing">
+      <!-- Panel de cola (se muestra para playlist) -->
+      <section id="queuePanel" class="queue-panel hide">
+        <header class="section-head">
+          <h3 id="queueTitle">Playlist</h3>
+        </header>
+        <ul id="queueList" class="fav-list"></ul>
+      </section>
+
+      <!-- Portada + controles simples -->
       <div id="npHero" class="np-hero">
         <button id="npPlay" class="np-play" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -108,7 +109,7 @@
   <!-- Sheet menú 3 puntos -->
   <div id="menuSheet" class="sheet">
     <div class="sheet-content">
-      <button id="mFav" class="sheet-item">Añadir/Quitar de Favoritos</button>
+      <button id="mFav" class="sheet-item">Añadir a Favoritos</button>
       <button id="mPl" class="sheet-item">Añadir a Playlist…</button>
       <button id="mClose" class="sheet-item ghost">Cerrar</button>
     </div>
