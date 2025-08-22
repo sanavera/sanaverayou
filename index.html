@@ -18,13 +18,15 @@
       </div>
     </div>
 
-    <!-- Mini reproductor fijo (nuevo) -->
+    <!-- Mini reproductor fijo (ahora con seek + tiempos) -->
     <div id="miniNow" class="mini-now hide">
       <img id="miniThumb" class="mini-thumb" alt="" />
       <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
         <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
+      <input id="seek" class="mini-seek" type="range" min="0" max="1000" value="0" />
+      <div class="mini-time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
     </div>
   </header>
 
@@ -88,12 +90,7 @@
     </section>
   </main>
 
-  <!-- Seekbar Dock (siempre visible) -->
-  <section id="seekDock" class="seek-dock">
-    <input id="seek" class="seek-bar" type="range" min="0" max="1000" value="0" />
-    <div class="time-info"><span id="cur">0:00</span><span id="dur">0:00</span></div>
-    <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
-  </section>
+  <!-- (Quitamos la seekbar inferior fija para liberar espacio) -->
 
   <!-- Barra inferior de navegación -->
   <nav id="bottomNav" class="bottom-nav">
