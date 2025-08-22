@@ -316,6 +316,13 @@ function renderPlaylists(){
         <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
       </button>`;
 
+    // NUEVO: tocar el card abre la playlist en el Reproductor (como "Abrir")
+    li.addEventListener("click", (e)=>{
+      if(e.target.closest(".more")) return; // si tocaron el botón de menú, no abrir
+      showPlaylistInPlayer(pl.id);
+      switchView("view-player");
+    });
+
     li.querySelector(".more").onclick = ()=>{
       selectedPlaylistId = pl.id;
       openActionSheet({
@@ -410,6 +417,7 @@ function updateHero(track){
   $("#npHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
   $("#npTitle").textContent = t ? t.title : "Elegí una canción";
   $("#npSub").textContent = t ? (t.author||"—") : "—";
+  updateMiniNow(); // sincronizar mini reproductor
 }
 
 function setQueue(srcArr, type, idx){ queue = srcArr; queueType = type; qIdx = idx; }
@@ -440,8 +448,22 @@ function togglePlay(){
   (st===YT.PlayerState.PLAYING)? ytPlayer.pauseVideo() : ytPlayer.playVideo();
   const playing = !(st===YT.PlayerState.PLAYING);
   $("#npPlay").classList.toggle("playing", playing);
+  $("#miniPlay").classList.toggle("playing", playing);
 }
 $("#npPlay").onclick = togglePlay;
+
+/* Mini reproductor: sincronización */
+function updateMiniNow(){
+  const has = !!currentTrack;
+  const wrap = $("#miniNow");
+  if(!wrap) return;
+  wrap.classList.toggle("hide", !has);
+  if(!has) return;
+  $("#miniThumb").src = currentTrack.thumb;
+  const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
+  $("#miniPlay").classList.toggle("playing", playing);
+}
+$("#miniPlay").onclick = togglePlay;
 
 function next(){ if(!queue) return; if(qIdx+1<queue.length){ qIdx++; playCurrent(true); } }
 function prev(){ if(!queue) return; if(qIdx-1>=0){ qIdx--; playCurrent(true); } }
@@ -457,6 +479,7 @@ function startTimer(){
     $("#seek").value = dur? Math.floor((cur/dur)*1000) : 0;
     const playing = ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING;
     $("#npPlay").classList.toggle("playing", playing);
+    $("#miniPlay").classList.toggle("playing", playing); // <-- mantener botón del header sincronizado
     refreshIndicators();
   }, 250);
 }
@@ -540,6 +563,7 @@ window.onYouTubeIframeAPIReady = function(){
       onStateChange:(e)=>{
         const st=e.data, playing=(st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING);
         $("#npPlay").classList.toggle("playing", playing);
+        $("#miniPlay").classList.toggle("playing", playing); // sincroniza header
         wasPlaying = playing;
         if(st===YT.PlayerState.ENDED){ next(); }
         refreshIndicators();
