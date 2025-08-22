@@ -316,9 +316,9 @@ function renderPlaylists(){
         <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
       </button>`;
 
-    // NUEVO: tocar el card abre la playlist en el Reproductor (como "Abrir")
+    // Tocar el card abre la playlist en el Reproductor (como "Abrir")
     li.addEventListener("click", (e)=>{
-      if(e.target.closest(".more")) return; // si tocaron el botón de menú, no abrir
+      if(e.target.closest(".more")) return;
       showPlaylistInPlayer(pl.id);
       switchView("view-player");
     });
@@ -479,7 +479,7 @@ function startTimer(){
     $("#seek").value = dur? Math.floor((cur/dur)*1000) : 0;
     const playing = ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING;
     $("#npPlay").classList.toggle("playing", playing);
-    $("#miniPlay").classList.toggle("playing", playing); // <-- mantener botón del header sincronizado
+    $("#miniPlay").classList.toggle("playing", playing); // mantener botón del header sincronizado
     refreshIndicators();
   }, 250);
 }
@@ -507,8 +507,54 @@ function showPlaylistInPlayer(plId){
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
         <div class="subtitle">${t.author||""}</div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn more" title="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
       </div>`;
+    // tocar fila -> reproducir
     li.onclick = ()=> playFromPlaylist(pl.id, i, true);
+
+    // menú para quitar de esta playlist
+    li.querySelector(".more").onclick = (e)=>{
+      e.stopPropagation();
+      openActionSheet({
+        title: t.title,
+        actions: [
+          { id:"removeFromPl", label:"Quitar de esta playlist", danger:true },
+          { id:"cancel", label:"Cancelar", ghost:true }
+        ],
+        onAction: (id)=>{
+          if(id!=="removeFromPl") return;
+          const P = playlists.find(p=>p.id===plId); if(!P) return;
+          const removed = P.tracks[i]?.id;
+          P.tracks.splice(i,1);
+          savePlaylists();
+          // refrescar UI de la lista
+          showPlaylistInPlayer(plId);
+
+          // Ajustar reproducción si corresponde
+          if(queueType==='playlist' && queue===P.tracks){
+            if(removed === (currentTrack && currentTrack.id)){
+              if(i < P.tracks.length){ qIdx = i; playCurrent(true); }
+              else if(P.tracks.length){ qIdx = P.tracks.length - 1; playCurrent(true); }
+              else{
+                // playlist vacía
+                ytPlayer.stopVideo();
+                currentTrack = null;
+                updateHero(null);
+                refreshIndicators();
+                updateMiniNow();
+              }
+            }else{
+              if(i < qIdx) qIdx--; // corremos índice si borraron algo antes
+            }
+          }
+        }
+      });
+    };
+
     ul.appendChild(li);
   });
   refreshIndicators();
