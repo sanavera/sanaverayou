@@ -1,17 +1,19 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SanaveraYou Pro</title>
-<link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SanaveraYou Pro</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <!-- Topbar -->
   <header class="topbar">
     <div class="brand-compact">
       <img id="miniLogo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Escudo_del_Club_Atl%C3%A9tico_Independiente.svg/1945px-Escudo_del_Club_Atl%C3%A9tico_Independiente.svg.png" alt="Logo" />
-      <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
+      <div class="search-container">
+        <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
+      </div>
     </div>
     <div id="resultsCount" class="muted"></div>
   </header>
@@ -20,13 +22,8 @@
   <main id="main">
     <section id="results" class="results"></section>
     <!-- sentinel para scroll infinito -->
-    <div id="scrollSentinel" style="height:1px;"></div>
+    <div id="sentinel" class="sentinel" aria-hidden="true"></div>
   </main>
-
-  <!-- FAB abrir favoritos -->
-  <button id="fabFavorites" class="fab" aria-label="Abrir favoritos">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-  </button>
 
   <!-- Modal Favoritos -->
   <div id="favoritesModal" class="modal" aria-hidden="true">
@@ -43,9 +40,14 @@
         <ul id="favList" class="fav-list"></ul>
       </section>
 
-      <!-- Controles en favoritos -->
+      <!-- Controles en favoritos (incluye botón para ir a búsqueda) -->
       <footer class="controls-section" id="favControls">
         <div class="controls">
+          <!-- nuevo: volver a buscar -->
+          <button id="btnGoSearch" class="btn btn-nav" title="Ir al buscador">
+            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/></svg>
+          </button>
+
           <button id="btnRepeatFav" class="btn" title="Repetir">
             <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 0 1 0-12zm10 4h-2v2h2a4 4 0 0 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 0 0 0-4z"/></svg>
           </button>
@@ -67,16 +69,16 @@
         <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
       </footer>
     </div>
-
-    <!-- FAB volver a buscador -->
-    <button id="fabBackToSearch" class="fab fab-alt" aria-label="Volver a buscar">
-      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/></svg>
-    </button>
   </div>
 
-  <!-- Controles en búsqueda -->
+  <!-- Controles en búsqueda (incluye botón para abrir favoritos) -->
   <footer class="controls-section" id="searchControls">
     <div class="controls">
+      <!-- nuevo: abrir favoritos -->
+      <button id="btnGoFavorites" class="btn btn-nav" title="Abrir favoritos">
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </button>
+
       <button id="btnRepeat" class="btn" title="Repetir">
         <svg viewBox="0 0 24 24"><path d="M7 7h7V5l4 3-4 3V9H7a4 4 0 0 0 0 8h2v2H7a6 6 0 0 1 0-12zm10 4h-2v2h2a4 4 0 0 1 0 8h-7v2l-4-3 4-3v2h7a2 2 0 0 0 0-4z"/></svg>
       </button>
@@ -101,6 +103,6 @@
   <!-- YouTube oculto -->
   <div id="yt-holder"><div id="player"></div></div>
 
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
