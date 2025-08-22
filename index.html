@@ -75,6 +75,7 @@ body.modal-open {
   backdrop-filter: blur(24px) saturate(180%);
   border-bottom: 1px solid var(--border-subtle);
   padding: 16px var(--side-pad);
+  position: relative;
 }
 
 .brand-compact {
@@ -100,13 +101,8 @@ body.modal-open {
   box-shadow: var(--shadow-md);
 }
 
-.search-container {
-  flex: 1;
-  position: relative;
-}
-
 #searchInput {
-  width: 100%;
+  flex: 1;
   background: var(--surface);
   border: 2px solid var(--border-subtle);
   color: var(--text-primary);
@@ -126,64 +122,44 @@ body.modal-open {
   transform: translateY(-1px);
 }
 
-/* Sugerencias */
-.suggestions {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: var(--surface-elevated);
-  border: 2px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  box-shadow: var(--shadow-lg);
-  z-index: 60;
-  max-height: 300px;
-  overflow-y: auto;
-  display: none;
-}
-
-.suggestions.show {
-  display: block;
-}
-
-.suggestion-item {
-  padding: 12px 18px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle);
-  transition: var(--transition-fast);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.suggestion-item:hover {
-  background: var(--surface-hover);
-}
-
-.suggestion-item:last-child {
-  border-bottom: none;
-}
-
-.suggestion-icon {
-  width: 16px;
-  height: 16px;
-  opacity: 0.6;
-}
-
-.suggestion-text {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
 #resultsCount {
   padding: 12px 4px;
   font-weight: 600;
   font-size: 14px;
   color: var(--text-secondary);
 }
-  /* Search Results - Clean List Style */
+
+/* Sugerencia */
+.suggestion {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 58px;
+  right: 16px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  cursor: pointer;
+  z-index: 100;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-fast);
+}
+
+.suggestion.visible {
+  display: block;
+}
+
+.suggestion:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* Search Results - Clean List Style */
 .results {
   padding: 16px var(--side-pad) calc(var(--controls-h) + 32px);
   display: flex;
@@ -454,9 +430,9 @@ body.modal-open {
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  }
+}
 
-  /* Footer */
+/* Footer */
 .footer-text {
   text-align: center;
   font-size: 10px;
@@ -732,6 +708,11 @@ body.modal-open {
   .fab-alt {
     bottom: 135px;
   }
+
+  .suggestion {
+    left: 48px;
+    right: 12px;
+  }
 }
 </style>
 </head>
@@ -740,10 +721,8 @@ body.modal-open {
   <header class="topbar">
     <div class="brand-compact">
       <img id="miniLogo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Escudo_del_Club_Atl%C3%A9tico_Independiente.svg/1945px-Escudo_del_Club_Atl%C3%A9tico_Independiente.svg.png" alt="Logo" />
-      <div class="search-container">
-        <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
-        <div id="suggestions" class="suggestions"></div>
-      </div>
+      <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
+      <div id="suggestion" class="suggestion"></div>
     </div>
     <div id="resultsCount" class="muted"></div>
   </header>
@@ -847,106 +826,45 @@ const cleanTitle = t => (t || "")
 
 const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
 
-/* ====== Sistema de sugerencias con API de YouTube ====== */
+/* ====== Sistema de sugerencias ====== */
 let suggestionTimeout = null;
-let currentSuggestionIndex = -1;
 
-async function fetchYouTubeSuggestions(query) {
-  if (!query.trim() || query.length < 2) return [];
-  
-  try {
-    const url = `https://suggestqueries.google.com/complete/search?hl=en&ds=yt&client=youtube&hjson=t&cp=1&q=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    const text = await response.text();
-    
-    // Parse la respuesta JSONP
-    const jsonStart = text.indexOf('(') + 1;
-    const jsonEnd = text.lastIndexOf(')');
-    const jsonStr = text.substring(jsonStart, jsonEnd);
-    const data = JSON.parse(jsonStr);
-    
-    // Extraer solo las sugerencias de texto
-    const suggestions = data[1] ? data[1].map(item => item[0]) : [];
-    return suggestions.slice(0, 1); // Solo 1 sugerencia
-  } catch (error) {
-    console.error('Error fetching suggestions:', error);
-    return [];
-  }
-}
-
-function showSuggestions(query) {
-  const suggestionsEl = $("#suggestions");
-  
-  // Cancelar timeout anterior
-  if (suggestionTimeout) {
-    clearTimeout(suggestionTimeout);
-  }
-  
-  if (!query.trim() || query.length < 2) {
-    hideSuggestions();
+async function fetchSuggestion(query) {
+  const suggestionEl = $("#suggestion");
+  if (!suggestionEl) {
+    alert("Error: #suggestion no encontrado en el DOM");
     return;
   }
 
-  // Debounce para evitar muchas llamadas
-  suggestionTimeout = setTimeout(async () => {
-    const suggestions = await fetchYouTubeSuggestions(query);
-    
-    if (suggestions.length === 0) {
-      hideSuggestions();
-      return;
-    }
+  if (query.length < 2) {
+    suggestionEl.textContent = "";
+    suggestionEl.classList.remove("visible");
+    return;
+  }
 
-    // Crear HTML para una sola sugerencia
-    suggestionsEl.innerHTML = suggestions.map(suggestion => `
-      <div class="suggestion-item" data-suggestion="${suggestion}">
-        <svg class="suggestion-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/>
-        </svg>
-        <span class="suggestion-text">${suggestion}</span>
-      </div>
-    `).join('');
-
-    // Agregar event listeners
-    suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const suggestion = item.dataset.suggestion;
-        const searchInput = $("#searchInput");
-        searchInput.value = suggestion;
-        hideSuggestions();
-        searchYouTube(suggestion); // Buscar automáticamente
-      });
+  try {
+    const encodedQuery = encodeURIComponent(query);
+    const url = `https://cors-anywhere.herokuapp.com/https://suggestqueries.google.com/complete/search?hl=es&ds=yt&client=youtube&hjson=t&cp=1&q=${encodedQuery}`;
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" }
     });
-
-    suggestionsEl.classList.add('show');
-    currentSuggestionIndex = -1;
-  }, 300); // 300ms de delay
-}
-
-function hideSuggestions() {
-  const suggestionsEl = $("#suggestions");
-  suggestionsEl.classList.remove('show');
-  currentSuggestionIndex = -1;
-}
-
-function highlightSuggestion(index) {
-  const items = $$("#suggestions .suggestion-item");
-  items.forEach((item, i) => {
-    if (i === index) {
-      item.style.background = 'var(--surface-hover)';
+    if (response.ok) {
+      const text = await response.text();
+      const jsonStart = text.indexOf('(') + 1;
+      const jsonEnd = text.lastIndexOf(')');
+      const jsonStr = text.substring(jsonStart, jsonEnd);
+      const json = JSON.parse(jsonStr);
+      const suggestions = json[1]?.map(item => item[0]) || [];
+      const suggestion = suggestions[0] || "";
+      suggestionEl.textContent = suggestion || `Sugerencia de prueba: ${query}...`;
+      suggestionEl.classList.toggle("visible", suggestionEl.textContent !== "");
     } else {
-      item.style.background = '';
+      suggestionEl.textContent = `Sugerencia de prueba: ${query}...`;
+      suggestionEl.classList.add("visible");
     }
-  });
-}
-
-function selectSuggestion(index) {
-  const items = $$("#suggestions .suggestion-item");
-  if (items[index]) {
-    const suggestion = items[index].dataset.suggestion;
-    const searchInput = $("#searchInput");
-    searchInput.value = suggestion;
-    hideSuggestions();
-    searchYouTube(suggestion); // Buscar automáticamente
+  } catch (e) {
+    suggestionEl.textContent = `Sugerencia de prueba: ${query}...`;
+    suggestionEl.classList.add("visible");
   }
 }
 
@@ -970,25 +888,20 @@ const INFINITE_BATCH_SIZE = 6;
 
 /* ====== Búsqueda (sin API key) ====== */
 async function searchYouTube(q, append = false) {
-  console.log("searchYouTube: Iniciando búsqueda", { query: q, append });
   setCount("Buscando…");
 
   if (!append) {
     items = [];
     loadedIds.clear();
     $("#results").innerHTML = "";
-    console.log("searchYouTube: Limpiando resultados previos");
   } else if (isLoadingMore) {
-    console.log("searchYouTube: Ya está cargando más, saliendo");
     return;
   } else {
     isLoadingMore = true;
     setCount(`Cargando más… (${items.length} mostrados)`);
   }
 
-  // Verificar caché
   if (!append && searchCache.has(q)) {
-    console.log("searchYouTube: Resultados desde caché", q);
     items = searchCache.get(q);
     renderResults();
     setCount(`Resultados: ${items.length} (desde caché)`);
@@ -997,15 +910,11 @@ async function searchYouTube(q, append = false) {
 
   if (!append) {
     lastQuery = q;
-    console.log("searchYouTube: Solicitando a jina.ai", q);
     const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
     try {
       const html = await fetch(endpoint, { headers: { Accept: "text/plain" } }).then(r => r.text());
-      console.log("searchYouTube: Respuesta de jina.ai recibida", html.length);
       allIds = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m => m[1])).slice(0, 50);
-      console.log("searchYouTube: IDs extraídos", allIds.length);
     } catch (e) {
-      console.error("searchYouTube: Error en jina.ai", e);
       setCount("Error al conectar con YouTube");
       isLoadingMore = false;
       return;
@@ -1016,17 +925,13 @@ async function searchYouTube(q, append = false) {
     .filter(id => !loadedIds.has(id))
     .slice(0, append ? INFINITE_BATCH_SIZE : BATCH_SIZE);
 
-  console.log("searchYouTube: IDs a procesar", idsToLoad);
-
   if (idsToLoad.length === 0) {
     setCount(`Resultados: ${items.length} (no hay más)`);
     isLoadingMore = false;
-    console.log("searchYouTube: No hay más IDs para cargar");
     return;
   }
 
   for (const id of idsToLoad) {
-    console.log("searchYouTube: Procesando ID", id);
     try {
       const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
         .then(r => r.json());
@@ -1040,9 +945,7 @@ async function searchYouTube(q, append = false) {
       loadedIds.add(id);
       appendTrackToResults(track, items.length - 1);
       setCount(`Resultados: ${items.length}`);
-      console.log("searchYouTube: Track añadido", track.title);
     } catch (e) {
-      console.error("searchYouTube: Error al obtener metadatos", id, e);
       const track = {
         id,
         title: cleanTitle(`Video ${id}`),
@@ -1063,20 +966,18 @@ async function searchYouTube(q, append = false) {
 
 /* ====== Render ====== */
 function setCount(t) {
-  console.log("setCount:", t);
   const countEl = $("#resultsCount");
   if (countEl) {
     countEl.textContent = t || "";
   } else {
-    console.error("setCount: #resultsCount no encontrado");
+    alert("Error: #resultsCount no encontrado");
   }
 }
 
 function appendTrackToResults(track, index) {
-  console.log("appendTrackToResults: Añadiendo track", track.title, index);
   const root = $("#results");
   if (!root) {
-    console.error("appendTrackToResults: #results no encontrado");
+    alert("Error: #results no encontrado");
     return;
   }
   const li = document.createElement("article");
@@ -1107,10 +1008,9 @@ function appendTrackToResults(track, index) {
 }
 
 function renderResults() {
-  console.log("renderResults: Renderizando todos los resultados", items.length);
   const root = $("#results");
   if (!root) {
-    console.error("renderResults: #results no encontrado");
+    alert("Error: #results no encontrado");
     return;
   }
   root.innerHTML = "";
@@ -1118,10 +1018,9 @@ function renderResults() {
 }
 
 function renderFavs() {
-  console.log("renderFavs: Renderizando favoritos", favs.length);
   const ul = $("#favList");
   if (!ul) {
-    console.error("renderFavs: #favList no encontrado");
+    alert("Error: #favList no encontrado");
     return;
   }
   ul.innerHTML = "";
@@ -1156,8 +1055,8 @@ function renderFavs() {
 
 /* ====== Favoritos ====== */
 const LS_KEY = "sanayera_favs_v1";
-function loadFavs() { try { favs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { favs = []; } console.log("loadFavs:", favs.length); }
-function saveFavs() { localStorage.setItem(LS_KEY, JSON.stringify(favs)); console.log("saveFavs:", favs.length); }
+function loadFavs() { try { favs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { favs = []; } }
+function saveFavs() { localStorage.setItem(LS_KEY, JSON.stringify(favs)); }
 function isFav(id) { return favs.some(f => f.id === id); }
 function toggleFav(track) {
   if (isFav(track.id)) { favs = favs.filter(f => f.id !== track.id); }
@@ -1179,14 +1078,12 @@ function loadYTApi() {
   const s = document.createElement("script");
   s.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(s);
-  console.log("loadYTApi: Cargando YouTube API");
 }
 window.onYouTubeIframeAPIReady = function () {
-  console.log("onYouTubeIframeAPIReady: YouTube API lista");
   ytPlayer = new YT.Player("player", {
     width: 300, height: 150, videoId: "",
     playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
-    events: { onReady: () => { YT_READY = true; console.log("YouTube Player listo"); }, onStateChange: onYTState }
+    events: { onReady: () => { YT_READY = true; }, onStateChange: onYTState }
   });
 };
 function onYTState(e) {
@@ -1236,21 +1133,25 @@ function togglePlay() {
   const st = ytPlayer.getPlayerState();
   (st === YT.PlayerState.PLAYING) ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
 }
+
 function prev() {
   if (idx >= 0 && idx - 1 >= 0) { playIndex(idx - 1, true); return; }
   const pos = favs.findIndex(f => f.id === currentTrack?.id);
   if (pos > 0) playFromFav(favs[pos - 1], true);
 }
+
 function next() {
   if (idx >= 0 && idx + 1 < items.length) { playIndex(idx + 1, true); return; }
   const pos = favs.findIndex(f => f.id === currentTrack?.id);
   if (pos >= 0 && pos + 1 < favs.length) playFromFav(favs[pos + 1], true);
 }
+
 function seekToFrac(frac) {
   if (!YT_READY) return;
   const d = ytPlayer.getDuration() || 0;
   ytPlayer.seekTo(frac * d, true);
 }
+
 function startTimer() {
   stopTimer();
   timer = setInterval(() => {
@@ -1262,442 +1163,15 @@ function startTimer() {
     $("#seek").value = dur ? Math.floor((cur / dur) * 1000) : 0;
     $("#curFav").textContent = fmt(cur);
     $("#durFav").textContent = fmt(dur);
-    $("#seekF
-
-
-/* ====== Utilidades ====== */
-const $ = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = s => { s = Math.max(0, Math.floor(s || 0)); const m = Math.floor(s / 60), ss = s % 60; return `${m}:${String(ss).padStart(2, '0')}`; };
-const uniq = a => [...new Set(a)];
-const cleanTitle = t => (t || "")
-  .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig, "")
-  .replace(/\((official\s*)?(music\s*)?video.*?\)/ig, "")
-  .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig, "")
-  .replace(/\s{2,}/g, " ").trim();
-
-const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
-
-/* ====== Sistema de sugerencias con API de YouTube ====== */
-let suggestionTimeout = null;
-let currentSuggestionIndex = -1;
-
-async function fetchYouTubeSuggestions(query) {
-  if (!query.trim() || query.length < 2) return [];
-  
-  try {
-    const url = `https://suggestqueries.google.com/complete/search?hl=en&ds=yt&client=youtube&hjson=t&cp=1&q=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    const text = await response.text();
-    
-    // Parse la respuesta JSONP
-    const jsonStart = text.indexOf('(') + 1;
-    const jsonEnd = text.lastIndexOf(')');
-    const jsonStr = text.substring(jsonStart, jsonEnd);
-    const data = JSON.parse(jsonStr);
-    
-    // Extraer solo las sugerencias de texto
-    const suggestions = data[1] ? data[1].map(item => item[0]) : [];
-    return suggestions.slice(0, 1); // Solo 1 sugerencia
-  } catch (error) {
-    console.error('Error fetching suggestions:', error);
-    return [];
-  }
-}
-
-function showSuggestions(query) {
-  const suggestionsEl = $("#suggestions");
-  
-  // Cancelar timeout anterior
-  if (suggestionTimeout) {
-    clearTimeout(suggestionTimeout);
-  }
-  
-  if (!query.trim() || query.length < 2) {
-    hideSuggestions();
-    return;
-  }
-
-  // Debounce para evitar muchas llamadas
-  suggestionTimeout = setTimeout(async () => {
-    const suggestions = await fetchYouTubeSuggestions(query);
-    
-    if (suggestions.length === 0) {
-      hideSuggestions();
-      return;
-    }
-
-    // Crear HTML para una sola sugerencia
-    suggestionsEl.innerHTML = suggestions.map(suggestion => `
-      <div class="suggestion-item" data-suggestion="${suggestion}">
-        <svg class="suggestion-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79L20 21.49 21.49 20l-5.99-6zM9.5 14A4.5 4.5 0 1 1 14 9.5 4.505 4.505 0 0 1 9.5 14z"/>
-        </svg>
-        <span class="suggestion-text">${suggestion}</span>
-      </div>
-    `).join('');
-
-    // Agregar event listeners
-    suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const suggestion = item.dataset.suggestion;
-        const searchInput = $("#searchInput");
-        searchInput.value = suggestion;
-        hideSuggestions();
-        searchYouTube(suggestion); // Buscar automáticamente
-      });
-    });
-
-    suggestionsEl.classList.add('show');
-    currentSuggestionIndex = -1;
-  }, 300); // 300ms de delay
-}
-
-function hideSuggestions() {
-  const suggestionsEl = $("#suggestions");
-  suggestionsEl.classList.remove('show');
-  currentSuggestionIndex = -1;
-}
-
-function highlightSuggestion(index) {
-  const items = $$("#suggestions .suggestion-item");
-  items.forEach((item, i) => {
-    if (i === index) {
-      item.style.background = 'var(--surface-hover)';
-    } else {
-      item.style.background = '';
-    }
-  });
-}
-
-function selectSuggestion(index) {
-  const items = $$("#suggestions .suggestion-item");
-  if (items[index]) {
-    const suggestion = items[index].dataset.suggestion;
-    const searchInput = $("#searchInput");
-    searchInput.value = suggestion;
-    hideSuggestions();
-    searchYouTube(suggestion); // Buscar automáticamente
-  }
-}
-
-/* ====== Estado ====== */
-let items = [];
-let favs = [];
-let idx = -1;
-let currentTrack = null;
-let ytPlayer = null;
-let YT_READY = false;
-let wasPlaying = false;
-let timer = null;
-let repeatOne = false;
-let searchCache = new Map();
-let isLoadingMore = false;
-let lastQuery = "";
-let allIds = [];
-let loadedIds = new Set();
-const BATCH_SIZE = 6;
-const INFINITE_BATCH_SIZE = 6;
-
-/* ====== Búsqueda (sin API key) ====== */
-async function searchYouTube(q, append = false) {
-  console.log("searchYouTube: Iniciando búsqueda", { query: q, append });
-  setCount("Buscando…");
-
-  if (!append) {
-    items = [];
-    loadedIds.clear();
-    $("#results").innerHTML = "";
-    console.log("searchYouTube: Limpiando resultados previos");
-  } else if (isLoadingMore) {
-    console.log("searchYouTube: Ya está cargando más, saliendo");
-    return;
-  } else {
-    isLoadingMore = true;
-    setCount(`Cargando más… (${items.length} mostrados)`);
-  }
-
-  // Verificar caché
-  if (!append && searchCache.has(q)) {
-    console.log("searchYouTube: Resultados desde caché", q);
-    items = searchCache.get(q);
-    renderResults();
-    setCount(`Resultados: ${items.length} (desde caché)`);
-    return;
-  }
-
-  if (!append) {
-    lastQuery = q;
-    console.log("searchYouTube: Solicitando a jina.ai", q);
-    const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-    try {
-      const html = await fetch(endpoint, { headers: { Accept: "text/plain" } }).then(r => r.text());
-      console.log("searchYouTube: Respuesta de jina.ai recibida", html.length);
-      allIds = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m => m[1])).slice(0, 50);
-      console.log("searchYouTube: IDs extraídos", allIds.length);
-    } catch (e) {
-      console.error("searchYouTube: Error en jina.ai", e);
-      setCount("Error al conectar con YouTube");
-      isLoadingMore = false;
-      return;
-    }
-  }
-
-  const idsToLoad = allIds
-    .filter(id => !loadedIds.has(id))
-    .slice(0, append ? INFINITE_BATCH_SIZE : BATCH_SIZE);
-
-  console.log("searchYouTube: IDs a procesar", idsToLoad);
-
-  if (idsToLoad.length === 0) {
-    setCount(`Resultados: ${items.length} (no hay más)`);
-    isLoadingMore = false;
-    console.log("searchYouTube: No hay más IDs para cargar");
-    return;
-  }
-
-  for (const id of idsToLoad) {
-    console.log("searchYouTube: Procesando ID", id);
-    try {
-      const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
-        .then(r => r.json());
-      const track = {
-        id,
-        title: cleanTitle(meta.title || `Video ${id}`),
-        thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-        author: meta.author_name || "YouTube"
-      };
-      items.push(track);
-      loadedIds.add(id);
-      appendTrackToResults(track, items.length - 1);
-      setCount(`Resultados: ${items.length}`);
-      console.log("searchYouTube: Track añadido", track.title);
-    } catch (e) {
-      console.error("searchYouTube: Error al obtener metadatos", id, e);
-      const track = {
-        id,
-        title: cleanTitle(`Video ${id}`),
-        thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-        author: "YouTube"
-      };
-      items.push(track);
-      loadedIds.add(id);
-      appendTrackToResults(track, items.length - 1);
-      setCount(`Resultados: ${items.length}`);
-    }
-  }
-
-  if (!append) searchCache.set(q, [...items]);
-  isLoadingMore = false;
-  setCount(`Resultados: ${items.length}`);
-}
-
-/* ====== Render ====== */
-function setCount(t) {
-  console.log("setCount:", t);
-  const countEl = $("#resultsCount");
-  if (countEl) {
-    countEl.textContent = t || "";
-  } else {
-    console.error("setCount: #resultsCount no encontrado");
-  }
-}
-
-function appendTrackToResults(track, index) {
-  console.log("appendTrackToResults: Añadiendo track", track.title, index);
-  const root = $("#results");
-  if (!root) {
-    console.error("appendTrackToResults: #results no encontrado");
-    return;
-  }
-  const li = document.createElement("article");
-  li.className = "card";
-  li.dataset.trackId = track.id;
-  li.innerHTML = `
-    <img class="thumb" src="${track.thumb}" alt="" />
-    <div class="meta">
-      <div class="title-line">
-        <span class="title-text">${track.title}</span>
-        <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-      </div>
-      <div class="subtitle">${track.author || ""}</div>
-    </div>
-    <div class="actions">
-      <button class="icon-btn heart ${isFav(track.id) ? 'active' : ''}" title="Favorito">${HEART_SVG}</button>
-    </div>`;
-  li.addEventListener("click", e => {
-    if (e.target.closest(".heart")) {
-      toggleFav(track);
-      e.stopPropagation();
-      return;
-    }
-    playIndex(index, true);
-  });
-  root.appendChild(li);
-  refreshIndicators();
-}
-
-function renderResults() {
-  console.log("renderResults: Renderizando todos los resultados", items.length);
-  const root = $("#results");
-  if (!root) {
-    console.error("renderResults: #results no encontrado");
-    return;
-  }
-  root.innerHTML = "";
-  items.forEach((it, i) => appendTrackToResults(it, i));
-}
-
-function renderFavs() {
-  console.log("renderFavs: Renderizando favoritos", favs.length);
-  const ul = $("#favList");
-  if (!ul) {
-    console.error("renderFavs: #favList no encontrado");
-    return;
-  }
-  ul.innerHTML = "";
-  favs.forEach((it) => {
-    const li = document.createElement("li");
-    li.className = "fav-item";
-    li.dataset.trackId = it.id;
-    li.innerHTML = `
-      <img class="thumb" src="${it.thumb}" alt="">
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${it.author || ""}</div>
-      </div>
-      <button class="remove-btn" title="Quitar">✕</button>
-    `;
-    li.addEventListener("click", e => {
-      if (e.target.closest(".remove-btn")) {
-        removeFav(it.id);
-        e.stopPropagation();
-        return;
-      }
-      playFromFav(it, true);
-    });
-    ul.appendChild(li);
-  });
-  updateHero(currentTrack);
-  refreshIndicators();
-}
-
-/* ====== Favoritos ====== */
-const LS_KEY = "sanayera_favs_v1";
-function loadFavs() { try { favs = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { favs = []; } console.log("loadFavs:", favs.length); }
-function saveFavs() { localStorage.setItem(LS_KEY, JSON.stringify(favs)); console.log("saveFavs:", favs.length); }
-function isFav(id) { return favs.some(f => f.id === id); }
-function toggleFav(track) {
-  if (isFav(track.id)) { favs = favs.filter(f => f.id !== track.id); }
-  else { favs.unshift(track); }
-  saveFavs();
-  renderResults();
-  renderFavs();
-}
-function removeFav(id) {
-  favs = favs.filter(f => f.id !== id);
-  saveFavs();
-  renderFavs();
-  renderResults();
-}
-
-/* ====== YouTube IFrame API ====== */
-function loadYTApi() {
-  if (window.YT && window.YT.Player) { onYouTubeIframeAPIReady(); return; }
-  const s = document.createElement("script");
-  s.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(s);
-  console.log("loadYTApi: Cargando YouTube API");
-}
-window.onYouTubeIframeAPIReady = function () {
-  console.log("onYouTubeIframeAPIReady: YouTube API lista");
-  ytPlayer = new YT.Player("player", {
-    width: 300, height: 150, videoId: "",
-    playerVars: { autoplay: 0, controls: 0, rel: 0, playsinline: 1 },
-    events: { onReady: () => { YT_READY = true; console.log("YouTube Player listo"); }, onStateChange: onYTState }
-  });
-};
-function onYTState(e) {
-  const st = e.data;
-  const playing = (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING);
-  $("#btnPlay").classList.toggle("playing", playing);
-  $("#btnPlayFav").classList.toggle("playing", playing);
-  wasPlaying = playing;
-  if (st === YT.PlayerState.ENDED) {
-    if (repeatOne) { ytPlayer.seekTo(0, true); ytPlayer.playVideo(); }
-    else { next(); }
-  }
-  refreshIndicators();
-}
-
-/* ====== Reproducción ====== */
-function updateHero(track) {
-  const t = track || currentTrack;
-  $("#favHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  $("#favNowTitle").textContent = t ? t.title : "—";
-}
-
-function playIndex(i, autoplay = false) {
-  if (!YT_READY || !items[i]) return;
-  idx = i;
-  currentTrack = items[i];
-  ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: 0, suggestedQuality: "auto" });
-  if (!autoplay) ytPlayer.pauseVideo();
-  startTimer();
-  updateHero(currentTrack);
-  refreshIndicators();
-}
-
-function playFromFav(track, autoplay = false) {
-  if (!YT_READY || !track) return;
-  currentTrack = track;
-  idx = items.findIndex(x => x.id === track.id);
-  ytPlayer.loadVideoById({ videoId: track.id, startSeconds: 0, suggestedQuality: "auto" });
-  if (!autoplay) ytPlayer.pauseVideo();
-  startTimer();
-  updateHero(track);
-  refreshIndicators();
-}
-
-function togglePlay() {
-  if (!YT_READY) return;
-  const st = ytPlayer.getPlayerState();
-  (st === YT.PlayerState.PLAYING) ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
-}
-function prev() {
-  if (idx >= 0 && idx - 1 >= 0) { playIndex(idx - 1, true); return; }
-  const pos = favs.findIndex(f => f.id === currentTrack?.id);
-  if (pos > 0) playFromFav(favs[pos - 1], true);
-}
-function next() {
-  if (idx >= 0 && idx + 1 < items.length) { playIndex(idx + 1, true); return; }
-  const pos = favs.findIndex(f => f.id === currentTrack?.id);
-  if (pos >= 0 && pos + 1 < favs.length) playFromFav(favs[pos + 1], true);
-}
-function seekToFrac(frac) {
-  if (!YT_READY) return;
-  const d = ytPlayer.getDuration() || 0;
-  ytPlayer.seekTo(frac * d, true);
-}
-function startTimer() {
-  stopTimer();
-  timer = setInterval(() => {
-    if (!YT_READY) return;
-    const cur = ytPlayer.getCurrentTime() || 0;
-    const dur = ytPlayer.getDuration() || 0;
-    $("#cur").textContent = fmt(cur);
-    $("#dur").textContent = fmt(dur);
-    $("#seek").value = dur ? Math.floor((cur / dur) * 1000) : 0;
-    $("#curFav").textContent = fmt(cur);
-    $("#durFav").textContent = fmt(dur);
-    $("#seekFav").value = $("#seek").value;
+    $("#seekFav").value = dur ? Math.floor((cur / dur) * 1000) : 0;
     refreshIndicators();
   }, 250);
 }
-function stopTimer() { clearInterval(timer); timer = null; }
+
+function stopTimer() {
+  clearInterval(timer);
+  timer = null;
+}
 
 /* ====== Indicadores (EQ) ====== */
 function refreshIndicators() {
@@ -1724,62 +1198,73 @@ document.addEventListener("visibilitychange", () => {
 /* ====== UI ====== */
 function setupSearchInput() {
   const searchInput = $("#searchInput");
-  const suggestionsEl = $("#suggestions");
+  const suggestionEl = $("#suggestion");
   
   if (!searchInput) {
-    console.error("setupSearchInput: #searchInput no encontrado");
+    alert("Error: #searchInput no encontrado");
+    return;
+  }
+  if (!suggestionEl) {
+    alert("Error: #suggestion no encontrado");
     return;
   }
 
-  // Evento de escritura para mostrar sugerencias
   searchInput.addEventListener("input", (e) => {
-    const query = e.target.value;
-    showSugerencias(query);
+    const query = e.target.value.trim();
+    clearTimeout(suggestionTimeout);
+    suggestionTimeout = setTimeout(() => fetchSuggestion(query), 300);
   });
 
-  // Evento Enter para buscar
   searchInput.addEventListener("keydown", async (e) => {
-    const suggestions = $$("#suggestions .suggestion-item");
-    
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (suggestions.length > 0) {
-        currentSuggestionIndex = Math.min(currentSuggestionIndex + 1, suggestions.length - 1);
-        highlightSuggestion(currentSuggestionIndex);
+    if (e.key === "Enter") {
+      const q = searchInput.value.trim();
+      if (q) {
+        clearTimeout(suggestionTimeout);
+        suggestionEl.textContent = "";
+        suggestionEl.classList.remove("visible");
+        await searchYouTube(q);
       }
-    } else if (e.key === "ArrowUp") {
+    } else if (e.key === "ArrowDown" && suggestionEl.classList.contains("visible")) {
       e.preventDefault();
-      if (suggestions.length > 0) {
-        currentSuggestionIndex = Math.max(currentSuggestionIndex - 1, -1);
-        highlightSuggestion(currentSuggestionIndex);
+      const suggestion = suggestionEl.textContent;
+      if (suggestion) {
+        searchInput.value = suggestion;
+        searchInput.setSelectionRange(suggestion.length, suggestion.length);
+        clearTimeout(suggestionTimeout);
+        suggestionEl.textContent = "";
+        suggestionEl.classList.remove("visible");
+        await searchYouTube(suggestion);
       }
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Escape" && suggestionEl.classList.contains("visible")) {
       e.preventDefault();
-      if (currentSuggestionIndex >= 0 && suggestions[currentSuggestionIndex]) {
-        selectSuggestion(currentSuggestionIndex);
-      } else {
-        const q = searchInput.value.trim();
-        if (q) {
-          hideSuggestions();
-          await searchYouTube(q);
-        }
-      }
-    } else if (e.key === "Escape") {
-      hideSuggestions();
+      clearTimeout(suggestionTimeout);
+      suggestionEl.textContent = "";
+      suggestionEl.classList.remove("visible");
     }
   });
 
-  // Ocultar sugerencias al hacer clic fuera
+  suggestionEl.addEventListener("click", () => {
+    const suggestion = suggestionEl.textContent;
+    if (suggestion) {
+      searchInput.value = suggestion;
+      searchInput.setSelectionRange(suggestion.length, suggestion.length);
+      clearTimeout(suggestionTimeout);
+      suggestionEl.textContent = "";
+      suggestionEl.classList.remove("visible");
+      searchYouTube(suggestion);
+    }
+  });
+
   document.addEventListener("click", (e) => {
-    if (!searchInput.contains(e.target) && !suggestionsEl.contains(e.target)) {
-      hideSuggestions();
+    if (!searchInput.contains(e.target) && !suggestionEl.contains(e.target)) {
+      suggestionEl.textContent = "";
+      suggestionEl.classList.remove("visible");
     }
   });
 
-  // Mostrar sugerencias al hacer foco si hay texto
   searchInput.addEventListener("focus", () => {
     if (searchInput.value.trim()) {
-      showSuggestions(searchInput.value);
+      fetchSuggestion(searchInput.value);
     }
   });
 }
@@ -1788,12 +1273,11 @@ function setupSearchInput() {
 function setupScroll() {
   const root = $("#results");
   if (!root) {
-    console.error("setupScroll: #results no encontrado");
+    alert("Error: #results no encontrado");
     return;
   }
   root.addEventListener("scroll", async () => {
     if (root.scrollTop + root.clientHeight >= root.scrollHeight - 50 && !isLoadingMore) {
-      console.log("setupScroll: Disparando carga infinita");
       await searchYouTube(lastQuery, true);
     }
   });
@@ -1811,16 +1295,17 @@ function openFavs() {
     document.body.classList.add("modal-open");
     renderFavs();
   } else {
-    console.error("openFavs: #favoritesModal no encontrado");
+    alert("Error: #favoritesModal no encontrado");
   }
 }
+
 function closeFavs() {
   const modal = $("#favoritesModal");
   if (modal) {
     modal.classList.remove("show");
     document.body.classList.remove("modal-open");
   } else {
-    console.error("closeFavs: #favoritesModal no encontrado");
+    alert("Error: #favoritesModal no encontrado");
   }
 }
 
@@ -1841,7 +1326,6 @@ $("#btnRepeatFav").onclick = () => $("#btnRepeat").click();
 $("#seekFav").addEventListener("input", e => { $("#seek").value = e.target.value; $("#seek").dispatchEvent(new Event("input")); });
 
 /* ====== Init ====== */
-console.log("Inicializando aplicación");
 loadFavs();
 renderFavs();
 loadYTApi();
@@ -1850,5 +1334,3 @@ setupScroll();
 </script>
 </body>
 </html>
-      
-  
