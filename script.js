@@ -9,27 +9,26 @@ const cleanTitle = t => (t||"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
   .replace(/\s{2,}/g," ").trim();
 
-const HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
-
 /* ========= Estado ========= */
-let items = [];            // lista de resultados de búsqueda (paginada)
+let items = [];            // resultados de búsqueda
 let favs  = [];            // favoritos
 let playlists = [];        // [{id,name,tracks:[]}]
-let queue = null;          // cola actual: array de tracks (items, favs o playlist)
+let queue = null;          // cola actual
 let queueType = null;      // 'search' | 'favs' | 'playlist'
-let qIdx = -1;             // índice dentro de queue
+let qIdx = -1;
 let currentTrack = null;
 
 let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
 
-/* ========= Búsqueda con paginación ========= */
+let selectedTrack = null;  // para el sheet (desde card o desde player)
+
+/* ========= Paginación / búsqueda ========= */
 const PAGE_SIZE = 12;
 const PIPED_MIRRORS = [
   "https://piped.video",
   "https://pipedapi.kavin.rocks",
   "https://piped.privacy.com.de"
 ];
-
 let paging = { query:"", page:0, loading:false, hasMore:false, mode:"piped" };
 let searchAbort = null;
 const pageCache = new Map();
@@ -51,13 +50,12 @@ $("#searchInput").addEventListener("keydown", async e=>{
   if(e.key!=="Enter") return;
   const q = e.target.value.trim(); if(!q) return;
   await startSearch(q);
-  switchView("view-search");
+  // OJO: NO cambiamos de pestaña; nos quedamos en Búsqueda como pediste
 });
 
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
 async function startSearch(q){
-  // cancelar anterior
   if(searchAbort) try{ searchAbort.abort(); }catch{}
   searchAbort = new AbortController();
 
@@ -88,7 +86,7 @@ async function loadNextPage(){
 
   let chunk = [], hasMore = false, lastErr = null;
 
-  // 1) Piped (con mirrors)
+  // 1) Piped
   for(const base of PIPED_MIRRORS){
     const url = `${base}/api/v1/search?q=${encodeURIComponent(paging.query)}&page=${next}&filter=videos&region=AR`;
     try{
@@ -161,7 +159,13 @@ function appendResults(chunk){
     card.className = "card";
     card.dataset.trackId = it.id;
     card.innerHTML = `
-      <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
+      <div class="thumb-wrap">
+        <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
+        <button class="card-play" title="Play/Pause">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+      </div>
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${it.title}</span>
@@ -170,18 +174,39 @@ function appendResults(chunk){
         <div class="subtitle">${it.author||""}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn heart ${isFav(it.id)?'active':''}" title="Favorito">${HEART_SVG}</button>
+        <button class="icon-btn more" title="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
       </div>`;
+
+    // Play al tocar la tarjeta
     card.addEventListener("click", e=>{
-      if(e.target.closest(".heart")){
-        toggleFav(it);
-        card.querySelector(".heart").classList.toggle("active", isFav(it.id));
-        e.stopPropagation(); return;
-      }
+      if(e.target.closest(".more") || e.target.closest(".card-play")) return; // se manejan aparte
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
-      switchView("view-player");
+      // NO cambiamos de vista
     });
+
+    // Play/Pause overlay en la imagen
+    card.querySelector(".card-play").onclick = (e)=>{
+      e.stopPropagation();
+      // si ya suena este, toggle; si no, lo cargo
+      if(currentTrack?.id === it.id){
+        togglePlay();
+      }else{
+        const pos = items.findIndex(x=>x.id===it.id);
+        playFromSearch(pos>=0?pos:0, true);
+      }
+      refreshIndicators();
+    };
+
+    // Sheet de opciones (agregar a fav / playlist)
+    card.querySelector(".more").onclick = (e)=>{
+      e.stopPropagation();
+      selectedTrack = it;
+      openMenuFor(selectedTrack);
+    };
+
     // animación de aparición
     card.style.opacity='0'; card.style.transform='translateY(10px)';
     root.appendChild(card);
@@ -221,7 +246,7 @@ function renderFavs(){
     li.addEventListener("click", e=>{
       if(e.target.closest(".remove-btn")){ removeFav(it.id); e.stopPropagation(); return; }
       playFromFav(it, true);
-      switchView("view-player");
+      switchView("view-player"); // acá sí tiene sentido entrar al player
     });
     ul.appendChild(li);
   });
@@ -250,49 +275,28 @@ function renderPlaylists(){
         </div>
       </div>
       <div class="pl-actions">
+        <button class="pill ghost" data-act="rename">Renombrar</button>
+        <button class="pill danger" data-act="delete">Eliminar</button>
         <button class="pill ghost" data-act="open">Abrir</button>
         <button class="pill" data-act="play">Reproducir</button>
       </div>`;
-    li.querySelector('[data-act="open"]').onclick = ()=> openPlaylistDetail(pl.id);
-    li.querySelector('[data-act="play"]').onclick = ()=> playPlaylist(pl.id);
+    li.querySelector('[data-act="open"]').onclick = ()=>{
+      showPlaylistInPlayer(pl.id);      // muestra lista en Player
+      switchView("view-player");
+    };
+    li.querySelector('[data-act="play"]').onclick = ()=>{
+      playPlaylist(pl.id); switchView("view-player");
+    };
+    li.querySelector('[data-act="rename"]').onclick = ()=>{
+      const name = prompt("Nuevo nombre:", pl.name)?.trim();
+      if(!name) return; pl.name = name; savePlaylists(); renderPlaylists();
+    };
+    li.querySelector('[data-act="delete"]').onclick = ()=>{
+      if(!confirm(`Eliminar playlist "${pl.name}"?`)) return;
+      playlists = playlists.filter(p=>p.id!==pl.id); savePlaylists(); renderPlaylists();
+    };
     list.appendChild(li);
   });
-}
-
-function openPlaylistDetail(id){
-  const pl = playlists.find(p=>p.id===id); if(!pl) return;
-  $("#plDetail").classList.remove("hide");
-  $("#plTitle").textContent = pl.name;
-  $("#btnPlayPlaylist").onclick = ()=> playPlaylist(pl.id);
-  $("#btnCloseDetail").onclick = ()=> $("#plDetail").classList.add("hide");
-  const ul = $("#plTracks"); ul.innerHTML="";
-  pl.tracks.forEach((t,i)=>{
-    const li = document.createElement("li"); li.className="fav-item"; li.dataset.trackId=t.id;
-    li.innerHTML = `
-      <img class="thumb" src="${t.thumb}" alt="">
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${t.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${t.author||""}</div>
-      </div>
-      <button class="remove-btn" title="Quitar">✕</button>`;
-    li.querySelector(".remove-btn").onclick = (e)=>{
-      e.stopPropagation();
-      const idx = pl.tracks.findIndex(x=>x.id===t.id);
-      if(idx>=0){ pl.tracks.splice(idx,1); savePlaylists(); openPlaylistDetail(id); renderPlaylists(); }
-    };
-    li.onclick = ()=> { playFromPlaylist(pl.id, i, true); switchView("view-player"); };
-    ul.appendChild(li);
-  });
-  refreshIndicators();
-}
-
-function playPlaylist(id){
-  const pl = playlists.find(p=>p.id===id); if(!pl || !pl.tracks.length) return;
-  playFromPlaylist(pl.id, 0, true);
-  switchView("view-player");
 }
 
 $("#btnNewPlaylist").onclick = ()=>{
@@ -304,19 +308,24 @@ $("#btnNewPlaylist").onclick = ()=>{
 };
 
 /* ========= Menú 3 puntos (sheet) ========= */
-$("#npMenu").onclick = ()=> $("#menuSheet").classList.add("show");
+function openMenuFor(track){
+  // configurar texto de favoritos
+  $("#mFav").textContent = isFav(track.id) ? "Quitar de Favoritos" : "Añadir a Favoritos";
+  $("#menuSheet").classList.add("show");
+}
+$("#npMenu").onclick = ()=>{ if(currentTrack){ selectedTrack = currentTrack; openMenuFor(currentTrack); } };
 $("#mClose").onclick = ()=> $("#menuSheet").classList.remove("show");
 $("#menuSheet").addEventListener("click", e=>{ if(e.target.id==="menuSheet") $("#menuSheet").classList.remove("show"); });
 
 $("#mFav").onclick = ()=>{
-  if(!currentTrack) return;
-  toggleFav(currentTrack);
+  if(!selectedTrack) return;
+  toggleFav(selectedTrack);
   $("#menuSheet").classList.remove("show");
 };
 $("#mPl").onclick = ()=>{
-  if(!currentTrack) return;
+  if(!selectedTrack) return;
   $("#menuSheet").classList.remove("show");
-  openPlaylistSheet(currentTrack);
+  openPlaylistSheet(selectedTrack);
 };
 
 function openPlaylistSheet(track){
@@ -327,7 +336,6 @@ function openPlaylistSheet(track){
     btn.className="sheet-item";
     btn.textContent = pl.name;
     btn.onclick = ()=>{
-      // evitar duplicados en playlist
       if(!pl.tracks.some(t=>t.id===track.id)) pl.tracks.unshift(track);
       savePlaylists(); sheet.classList.remove("show"); renderPlaylists();
     };
@@ -354,9 +362,7 @@ function updateHero(track){
   $("#npSub").textContent = t ? (t.author||"—") : "—";
 }
 
-function setQueue(srcArr, type, idx){
-  queue = srcArr; queueType = type; qIdx = idx;
-}
+function setQueue(srcArr, type, idx){ queue = srcArr; queueType = type; qIdx = idx; }
 
 function playCurrent(autoplay=false){
   if(!YT_READY || !queue || qIdx<0 || qIdx>=queue.length) return;
@@ -378,6 +384,8 @@ function playFromPlaylist(plId, i, autoplay=false){
   setQueue(pl.tracks, "playlist", i); playCurrent(autoplay);
 }
 
+function playPlaylist(id){ const pl = playlists.find(p=>p.id===id); if(!pl||!pl.tracks.length) return; playFromPlaylist(pl.id, 0, true); }
+
 function togglePlay(){
   if(!YT_READY) return;
   const st = ytPlayer.getPlayerState();
@@ -385,21 +393,11 @@ function togglePlay(){
   const playing = !(st===YT.PlayerState.PLAYING);
   $("#npPlay").classList.toggle("playing", playing);
 }
-
 $("#npPlay").onclick = togglePlay;
 
-function next(){
-  if(!queue) return;
-  if(qIdx+1 < queue.length){ qIdx++; playCurrent(true); }
-}
-function prev(){
-  if(!queue) return;
-  if(qIdx-1 >= 0){ qIdx--; playCurrent(true); }
-}
-function seekToFrac(frac){
-  if(!YT_READY) return;
-  const d = ytPlayer.getDuration()||0; ytPlayer.seekTo(frac*d, true);
-}
+function next(){ if(!queue) return; if(qIdx+1<queue.length){ qIdx++; playCurrent(true); } }
+function prev(){ if(!queue) return; if(qIdx-1>=0){ qIdx--; playCurrent(true); } }
+function seekToFrac(frac){ if(!YT_READY) return; const d = ytPlayer.getDuration()||0; ytPlayer.seekTo(frac*d,true); }
 $("#seek").addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
 
 function startTimer(){
@@ -416,13 +414,46 @@ function startTimer(){
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
+/* ========= Queue en Player (para playlists) ========= */
+function showPlaylistInPlayer(plId){
+  const pl = playlists.find(p=>p.id===plId); if(!pl) return;
+  const panel = $("#queuePanel"); panel.classList.remove("hide");
+  $("#queueTitle").textContent = pl.name;
+  const ul = $("#queueList"); ul.innerHTML="";
+  pl.tracks.forEach((t,i)=>{
+    const li = document.createElement("li"); li.className="queue-item"; li.dataset.trackId=t.id;
+    li.innerHTML = `
+      <img class="thumb" src="${t.thumb}" alt="">
+      <div class="meta">
+        <div class="title-line">
+          <span class="title-text">${t.title}</span>
+          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+        <div class="subtitle">${t.author||""}</div>
+      </div>`;
+    li.onclick = ()=> playFromPlaylist(pl.id, i, true);
+    ul.appendChild(li);
+  });
+  refreshIndicators();
+}
+function hideQueuePanel(){ $("#queuePanel").classList.add("hide"); $("#queueList").innerHTML=""; }
+
 /* ========= Indicadores / EQ ========= */
 function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
-  $$("#results .card").forEach(c=> c.classList.toggle("is-playing", playing && c.dataset.trackId===curId));
+
+  // tarjetas de búsqueda
+  $$("#results .card").forEach(c=>{
+    const isCur = c.dataset.trackId===curId;
+    c.classList.toggle("is-playing", playing && isCur);
+    const btn = c.querySelector(".card-play");
+    if(btn) btn.classList.toggle("playing", playing && isCur);
+  });
+  // favoritos
   $$("#favList .fav-item").forEach(li=> li.classList.toggle("is-playing", playing && li.dataset.trackId===curId));
-  $$("#plTracks .fav-item").forEach(li=> li.classList.toggle("is-playing", playing && li.dataset.trackId===curId));
+  // queue en player
+  $$("#queueList .queue-item").forEach(li=> li.classList.toggle("is-playing", playing && li.dataset.trackId===curId));
 }
 
 /* ========= Visibilidad (truco recarga) ========= */
@@ -459,9 +490,7 @@ window.onYouTubeIframeAPIReady = function(){
 
 /* ========= Infinite scroll con sentinel ========= */
 const io = new IntersectionObserver((entries)=>{
-  for(const en of entries){
-    if(en.isIntersecting){ loadNextPage(); }
-  }
+  for(const en of entries){ if(en.isIntersecting){ loadNextPage(); } }
 },{ root:null, rootMargin:"800px 0px", threshold:0 });
 io.observe($("#sentinel"));
 
@@ -471,6 +500,3 @@ loadPlaylists();
 renderFavs();
 renderPlaylists();
 loadYTApi();
-
-// Navegar directo al Player si hay algo sonando al recargar (opcional)
-// switchView("view-player");
