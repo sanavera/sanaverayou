@@ -7,7 +7,8 @@
 
   --radius:16px; --radius-sm:12px; --radius-lg:24px; --side-pad:20px;
 
-  --seek-h:92px;
+  /* ↓ reduje la reserva porque el seek ya no está abajo */
+  --seek-h:44px;
   --nav-h:74px;
   --safe:env(safe-area-inset-bottom);
 
@@ -62,10 +63,10 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 #searchInput:focus{ background:var(--surface-elevated); box-shadow:var(--neu-inset-dark); border:1px solid var(--accent); }
 #resultsCount{ margin-top:8px; font-size:13px; font-weight:600; color:var(--text-secondary); }
 
-/* Mini reproductor (nuevo) */
+/* Mini reproductor con seek horizontal */
 .mini-now{
   margin-top:10px;
-  display:flex; align-items:center; gap:12px;
+  display:flex; align-items:center; gap:10px;
   background:var(--surface); padding:8px 10px;
   border-radius:14px; box-shadow:var(--neu-inset-dark), var(--neu-inset-light);
 }
@@ -74,10 +75,28 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 .mini-btn{
   width:38px; height:38px; border:none; border-radius:50%;
   display:grid; place-items:center; background:var(--surface-elevated); color:#fff;
-  box-shadow:var(--neu-dark), var(--neu-light); cursor:pointer;
+  box-shadow:var(--neu-dark), var(--neu-light); cursor:pointer; flex:0 0 auto;
 }
 .mini-btn .i-pause{ display:none; }
 .mini-btn.playing .i-play{ display:none; } .mini-btn.playing .i-pause{ display:block; }
+
+/* barra de progreso en el header */
+.mini-now .seek-bar{
+  flex:1 1 auto; min-width:120px;
+  appearance:none; height:8px; border-radius:6px; cursor:pointer; outline:none;
+  background:var(--surface); box-shadow:var(--neu-inset-dark), var(--neu-inset-light);
+}
+.mini-now .seek-bar::-webkit-slider-thumb{
+  appearance:none; width:18px; height:18px; border-radius:50%; background:var(--accent);
+  box-shadow:4px 4px 8px rgba(0,0,0,.4), -2px -2px 4px rgba(255,255,255,.03);
+  transition:var(--fast);
+}
+
+.time-inline{
+  display:flex; align-items:center; gap:8px;
+  color:var(--text-secondary); font-size:12px; font-variant-numeric:tabular-nums;
+  flex:0 0 auto;
+}
 
 /* Vistas */
 .view{ display:none; padding:12px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 28px + var(--safe)); }
@@ -101,7 +120,7 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
   object-fit:cover; background:var(--surface);
   box-shadow:8px 8px 16px rgba(0,0,0,.45), -4px -4px 8px rgba(255,255,255,.04);
 }
-.card .thumb{ width:100%; height:100%; } /* seguridad en cards */
+.card .thumb{ width:100%; height:100%; }
 
 .card-play{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -213,25 +232,16 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 /* Queue panel */
 .queue-panel{ margin-bottom:12px; }
 .queue-panel .section-head{ margin-top:0; }
+/* acciones en ítems de la cola */
+.queue-item .actions{ margin-left:auto; display:flex; gap:8px; }
 
-/* Seek Dock */
+/* Dock inferior: solo crédito */
 .seek-dock{
   position:fixed; left:0; right:0; bottom:var(--nav-h); z-index:70;
   background:var(--surface); border-top:1px solid rgba(255,255,255,.03);
-  padding:10px var(--side-pad) 8px; box-shadow:var(--neu-elev);
+  padding:6px var(--side-pad) 6px; box-shadow:var(--neu-elev);
 }
-.seek-bar{
-  width:100%; appearance:none; height:10px; border-radius:6px; cursor:pointer; outline:none;
-  background:var(--surface); box-shadow:var(--neu-inset-dark), var(--neu-inset-light);
-}
-.seek-bar::-webkit-slider-thumb{
-  appearance:none; width:20px; height:20px; border-radius:50%; background:var(--accent);
-  box-shadow:4px 4px 8px rgba(0,0,0,.4), -2px -2px 4px rgba(255,255,255,.03);
-  transition:var(--fast);
-}
-.seek-bar:hover{ height:12px; }
-.time-info{ display:flex; justify-content:space-between; padding:6px 2px 0; color:var(--text-secondary); font-size:12px; font-variant-numeric:tabular-nums; }
-.footer-text{ text-align:center; font-size:10px; color:var(--text-muted); padding-top:6px; }
+.footer-text{ text-align:center; font-size:10px; color:var(--text-muted); }
 
 /* Bottom Nav */
 .bottom-nav{
