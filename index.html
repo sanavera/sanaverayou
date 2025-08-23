@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SanaveraYou • Pro</title>
-<link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SanaveraYou • Pro</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
@@ -15,20 +15,6 @@
       <div class="search-container">
         <input id="searchInput" placeholder="Buscar (ej: Amar Azul – Yo tomo)" autocomplete="off" />
         <div id="resultsCount" class="muted"></div>
-      </div>
-    </div>
-
-    <!-- Mini reproductor fijo con seek y tiempos -->
-    <div id="miniNow" class="mini-now hide">
-      <img id="miniThumb" class="mini-thumb" alt="" />
-      <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
-        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-      </button>
-      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" />
-      <div class="time-inline">
-        <span id="cur">0:00</span>
-        <span id="dur">0:00</span>
       </div>
     </div>
   </header>
@@ -93,9 +79,21 @@
     </section>
   </main>
 
-  <!-- Dock inferior: solo crédito -->
+  <!-- Dock inferior: mini reproductor + crédito dentro -->
   <section id="seekDock" class="seek-dock">
-    <div class="footer-text">Desarrollado por Sebastián Sanavera ©</div>
+    <div id="miniNow" class="mini-now hide">
+      <img id="miniThumb" class="mini-thumb" alt="" />
+      <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+      </button>
+      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" />
+      <div class="time-inline">
+        <span id="cur">0:00</span>
+        <span id="dur">0:00</span>
+      </div>
+      <div class="mini-credit">Desarrollado por Sebastián Sanavera ®</div>
+    </div>
   </section>
 
   <!-- Barra inferior de navegación -->
@@ -118,16 +116,16 @@
     </button>
   </nav>
 
-  <!-- Sheet menú 3 puntos -->
+  <!-- Sheets -->
   <div id="menuSheet" class="sheet">
     <div class="sheet-content">
+      <div class="sheet-title">Opciones</div>
       <button id="mFav" class="sheet-item">Añadir a Favoritos</button>
       <button id="mPl" class="sheet-item">Añadir a Playlist…</button>
       <button id="mClose" class="sheet-item ghost">Cerrar</button>
     </div>
   </div>
 
-  <!-- Sheet seleccionar/crear playlist -->
   <div id="playlistSheet" class="sheet">
     <div class="sheet-content">
       <div class="sheet-title">Agregar a playlist</div>
@@ -143,6 +141,6 @@
   <!-- YouTube oculto -->
   <div id="yt-holder"><div id="player"></div></div>
 
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
