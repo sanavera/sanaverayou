@@ -22,32 +22,36 @@ let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
 let selectedTrack = null;        // para sheets desde cards/favs
 let selectedPlaylistId = null;   // para sheet de playlists
 
-/* ========= Búsqueda turbo ========= */
-const FIRST_PAGE_SIZE = 8;   // primera “pinta” rápida
-const PAGE_SIZE       = 12;  // siguientes páginas
-const SCRAPE_META_CONC = 6;  // concurrencia para hidratar títulos
-const RACE_TIMEOUT_MS = 3500;
+/* ========= Búsqueda ultra rápida ========= */
+const FIRST_BATCH_SIZE = 12;   // primera tanda inmediata
+const BATCH_SIZE = 15;         // siguientes tandas
+const MAX_CONCURRENT = 8;      // hilos paralelos para metadatos
 
-const PIPED_MIRRORS = [
-  "https://piped.video",
-  "https://pipedapi.kavin.rocks",
-  "https://piped.privacy.com.de"
-];
-
-let paging = { query:"", page:0, loading:false, hasMore:false, mode:"piped" };
+let paging = { query:"", page:0, loading:false, hasMore:true };
 let searchAbort = null;
-let fastestMirror = null; // aprendemos el mirror más rápido
-const pageCache = new Map();
-const cacheKey = (q,p) => `sanyou:q=${q}:p=${p}`;
-const storageGet = (k) => {
-  try{
-    const raw = sessionStorage.getItem(k); if(!raw) return null;
-    const obj = JSON.parse(raw); if(Date.now()-obj.ts > 10*60*1000) return null;
-    return obj.data;
-  }catch{ return null; }
+const searchCache = new Map();
+
+// Cache con expiración
+const cacheKey = (q,p) => `fast_search:${q}:${p}`;
+const getCached = (key) => {
+  try {
+    const item = sessionStorage.getItem(key);
+    if (!item) return null;
+    const data = JSON.parse(item);
+    if (Date.now() - data.timestamp > 300000) { // 5 min
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return data.value;
+  } catch { return null; }
 };
-const storageSet = (k,data) => {
-  try{ sessionStorage.setItem(k, JSON.stringify({ts:Date.now(), data})); }catch{}
+const setCache = (key, value) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({
+      value,
+      timestamp: Date.now()
+    }));
+  } catch {}
 };
 
 /* ========= Nav ========= */
@@ -69,240 +73,260 @@ $("#searchInput").addEventListener("keydown", async e=>{
 });
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
-/* ========= Buscar (motor rápido) ========= */
-function withTimeout(p, ms = RACE_TIMEOUT_MS){
-  return Promise.race([
-    p,
-    new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")), ms))
-  ]);
-}
-function makeAbortableFetch(url, controller){
-  return fetch(url, {signal: controller.signal, headers:{Accept:"application/json"}});
-}
-function mapPipedItems(arr, limit){
-  return arr.slice(0, limit).map(it=>{
-    const id = it.id || it.videoId || (it.url && new URL(it.url,"https://x").searchParams.get("v"));
-    if(!id) return null;
-    const thumb = it.thumbnail || (it.thumbnails && it.thumbnails[0] && it.thumbnails[0].url) || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-    const author = it.uploader || it.uploaderName || it.author || "";
-    const title = cleanTitle(it.title || it.name || `Video ${id}`);
-    return { id, title, thumb, author };
-  }).filter(Boolean);
-}
+/* ========= Motor de búsqueda optimizado ========= */
+async function fastYouTubeSearch(query, page = 1, limit = BATCH_SIZE) {
+  const cacheKey_ = cacheKey(query, page);
+  const cached = getCached(cacheKey_);
+  if (cached) return cached;
 
-/* Piped: arma promesa por mirror */
-function pipedPagePromise(base, q, page, limit, c){
-  const url = `${base}/api/v1/search?q=${encodeURIComponent(q)}&page=${page}&filter=videos&region=AR`;
-  const t0 = performance.now();
-  return makeAbortableFetch(url, c)
-    .then(r=>{ if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-    .then(data=>{
-      const arr = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
-      const out = mapPipedItems(arr, limit);
-      const hasMore = arr.length >= limit;
-      const dt = performance.now()-t0;
-      return { items: out, hasMore, mode:"piped", used: base, dt };
+  // Scraping directo más rápido usando múltiples proxies
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
+  
+  try {
+    // Usar r.jina.ai para obtener HTML limpio más rápido
+    const response = await fetch(`https://r.jina.ai/${searchUrl}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
     });
-}
-
-/* Scrape: ids inmediatos + hidratación opcional */
-async function scrapePage(q, page, limit, c, hydrate=true){
-  const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-  const t0 = performance.now();
-  const html = await fetch(url, {signal:c.signal, headers:{Accept:"text/plain"}}).then(r=>r.text());
-  const idsAll = uniq([...html.matchAll(/watch\?v=([\w-]{11})/g)].map(m=>m[1]));
-  const slice = idsAll.slice((page-1)*limit, page*limit);
-
-  // Pinta inmediata con título provisorio y thumb
-  const items = slice.map(id=>({
-    id,
-    title: cleanTitle(`Video ${id}`),
-    thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-    author: ""
-  }));
-
-  const dt = performance.now()-t0;
-  // Hidratación en 2º plano (no bloquea primera pinta)
-  if(hydrate){
-    (async()=>{
-      const metas = await mapLimit(slice, SCRAPE_META_CONC, async (id)=>{
-        try{
-          const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`, {signal:c.signal}).then(r=>r.json());
-          return { id, title: cleanTitle(meta.title||`Video ${id}`), author: meta.author_name||"", thumb: meta.thumbnail_url || `https://img.youtube.com/vi/${id}/hqdefault.jpg` };
-        }catch{
-          return { id, title: cleanTitle(`Video ${id}`), author:"", thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg` };
-        }
-      });
-      // actualizo DOM si sigue visible
-      metas.forEach(m=>{
-        const node = document.querySelector(`[data-track-id="${m.id}"]`);
-        if(node){
-          const tt = node.querySelector(".title-text");
-          const sub = node.querySelector(".subtitle");
-          const img = node.querySelector(".thumb");
-          if(tt) tt.textContent = m.title;
-          if(sub) sub.textContent = m.author || "";
-          if(img && img.src!==m.thumb) img.src = m.thumb;
-        }
-      });
-    })();
-  }
-
-  return { items, hasMore: idsAll.length > page*limit, mode:"scrape", used:"scrape", dt };
-}
-
-async function mapLimit(arr, limit, worker){
-  const out = new Array(arr.length); let i=0; const pool=new Set();
-  async function fill(){
-    while(i<arr.length && pool.size<limit){
-      const idx=i++; const p=Promise.resolve(worker(arr[idx])).then(v=>out[idx]=v).finally(()=>pool.delete(p));
-      pool.add(p);
+    
+    if (!response.ok) throw new Error('Network error');
+    
+    const html = await response.text();
+    
+    // Extraer IDs de video con regex optimizado
+    const videoIds = [];
+    const matches = html.matchAll(/watch\?v=([\w-]{11})/g);
+    const seenIds = new Set();
+    
+    for (const match of matches) {
+      const id = match[1];
+      if (!seenIds.has(id) && videoIds.length < limit * 2) { // Buffer extra
+        seenIds.add(id);
+        videoIds.push(id);
+      }
     }
-    if(!pool.size) return; await Promise.race(pool); return fill();
+    
+    // Paginación simple
+    const startIdx = (page - 1) * limit;
+    const pageIds = videoIds.slice(startIdx, startIdx + limit);
+    
+    if (pageIds.length === 0) {
+      return { items: [], hasMore: false };
+    }
+    
+    // Crear items básicos inmediatamente
+    const items = pageIds.map(id => ({
+      id,
+      title: `♪ Video ${id}`, // Placeholder temporal
+      author: '',
+      thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+      loading: true
+    }));
+    
+    const result = {
+      items,
+      hasMore: videoIds.length > startIdx + limit
+    };
+    
+    setCache(cacheKey_, result);
+    
+    // Hidratar metadatos en background sin bloquear
+    hydrateMetadata(pageIds, query, page);
+    
+    return result;
+    
+  } catch (error) {
+    console.warn('Search error:', error);
+    
+    // Fallback a método alternativo
+    return await fallbackSearch(query, page, limit);
   }
-  await fill(); await Promise.all([...pool]); return out;
 }
 
-/* Carrera: piped x3 + scrape -> primero que entregue */
-async function raceSearchPage(q, page, limit, externalAbort){
-  const localAbort = new AbortController();
-  const onAbort = () => localAbort.abort();
-  if(externalAbort) externalAbort.addEventListener?.("abort", onAbort, {once:true});
-
-  const contenders = [];
-
-  // Prioridad: si ya sabemos el mirror rápido, probalo dos veces (rápido y con timeout corto)
-  if(fastestMirror){
-    contenders.push(withTimeout(pipedPagePromise(fastestMirror, q, page, limit, localAbort)));
+// Método de fallback usando API alternativa
+async function fallbackSearch(query, page, limit) {
+  try {
+    // Usar invidious como fallback
+    const response = await fetch(`https://vid.puffyan.us/api/v1/search?q=${encodeURIComponent(query)}&page=${page}&type=video&region=AR`);
+    if (!response.ok) throw new Error('Fallback failed');
+    
+    const data = await response.json();
+    const items = data.slice(0, limit).map(item => ({
+      id: item.videoId,
+      title: cleanTitle(item.title || 'Video'),
+      author: item.author || '',
+      thumb: `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg`,
+      loading: false
+    }));
+    
+    return {
+      items,
+      hasMore: data.length === limit
+    };
+  } catch {
+    return { items: [], hasMore: false };
   }
-  // Resto de mirrors en paralelo
-  for(const base of PIPED_MIRRORS){
-    if(base===fastestMirror) continue;
-    contenders.push(withTimeout(pipedPagePromise(base, q, page, limit, localAbort)));
-  }
-  // Scrape también compite (da ids inmediatos)
-  contenders.push(withTimeout(scrapePage(q, page, limit, localAbort, true)));
+}
 
-  try{
-    const res = await Promise.any(contenders);
-    // Cancelo el resto
-    localAbort.abort();
-    if(res.mode==="piped" && res.used) fastestMirror = res.used; // aprendemos mirror rápido
-    return res;
-  }catch(err){
-    localAbort.abort();
-    throw err;
+// Hidratación de metadatos en paralelo
+async function hydrateMetadata(videoIds, query, page) {
+  const chunks = [];
+  for (let i = 0; i < videoIds.length; i += MAX_CONCURRENT) {
+    chunks.push(videoIds.slice(i, i + MAX_CONCURRENT));
+  }
+  
+  for (const chunk of chunks) {
+    await Promise.allSettled(chunk.map(async (videoId) => {
+      try {
+        // Usar noembed para obtener metadata rápido
+        const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, {
+          signal: AbortSignal.timeout(3000) // 3s timeout
+        });
+        
+        if (response.ok) {
+          const meta = await response.json();
+          
+          // Actualizar DOM inmediatamente si el elemento está visible
+          const element = document.querySelector(`[data-track-id="${videoId}"]`);
+          if (element) {
+            const titleEl = element.querySelector('.title-text');
+            const authorEl = element.querySelector('.subtitle');
+            
+            if (titleEl && meta.title) {
+              titleEl.textContent = cleanTitle(meta.title);
+              titleEl.style.color = ''; // Remover estilo de loading
+            }
+            
+            if (authorEl && meta.author_name) {
+              authorEl.textContent = meta.author_name;
+            }
+            
+            // Actualizar también en el array items
+            const itemIndex = items.findIndex(item => item.id === videoId);
+            if (itemIndex !== -1) {
+              items[itemIndex].title = cleanTitle(meta.title) || items[itemIndex].title;
+              items[itemIndex].author = meta.author_name || '';
+              items[itemIndex].loading = false;
+            }
+          }
+        }
+      } catch (error) {
+        // Si falla, al menos quitamos el indicador de loading
+        const element = document.querySelector(`[data-track-id="${videoId}"]`);
+        if (element) {
+          const titleEl = element.querySelector('.title-text');
+          if (titleEl) {
+            titleEl.textContent = `♪ ${videoId}`;
+            titleEl.style.color = '#888'; // Color más suave para placeholders
+          }
+        }
+      }
+    }));
   }
 }
 
 /* ========= API pública de búsqueda ========= */
-async function startSearch(q){
-  // cancelar búsqueda anterior
-  if(searchAbort) try{ searchAbort.abort(); }catch{}
+async function startSearch(query) {
+  // Cancelar búsqueda anterior
+  if (searchAbort) {
+    searchAbort.abort();
+  }
   searchAbort = new AbortController();
-
-  paging = { query:q, page:0, loading:false, hasMore:true, mode:"piped" };
+  
+  // Reset estado
+  paging = { query, page: 0, loading: false, hasMore: true };
   items = [];
   $("#results").innerHTML = "";
-  setCount("Buscando…");
-
-  // ¿Cache?
-  const ck = cacheKey(q, 1);
-  const cached = storageGet(ck);
-  if(cached){
-    appendResults(dedupeById(cached.items));
-    items = items.concat(cached.items);
-    paging.page = 1; paging.hasMore = cached.hasMore; paging.mode = cached.mode || "piped";
-    setCount(`🎵 ${items.length} canciones${paging.hasMore?' • baja para más':''}`);
-    // Pre-carga silenciosa de página 2
-    preloadNextPage();
-    return;
-  }
-
-  // Carrera para la 1ª página con FIRST_PAGE_SIZE -> pinta rápido
-  try{
-    const res = await raceSearchPage(q, 1, FIRST_PAGE_SIZE, searchAbort);
-    const clean = dedupeById(res.items);
-    appendResults(clean);
-    items = items.concat(clean);
-    paging.page = 1; paging.hasMore = res.hasMore; paging.mode = res.mode;
-    storageSet(ck, {items:clean, hasMore:res.hasMore, mode:res.mode});
-    setCount(`🎵 ${items.length} canciones${paging.hasMore?' • baja para más':''}`);
-    // Pre-carga silenciosa de página 2
-    preloadNextPage();
-  }catch(e){
-    setCount("❌ Error al buscar. Intenta de nuevo.");
-  }
-}
-
-function dedupeById(arr){
-  const seen = new Set(); const out = [];
-  for(const it of arr){ if(!it?.id || seen.has(it.id)) continue; seen.add(it.id); out.push(it); }
-  return out;
-}
-
-async function preloadNextPage(){
-  const q = paging.query; const next = 2;
-  const ck2 = cacheKey(q, next);
-  if(storageGet(ck2)) return;
-  try{
-    const res = await raceSearchPage(q, next, PAGE_SIZE, searchAbort);
-    const clean = dedupeById(res.items);
-    storageSet(ck2, {items:clean, hasMore:res.hasMore, mode:res.mode});
-  }catch{}
-}
-
-async function loadNextPage(){
-  if(paging.loading || !paging.hasMore) return;
-  paging.loading = true;
-  const next = paging.page + 1;
-
-  const ck = cacheKey(paging.query, next);
-  const cached = storageGet(ck);
-  if(cached){
-    const clean = dedupeById(cached.items);
-    appendResults(clean);
-    items = items.concat(clean);
-    paging.page = next; paging.hasMore = cached.hasMore; paging.loading = false;
-    setCount(`🎵 ${items.length} canciones${paging.hasMore?' • baja para más':''}`);
-    // Pre-carga siguiente
-    preloadPage(next+1);
-    return;
-  }
-
-  try{
-    // para páginas siguientes: intentamos mirror más rápido primero; si falla, carrera
-    let res;
-    if(fastestMirror){
-      try{
-        res = await withTimeout(pipedPagePromise(fastestMirror, paging.query, next, PAGE_SIZE, searchAbort));
-      }catch{
-        res = await raceSearchPage(paging.query, next, PAGE_SIZE, searchAbort);
-      }
-    }else{
-      res = await raceSearchPage(paging.query, next, PAGE_SIZE, searchAbort);
+  setCount("🔍 Buscando...");
+  
+  try {
+    // Primera página con resultados inmediatos
+    const result = await fastYouTubeSearch(query, 1, FIRST_BATCH_SIZE);
+    
+    if (searchAbort.signal.aborted) return;
+    
+    if (result.items.length === 0) {
+      setCount("❌ No se encontraron resultados");
+      return;
     }
-    const clean = dedupeById(res.items);
-    storageSet(ck, {items:clean, hasMore:res.hasMore, mode:res.mode});
-    appendResults(clean);
-    items = items.concat(clean);
-    paging.page = next; paging.hasMore = res.hasMore; paging.mode = res.mode;
-    paging.loading = false;
-    setCount(`🎵 ${items.length} canciones${paging.hasMore?' • baja para más':''}`);
-    preloadPage(next+1);
-  }catch(e){
-    paging.loading=false; paging.hasMore=false;
-    setCount("❌ Error al cargar más.");
+    
+    // Mostrar resultados inmediatamente
+    const deduped = dedupeById(result.items);
+    appendResults(deduped);
+    items = deduped;
+    
+    paging.page = 1;
+    paging.hasMore = result.hasMore;
+    
+    setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
+    
+    // Pre-cargar segunda página en background
+    if (result.hasMore) {
+      setTimeout(() => preloadNextPage(), 500);
+    }
+    
+  } catch (error) {
+    console.error('Search failed:', error);
+    setCount("❌ Error en la búsqueda. Intenta de nuevo.");
   }
 }
-async function preloadPage(p){
-  const q=paging.query; const ck = cacheKey(q,p);
-  if(storageGet(ck)) return;
-  try{
-    const res = await raceSearchPage(q, p, PAGE_SIZE, searchAbort);
-    const clean = dedupeById(res.items);
-    storageSet(ck, {items:clean, hasMore:res.hasMore, mode:res.mode});
-  }catch{}
+
+function dedupeById(arr) {
+  const seen = new Set();
+  return arr.filter(item => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+async function preloadNextPage() {
+  if (paging.loading || !paging.hasMore) return;
+  
+  try {
+    const nextPage = paging.page + 1;
+    await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
+  } catch (error) {
+    console.warn('Preload failed:', error);
+  }
+}
+
+async function loadNextPage() {
+  if (paging.loading || !paging.hasMore) return;
+  
+  paging.loading = true;
+  const nextPage = paging.page + 1;
+  
+  try {
+    const result = await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
+    
+    if (result.items.length === 0) {
+      paging.hasMore = false;
+      paging.loading = false;
+      return;
+    }
+    
+    const newItems = dedupeById(result.items);
+    appendResults(newItems);
+    items = items.concat(newItems);
+    
+    paging.page = nextPage;
+    paging.hasMore = result.hasMore;
+    paging.loading = false;
+    
+    setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
+    
+    // Pre-cargar siguiente página
+    if (result.hasMore) {
+      setTimeout(() => preloadNextPage(), 300);
+    }
+    
+  } catch (error) {
+    paging.loading = false;
+    paging.hasMore = false;
+    setCount(`🎵 ${items.length} canciones • Error cargando más`);
+  }
 }
 
 /* ========= Render resultados ========= */
@@ -312,6 +336,10 @@ function appendResults(chunk){
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.trackId = it.id;
+    
+    // Estilo para loading
+    const titleStyle = it.loading ? 'color: #666; font-style: italic;' : '';
+    
     card.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
@@ -322,7 +350,7 @@ function appendResults(chunk){
       </div>
       <div class="meta">
         <div class="title-line">
-          <span class="title-text">${it.title}</span>
+          <span class="title-text" style="${titleStyle}">${it.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
         <div class="subtitle">${it.author||""}</div>
@@ -368,9 +396,17 @@ function appendResults(chunk){
       });
     };
 
-    card.style.opacity='0'; card.style.transform='translateY(10px)';
+    // Animación de entrada más rápida
+    card.style.opacity='0'; 
+    card.style.transform='translateY(5px)';
     root.appendChild(card);
-    requestAnimationFrame(()=>{ card.style.transition='all .25s ease-out'; card.style.opacity='1'; card.style.transform='translateY(0)'; });
+    
+    // Usar RAF para animación suave
+    requestAnimationFrame(()=>{
+      card.style.transition='all .2s ease-out'; 
+      card.style.opacity='1'; 
+      card.style.transform='translateY(0)';
+    });
   }
   refreshIndicators();
 }
