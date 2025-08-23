@@ -23,9 +23,9 @@ let selectedTrack = null;        // para sheets desde cards/favs
 let selectedPlaylistId = null;   // para sheet de playlists
 
 /* ========= Búsqueda ultra rápida ========= */
-const FIRST_BATCH_SIZE = 12;   // primera tanda inmediata
-const BATCH_SIZE = 15;         // siguientes tandas
-const MAX_CONCURRENT = 8;      // hilos paralelos para metadatos
+const FIRST_BATCH_SIZE = 10;   // primera tanda inmediata
+const BATCH_SIZE = 0;         // siguientes tandas
+const MAX_CONCURRENT = 3;      // hilos paralelos para metadatos
 
 let paging = { query:"", page:0, loading:false, hasMore:true };
 let searchAbort = null;
