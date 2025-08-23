@@ -7,8 +7,8 @@
 
   --radius:16px; --radius-sm:12px; --radius-lg:24px; --side-pad:20px;
 
-  /* ↓ reduje la reserva porque el seek ya no está abajo */
-  --seek-h:44px;
+  /* ↑ el mini va abajo: reservo altura suficiente para que no tape */
+  --seek-h:92px;
   --nav-h:74px;
   --safe:env(safe-area-inset-bottom);
 
@@ -83,10 +83,19 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 }
 #resultsCount{ margin-top:8px; font-size:13px; font-weight:600; color:var(--text-secondary); }
 
-/* Mini reproductor con glassmorphism */
+/* Mini reproductor (en dock inferior) */
+.seek-dock{
+  position:fixed; left:0; right:0; bottom:var(--nav-h); z-index:70;
+  background:rgba(26, 28, 36, 0.8);
+  backdrop-filter:blur(16px) saturate(180%);
+  -webkit-backdrop-filter:blur(16px) saturate(180%);
+  border-top:1px solid rgba(255,255,255,.08);
+  padding:6px var(--side-pad) 8px;
+  box-shadow:0 -4px 16px rgba(0,0,0,.2);
+}
+
 .mini-now{
-  margin-top:10px;
-  display:flex; align-items:center; gap:10px;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   background:rgba(36, 39, 49, 0.6);
   backdrop-filter:blur(12px) saturate(180%);
   -webkit-backdrop-filter:blur(12px) saturate(180%);
@@ -94,7 +103,8 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
   border-radius:14px; 
   border:1px solid rgba(255,255,255,.08);
   box-shadow:
-    0 4px 16px rgba(0,0,0,.25),
+    var(--neu-dark),
+    var(--neu-light),
     inset 0 1px 0 rgba(255,255,255,.05);
 }
 .mini-now.hide{ display:none; }
@@ -123,11 +133,11 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 .mini-btn .i-pause{ display:none; }
 .mini-btn.playing .i-play{ display:none; } .mini-btn.playing .i-pause{ display:block; }
 
-/* barra de progreso con mejor diseño */
 .mini-now .seek-bar{
   flex:1 1 auto; min-width:120px;
   appearance:none; height:6px; border-radius:3px; cursor:pointer; outline:none;
   background:rgba(255,255,255,.1);
+  box-shadow: var(--neu-inset-dark), var(--neu-inset-light);
   transition:var(--fast);
 }
 .mini-now .seek-bar::-webkit-slider-thumb{
@@ -150,6 +160,13 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
   color:var(--text-secondary); font-size:12px; font-variant-numeric:tabular-nums;
   flex:0 0 auto; font-weight:500;
 }
+.mini-credit{
+  flex-basis:100%;
+  text-align:center;
+  font-size:10px;
+  color:var(--text-muted);
+  margin-top:4px;
+}
 
 /* Vistas */
 .view{ display:none; padding:12px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 28px + var(--safe)); }
@@ -165,7 +182,7 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
   border:1px solid rgba(255,255,255,.06);
   border-radius:var(--radius);
   padding:12px 14px; transition:var(--transition);
-  box-shadow:0 4px 16px rgba(0,0,0,.15);
+  box-shadow:0 4px 16px rgba(0,0,0,.15), var(--neu-dark), var(--neu-light);
 }
 .card:hover{ 
   background:rgba(32, 34, 43, 0.8);
@@ -307,7 +324,7 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
   -webkit-backdrop-filter:blur(8px) saturate(120%);
   padding:12px 14px; border-radius:var(--radius);
   border:1px solid rgba(255,255,255,.06);
-  box-shadow:0 4px 16px rgba(0,0,0,.15);
+  box-shadow:0 4px 16px rgba(0,0,0,.15), var(--neu-dark), var(--neu-light);
   transition:var(--transition);
 }
 .pl-item:hover{
@@ -376,22 +393,9 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 /* Queue panel */
 .queue-panel{ margin-bottom:12px; }
 .queue-panel .section-head{ margin-top:0; }
-/* acciones en ítems de la cola */
 .queue-item .actions{ margin-left:auto; display:flex; gap:8px; }
 
-/* Dock inferior: solo crédito con glassmorphism */
-.seek-dock{
-  position:fixed; left:0; right:0; bottom:var(--nav-h); z-index:70;
-  background:rgba(26, 28, 36, 0.8);
-  backdrop-filter:blur(16px) saturate(180%);
-  -webkit-backdrop-filter:blur(16px) saturate(180%);
-  border-top:1px solid rgba(255,255,255,.08);
-  padding:6px var(--side-pad) 6px; 
-  box-shadow:0 -4px 16px rgba(0,0,0,.2);
-}
-.footer-text{ text-align:center; font-size:10px; color:var(--text-muted); font-weight:400; }
-
-/* Bottom Nav con glassmorphism tipo Spotify */
+/* Bottom Nav */
 .bottom-nav{
   position:fixed; left:0; right:0; bottom:0; z-index:80;
   height:var(--nav-h); padding-bottom:max(8px, var(--safe));
@@ -438,7 +442,7 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
 }
 .nav-btn:active{ transform:scale(.95); }
 
-/* Sheets con glassmorphism */
+/* Sheets */
 .sheet{ position:fixed; inset:0; display:none; z-index:1000; background:rgba(8,9,12,.7); backdrop-filter:blur(8px); }
 .sheet.show{ display:block; }
 .sheet-content{
@@ -488,7 +492,7 @@ body.modal-open{ overflow:hidden; position:fixed; inset:0; width:100%; }
     0 0 0 2px rgba(239, 68, 68, 0.1);
 }
 
-/* Scrollbar mejorada */
+/* Scrollbar */
 ::-webkit-scrollbar{ width:8px; }
 ::-webkit-scrollbar-track{ 
   background:rgba(26, 28, 36, 0.3); 
