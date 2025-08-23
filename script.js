@@ -52,7 +52,7 @@ function setCount(t){ $("#resultsCount").textContent = t||""; }
 /* ========= Motor de búsqueda (sin caché) ========= */
 async function fastYouTubeSearch(query, page = 1, limit = BATCH_SIZE) {
   // Scraping directo más rápido
-  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
+  const searchUrl = `https://www.youtube.com.ar/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
   try {
     // HTML limpio más rápido
     const response = await fetch(`https://r.jina.ai/${searchUrl}`, {
