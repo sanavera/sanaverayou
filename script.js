@@ -29,30 +29,6 @@ const MAX_CONCURRENT = 8;      // hilos paralelos para metadatos
 
 let paging = { query:"", page:0, loading:false, hasMore:true };
 let searchAbort = null;
-const searchCache = new Map();
-
-// Cache con expiración
-const cacheKey = (q,p) => `fast_search:${q}:${p}`;
-const getCached = (key) => {
-  try {
-    const item = sessionStorage.getItem(key);
-    if (!item) return null;
-    const data = JSON.parse(item);
-    if (Date.now() - data.timestamp > 300000) { // 5 min
-      sessionStorage.removeItem(key);
-      return null;
-    }
-    return data.value;
-  } catch { return null; }
-};
-const setCache = (key, value) => {
-  try {
-    sessionStorage.setItem(key, JSON.stringify({
-      value,
-      timestamp: Date.now()
-    }));
-  } catch {}
-};
 
 /* ========= Nav ========= */
 function switchView(id){
@@ -73,84 +49,61 @@ $("#searchInput").addEventListener("keydown", async e=>{
 });
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
-/* ========= Motor de búsqueda optimizado ========= */
+/* ========= Motor de búsqueda (sin caché) ========= */
 async function fastYouTubeSearch(query, page = 1, limit = BATCH_SIZE) {
-  const cacheKey_ = cacheKey(query, page);
-  const cached = getCached(cacheKey_);
-  if (cached) return cached;
-
-  // Scraping directo más rápido usando múltiples proxies
+  // Scraping directo más rápido
   const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
-  
   try {
-    // Usar r.jina.ai para obtener HTML limpio más rápido
+    // HTML limpio más rápido
     const response = await fetch(`https://r.jina.ai/${searchUrl}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     });
-    
     if (!response.ok) throw new Error('Network error');
-    
+
     const html = await response.text();
-    
-    // Extraer IDs de video con regex optimizado
+
+    // Extraer IDs
     const videoIds = [];
     const matches = html.matchAll(/watch\?v=([\w-]{11})/g);
     const seenIds = new Set();
-    
-    for (const match of matches) {
-      const id = match[1];
-      if (!seenIds.has(id) && videoIds.length < limit * 2) { // Buffer extra
+    for (const m of matches) {
+      const id = m[1];
+      if (!seenIds.has(id) && videoIds.length < limit * 2) {
         seenIds.add(id);
         videoIds.push(id);
       }
     }
-    
+
     // Paginación simple
     const startIdx = (page - 1) * limit;
     const pageIds = videoIds.slice(startIdx, startIdx + limit);
-    
-    if (pageIds.length === 0) {
-      return { items: [], hasMore: false };
-    }
-    
-    // Crear items básicos inmediatamente
+    if (pageIds.length === 0) return { items: [], hasMore: false };
+
+    // Items base inmediatos
     const items = pageIds.map(id => ({
       id,
-      title: `♪ Video ${id}`, // Placeholder temporal
+      title: `♪ Video ${id}`,
       author: '',
       thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
       loading: true
     }));
-    
-    const result = {
-      items,
-      hasMore: videoIds.length > startIdx + limit
-    };
-    
-    setCache(cacheKey_, result);
-    
-    // Hidratar metadatos en background sin bloquear
+
+    // Hidratar metadatos en background
     hydrateMetadata(pageIds, query, page);
-    
-    return result;
-    
+
+    return { items, hasMore: videoIds.length > startIdx + limit };
+
   } catch (error) {
     console.warn('Search error:', error);
-    
-    // Fallback a método alternativo
     return await fallbackSearch(query, page, limit);
   }
 }
 
-// Método de fallback usando API alternativa
+// Fallback usando Invidious
 async function fallbackSearch(query, page, limit) {
   try {
-    // Usar invidious como fallback
     const response = await fetch(`https://vid.puffyan.us/api/v1/search?q=${encodeURIComponent(query)}&page=${page}&type=video&region=AR`);
     if (!response.ok) throw new Error('Fallback failed');
-    
     const data = await response.json();
     const items = data.slice(0, limit).map(item => ({
       id: item.videoId,
@@ -159,66 +112,55 @@ async function fallbackSearch(query, page, limit) {
       thumb: `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg`,
       loading: false
     }));
-    
-    return {
-      items,
-      hasMore: data.length === limit
-    };
+    return { items, hasMore: data.length === limit };
   } catch {
     return { items: [], hasMore: false };
   }
 }
 
-// Hidratación de metadatos en paralelo
+// Hidratar metadatos en paralelo
 async function hydrateMetadata(videoIds, query, page) {
   const chunks = [];
   for (let i = 0; i < videoIds.length; i += MAX_CONCURRENT) {
     chunks.push(videoIds.slice(i, i + MAX_CONCURRENT));
   }
-  
+
   for (const chunk of chunks) {
     await Promise.allSettled(chunk.map(async (videoId) => {
       try {
-        // Usar noembed para obtener metadata rápido
         const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, {
-          signal: AbortSignal.timeout(3000) // 3s timeout
+          signal: AbortSignal.timeout(3000)
         });
-        
         if (response.ok) {
           const meta = await response.json();
-          
-          // Actualizar DOM inmediatamente si el elemento está visible
-          const element = document.querySelector(`[data-track-id="${videoId}"]`);
-          if (element) {
-            const titleEl = element.querySelector('.title-text');
-            const authorEl = element.querySelector('.subtitle');
-            
+
+          // DOM si visible
+          const el = document.querySelector(`[data-track-id="${videoId}"]`);
+          if (el) {
+            const titleEl = el.querySelector('.title-text');
+            const authorEl = el.querySelector('.subtitle');
             if (titleEl && meta.title) {
               titleEl.textContent = cleanTitle(meta.title);
-              titleEl.style.color = ''; // Remover estilo de loading
+              titleEl.style.color = '';
             }
-            
-            if (authorEl && meta.author_name) {
-              authorEl.textContent = meta.author_name;
-            }
-            
-            // Actualizar también en el array items
-            const itemIndex = items.findIndex(item => item.id === videoId);
-            if (itemIndex !== -1) {
-              items[itemIndex].title = cleanTitle(meta.title) || items[itemIndex].title;
-              items[itemIndex].author = meta.author_name || '';
-              items[itemIndex].loading = false;
-            }
+            if (authorEl && meta.author_name) authorEl.textContent = meta.author_name;
+          }
+
+          // Actualizar array items
+          const idx = items.findIndex(x => x.id === videoId);
+          if (idx !== -1) {
+            items[idx].title = cleanTitle(meta.title) || items[idx].title;
+            items[idx].author = meta.author_name || '';
+            items[idx].loading = false;
           }
         }
-      } catch (error) {
-        // Si falla, al menos quitamos el indicador de loading
-        const element = document.querySelector(`[data-track-id="${videoId}"]`);
-        if (element) {
-          const titleEl = element.querySelector('.title-text');
+      } catch {
+        const el = document.querySelector(`[data-track-id="${videoId}"]`);
+        if (el) {
+          const titleEl = el.querySelector('.title-text');
           if (titleEl) {
             titleEl.textContent = `♪ ${videoId}`;
-            titleEl.style.color = '#888'; // Color más suave para placeholders
+            titleEl.style.color = '#888';
           }
         }
       }
@@ -228,44 +170,39 @@ async function hydrateMetadata(videoIds, query, page) {
 
 /* ========= API pública de búsqueda ========= */
 async function startSearch(query) {
-  // Cancelar búsqueda anterior
-  if (searchAbort) {
-    searchAbort.abort();
-  }
+  // Cancelar anterior
+  if (searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
-  
+
   // Reset estado
   paging = { query, page: 0, loading: false, hasMore: true };
   items = [];
   $("#results").innerHTML = "";
   setCount("🔍 Buscando...");
-  
+
   try {
-    // Primera página con resultados inmediatos
+    // Primera página inmediata
     const result = await fastYouTubeSearch(query, 1, FIRST_BATCH_SIZE);
-    
     if (searchAbort.signal.aborted) return;
-    
+
     if (result.items.length === 0) {
       setCount("❌ No se encontraron resultados");
       return;
     }
-    
-    // Mostrar resultados inmediatamente
+
+    // Mostrar ya
     const deduped = dedupeById(result.items);
     appendResults(deduped);
     items = deduped;
-    
+
     paging.page = 1;
     paging.hasMore = result.hasMore;
-    
+
     setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
-    
+
     // Pre-cargar segunda página en background
-    if (result.hasMore) {
-      setTimeout(() => preloadNextPage(), 500);
-    }
-    
+    if (result.hasMore) setTimeout(() => preloadNextPage(), 500);
+
   } catch (error) {
     console.error('Search failed:', error);
     setCount("❌ Error en la búsqueda. Intenta de nuevo.");
@@ -282,8 +219,7 @@ function dedupeById(arr) {
 }
 
 async function preloadNextPage() {
-  if (paging.loading || !paging.hasMore) return;
-  
+  if (paging.loading || !paging.hasMore || !paging.query) return;
   try {
     const nextPage = paging.page + 1;
     await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
@@ -293,35 +229,32 @@ async function preloadNextPage() {
 }
 
 async function loadNextPage() {
-  if (paging.loading || !paging.hasMore) return;
-  
+  if (paging.loading || !paging.hasMore || !paging.query) return;
+
   paging.loading = true;
   const nextPage = paging.page + 1;
-  
+
   try {
     const result = await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
-    
+
     if (result.items.length === 0) {
       paging.hasMore = false;
       paging.loading = false;
       return;
     }
-    
+
     const newItems = dedupeById(result.items);
     appendResults(newItems);
     items = items.concat(newItems);
-    
+
     paging.page = nextPage;
     paging.hasMore = result.hasMore;
     paging.loading = false;
-    
+
     setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
-    
-    // Pre-cargar siguiente página
-    if (result.hasMore) {
-      setTimeout(() => preloadNextPage(), 300);
-    }
-    
+
+    if (result.hasMore) setTimeout(() => preloadNextPage(), 300);
+
   } catch (error) {
     paging.loading = false;
     paging.hasMore = false;
@@ -336,10 +269,8 @@ function appendResults(chunk){
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.trackId = it.id;
-    
-    // Estilo para loading
-    const titleStyle = it.loading ? 'color: #666; font-style: italic;' : '';
-    
+
+    const titleStyle = it.loading ? 'color:#666;font-style:italic;' : '';
     card.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
@@ -396,12 +327,10 @@ function appendResults(chunk){
       });
     };
 
-    // Animación de entrada más rápida
+    // Animación de entrada
     card.style.opacity='0'; 
     card.style.transform='translateY(5px)';
     root.appendChild(card);
-    
-    // Usar RAF para animación suave
     requestAnimationFrame(()=>{
       card.style.transition='all .2s ease-out'; 
       card.style.opacity='1'; 
@@ -448,13 +377,11 @@ function renderFavs(){
         </button>
       </div>`;
 
-    // Tap -> reproducir en favoritos (sin navegar)
     li.addEventListener("click", e=>{
       if(e.target.closest(".more") || e.target.closest(".card-play")) return;
       playFromFav(it, true);
     });
 
-    // Play/Pause overlay
     li.querySelector(".card-play").onclick = (e)=>{
       e.stopPropagation();
       if(currentTrack?.id === it.id){ togglePlay(); }
@@ -462,7 +389,6 @@ function renderFavs(){
       refreshIndicators();
     };
 
-    // Menú 3 puntos (favorito)
     li.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
       openActionSheet({
@@ -509,7 +435,6 @@ function renderPlaylists(){
         <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
       </button>`;
 
-    // Tocar el card abre la playlist en el Reproductor (como "Abrir")
     li.addEventListener("click", (e)=>{
       if(e.target.closest(".more")) return;
       showPlaylistInPlayer(pl.id);
@@ -556,7 +481,7 @@ $("#btnNewPlaylist").onclick = ()=>{
   savePlaylists(); renderPlaylists();
 };
 
-/* ========= Sheets genéricos ========= */
+/* ========= Sheets ========= */
 function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
   const sheet = $("#menuSheet");
   sheet.innerHTML = `
@@ -565,8 +490,7 @@ function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
       ${actions.map(a=>`
         <button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">
           ${a.label}
-        </button>
-      `).join("")}
+        </button>`).join("")}
     </div>`;
   sheet.classList.add("show");
   sheet.onclick = (e)=>{
@@ -610,7 +534,7 @@ function updateHero(track){
   $("#npHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
   $("#npTitle").textContent = t ? t.title : "Elegí una canción";
   $("#npSub").textContent = t ? (t.author||"—") : "—";
-  updateMiniNow(); // sincronizar mini reproductor
+  updateMiniNow();
 }
 
 function setQueue(srcArr, type, idx){ queue = srcArr; queueType = type; qIdx = idx; }
@@ -645,7 +569,7 @@ function togglePlay(){
 }
 $("#npPlay").onclick = togglePlay;
 
-/* Mini reproductor: sincronización */
+/* Mini reproductor */
 function updateMiniNow(){
   const has = !!currentTrack;
   const wrap = $("#miniNow");
@@ -678,7 +602,7 @@ function startTimer(){
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
-/* ========= Queue en Player ========= */
+/* ========= Cola en Player ========= */
 function showPlaylistInPlayer(plId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   const panel = $("#queuePanel"); panel.classList.remove("hide");
@@ -765,7 +689,7 @@ window.onYouTubeIframeAPIReady = function(){
   });
 };
 
-/* ========= Infinite scroll (usa el motor nuevo) ========= */
+/* ========= Infinite scroll ========= */
 const io = new IntersectionObserver((entries)=>{
   for(const en of entries){ if(en.isIntersecting){ loadNextPage(); } }
 },{ root:null, rootMargin:"800px 0px", threshold:0 });
