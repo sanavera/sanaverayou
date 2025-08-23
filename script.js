@@ -1,17 +1,17 @@
+script.js
 /* ========= Utils ========= */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = s => { s = Math.max(0, Math.floor(s || 0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
+const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const uniq = a => [...new Set(a)];
 const cleanTitle = t => (t||"")
-  .replace(/\[(?:official\s*)?(?:music\s*)?video.*?\]/ig,"")
-  .replace(/\((?:official\s*)?(?:music\s*)?video.*?\)/ig,"")
+  .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"")
+  .replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
   .replace(/\s{2,}/g," ").trim();
 
 /* ========= Estado ========= */
-let items = [];            // resultados visibles
-let seenIds = new Set();   // ids globales ya renderizados
+let items = [];            // resultados
 let favs  = [];            // favoritos
 let playlists = [];        // [{id,name,tracks:[]}]
 let queue = null;          // cola actual
@@ -23,15 +23,13 @@ let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
 let selectedTrack = null;        // para sheets desde cards/favs
 let selectedPlaylistId = null;   // para sheet de playlists
 
-/* ========= Búsqueda rápida (sólo YouTube) ========= */
+/* ========= Búsqueda ultra rápida ========= */
 const FIRST_BATCH_SIZE = 12;   // primera tanda inmediata
 const BATCH_SIZE = 15;         // siguientes tandas
 const MAX_CONCURRENT = 8;      // hilos paralelos para metadatos
 
 let paging = { query:"", page:0, loading:false, hasMore:true };
 let searchAbort = null;
-
-let io = null; // IntersectionObserver (se activa tras la 1ª búsqueda)
 
 /* ========= Nav ========= */
 function switchView(id){
@@ -52,76 +50,77 @@ $("#searchInput").addEventListener("keydown", async e=>{
 });
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
-/* ========= Motor de búsqueda (YouTube + r.jina.ai) ========= */
-/* Sólo IDs desde la página de resultados; títulos se hidratan luego. */
+/* ========= Motor de búsqueda (sin caché) ========= */
 async function fastYouTubeSearch(query, page = 1, limit = BATCH_SIZE) {
+  // Scraping directo más rápido
   const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
+  try {
+    // HTML limpio más rápido
+    const response = await fetch(`https://r.jina.ai/${searchUrl}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    if (!response.ok) throw new Error('Network error');
 
-  const response = await fetch(`https://r.jina.ai/${searchUrl}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    signal: AbortSignal.timeout(8000)
-  });
+    const html = await response.text();
 
-  if (!response.ok) throw new Error('Network error');
+    // Extraer IDs
+    const videoIds = [];
+    const matches = html.matchAll(/watch\?v=([\w-]{11})/g);
+    const seenIds = new Set();
+    for (const m of matches) {
+      const id = m[1];
+      if (!seenIds.has(id) && videoIds.length < limit * 2) {
+        seenIds.add(id);
+        videoIds.push(id);
+      }
+    }
 
-  const html = await response.text();
+    // Paginación simple
+    const startIdx = (page - 1) * limit;
+    const pageIds = videoIds.slice(startIdx, startIdx + limit);
+    if (pageIds.length === 0) return { items: [], hasMore: false };
 
-  // Extraer IDs de video únicos
-  const ids = [];
-  const seen = new Set();
-  for (const m of html.matchAll(/watch\?v=([\w-]{11})/g)) {
-    const id = m[1];
-    if (!seen.has(id)) { seen.add(id); ids.push(id); }
+    // Items base inmediatos
+    const items = pageIds.map(id => ({
+      id,
+      title: `♪ Video ${id}`,
+      author: '',
+      thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+      loading: true
+    }));
+
+    // Hidratar metadatos en background
+    hydrateMetadata(pageIds, query, page);
+
+    return { items, hasMore: videoIds.length > startIdx + limit };
+
+  } catch (error) {
+    console.warn('Search error:', error);
+    return await fallbackSearch(query, page, limit);
   }
-
-  // Paginación simple por slicing
-  const startIdx = (page - 1) * limit;
-  const pageIds = ids.slice(startIdx, startIdx + limit);
-
-  const items = pageIds.map(id => ({
-    id,
-    title: "♪ Buscando título…",  // no mostramos el ID
-    author: '',
-    thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-    loading: true
-  }));
-
-  // Hidratar metadatos en background
-  hydrateMetadata(pageIds);
-
-  return {
-    items,
-    hasMore: ids.length > startIdx + limit
-  };
 }
 
-/* ========= Hidratación de metadatos ========= */
-async function fetchOEmbed(id){
-  try{
-    const url = `https://r.jina.ai/http://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if(!r.ok) return null;
-    const txt = await r.text();
-    const j = JSON.parse(txt);
-    return { title: cleanTitle(j.title || ""), author: j.author_name || "" };
-  }catch{ return null; }
+// Fallback usando Invidious
+async function fallbackSearch(query, page, limit) {
+  try {
+    const response = await fetch(`https://vid.puffyan.us/api/v1/search?q=${encodeURIComponent(query)}&page=${page}&type=video&region=AR`);
+    if (!response.ok) throw new Error('Fallback failed');
+    const data = await response.json();
+    const items = data.slice(0, limit).map(item => ({
+      id: item.videoId,
+      title: cleanTitle(item.title || 'Video'),
+      author: item.author || '',
+      thumb: `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg`,
+      loading: false
+    }));
+    return { items, hasMore: data.length === limit };
+  } catch {
+    return { items: [], hasMore: false };
+  }
 }
-async function fetchWatchTitle(id){
-  try{
-    const r = await fetch(`https://r.jina.ai/http://www.youtube.com/watch?v=${id}`, { signal: AbortSignal.timeout(5000) });
-    if(!r.ok) return null;
-    const html = await r.text();
-    let title = "";
-    const m = html.match(/<title>([^<]+)<\/title>/i);
-    if (m) title = m[1].replace(/\s*-+\s*YouTube\s*$/i,'').trim();
-    let author = "";
-    const ma = html.match(/"ownerChannelName":"([^"]+)"/) || html.match(/"channelId":"[^"]+","title":"([^"]+)"/);
-    if (ma) author = ma[1];
-    if (!title) return null;
-    return { title: cleanTitle(title), author };
-  }catch{ return null; }
-}
-async function hydrateMetadata(videoIds) {
+
+// Hidratar metadatos en paralelo
+async function hydrateMetadata(videoIds, query, page) {
   const chunks = [];
   for (let i = 0; i < videoIds.length; i += MAX_CONCURRENT) {
     chunks.push(videoIds.slice(i, i + MAX_CONCURRENT));
@@ -129,32 +128,42 @@ async function hydrateMetadata(videoIds) {
 
   for (const chunk of chunks) {
     await Promise.allSettled(chunk.map(async (videoId) => {
-      let meta = await fetchOEmbed(videoId);
-      if (!meta) meta = await fetchWatchTitle(videoId);
+      try {
+        const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (response.ok) {
+          const meta = await response.json();
 
-      const element = document.querySelector(`[data-track-id="${videoId}"]`);
-      const idx = items.findIndex(it => it.id === videoId);
+          // DOM si visible
+          const el = document.querySelector(`[data-track-id="${videoId}"]`);
+          if (el) {
+            const titleEl = el.querySelector('.title-text');
+            const authorEl = el.querySelector('.subtitle');
+            if (titleEl && meta.title) {
+              titleEl.textContent = cleanTitle(meta.title);
+              titleEl.style.color = '';
+            }
+            if (authorEl && meta.author_name) authorEl.textContent = meta.author_name;
+          }
 
-      // Actualizar UI y estado
-      if (meta) {
-        if (element) {
-          const tEl = element.querySelector('.title-text');
-          const aEl = element.querySelector('.subtitle');
-          if (tEl) { tEl.textContent = meta.title || "—"; tEl.style.color=""; tEl.style.fontStyle=""; }
-          if (aEl) { aEl.textContent = meta.author || ""; }
+          // Actualizar array items
+          const idx = items.findIndex(x => x.id === videoId);
+          if (idx !== -1) {
+            items[idx].title = cleanTitle(meta.title) || items[idx].title;
+            items[idx].author = meta.author_name || '';
+            items[idx].loading = false;
+          }
         }
-        if (idx !== -1) {
-          items[idx].title  = meta.title || items[idx].title;
-          items[idx].author = meta.author || '';
-          items[idx].loading = false;
+      } catch {
+        const el = document.querySelector(`[data-track-id="${videoId}"]`);
+        if (el) {
+          const titleEl = el.querySelector('.title-text');
+          if (titleEl) {
+            titleEl.textContent = `♪ ${videoId}`;
+            titleEl.style.color = '#888';
+          }
         }
-      } else {
-        // Fallback visual sin ID
-        if (element) {
-          const tEl = element.querySelector('.title-text');
-          if (tEl) { tEl.textContent = "♪ Título no disponible"; tEl.style.color="#8b8b8b"; tEl.style.fontStyle="italic"; }
-        }
-        if (idx !== -1) items[idx].loading = false;
       }
     }));
   }
@@ -162,18 +171,18 @@ async function hydrateMetadata(videoIds) {
 
 /* ========= API pública de búsqueda ========= */
 async function startSearch(query) {
-  // Cancelar búsqueda anterior
+  // Cancelar anterior
   if (searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
 
   // Reset estado
   paging = { query, page: 0, loading: false, hasMore: true };
   items = [];
-  seenIds = new Set();
   $("#results").innerHTML = "";
   setCount("🔍 Buscando...");
 
   try {
+    // Primera página inmediata
     const result = await fastYouTubeSearch(query, 1, FIRST_BATCH_SIZE);
     if (searchAbort.signal.aborted) return;
 
@@ -182,33 +191,22 @@ async function startSearch(query) {
       return;
     }
 
-    mergeAndRender(result.items);
+    // Mostrar ya
+    const deduped = dedupeById(result.items);
+    appendResults(deduped);
+    items = deduped;
 
     paging.page = 1;
     paging.hasMore = result.hasMore;
 
     setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
 
-    // Activar/crear el observer recién ahora
-    ensureObserver();
+    // Pre-cargar segunda página en background
+    if (result.hasMore) setTimeout(() => preloadNextPage(), 500);
 
   } catch (error) {
     console.error('Search failed:', error);
     setCount("❌ Error en la búsqueda. Intenta de nuevo.");
-  }
-}
-
-/* Añade evitando duplicados globales y renderiza */
-function mergeAndRender(chunk){
-  const filtered = [];
-  for(const it of chunk){
-    if (!it?.id || seenIds.has(it.id)) continue;
-    seenIds.add(it.id);
-    filtered.push(it);
-  }
-  if (filtered.length) {
-    appendResults(filtered);
-    items = items.concat(filtered);
   }
 }
 
@@ -225,8 +223,10 @@ async function preloadNextPage() {
   if (paging.loading || !paging.hasMore || !paging.query) return;
   try {
     const nextPage = paging.page + 1;
-    await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE); // sólo para hidratar cache local de red si lo desea el navegador
-  } catch {}
+    await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
+  } catch (error) {
+    console.warn('Preload failed:', error);
+  }
 }
 
 async function loadNextPage() {
@@ -244,7 +244,9 @@ async function loadNextPage() {
       return;
     }
 
-    mergeAndRender(result.items);
+    const newItems = dedupeById(result.items);
+    appendResults(newItems);
+    items = items.concat(newItems);
 
     paging.page = nextPage;
     paging.hasMore = result.hasMore;
@@ -269,8 +271,7 @@ function appendResults(chunk){
     card.className = "card";
     card.dataset.trackId = it.id;
 
-    const titleStyle = it.loading ? 'color:#666; font-style:italic;' : '';
-
+    const titleStyle = it.loading ? 'color:#666;font-style:italic;' : '';
     card.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
@@ -292,12 +293,14 @@ function appendResults(chunk){
         </button>
       </div>`;
 
+    // Tap en card -> reproducir pero quedarse en Búsqueda
     card.addEventListener("click", e=>{
       if(e.target.closest(".more") || e.target.closest(".card-play")) return;
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
     });
 
+    // Play/Pause overlay
     card.querySelector(".card-play").onclick = (e)=>{
       e.stopPropagation();
       if(currentTrack?.id === it.id){ togglePlay(); }
@@ -308,6 +311,7 @@ function appendResults(chunk){
       refreshIndicators();
     };
 
+    // Menú 3 puntos (track)
     card.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
       openActionSheet({
@@ -324,10 +328,10 @@ function appendResults(chunk){
       });
     };
 
+    // Animación de entrada
     card.style.opacity='0'; 
     card.style.transform='translateY(5px)';
     root.appendChild(card);
-
     requestAnimationFrame(()=>{
       card.style.transition='all .2s ease-out'; 
       card.style.opacity='1'; 
@@ -478,7 +482,7 @@ $("#btnNewPlaylist").onclick = ()=>{
   savePlaylists(); renderPlaylists();
 };
 
-/* ========= Sheets genéricos ========= */
+/* ========= Sheets ========= */
 function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
   const sheet = $("#menuSheet");
   sheet.innerHTML = `
@@ -487,8 +491,7 @@ function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
       ${actions.map(a=>`
         <button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">
           ${a.label}
-        </button>
-      `).join("")}
+        </button>`).join("")}
     </div>`;
   sheet.classList.add("show");
   sheet.onclick = (e)=>{
@@ -567,7 +570,7 @@ function togglePlay(){
 }
 $("#npPlay").onclick = togglePlay;
 
-/* Mini reproductor: sincronización */
+/* Mini reproductor */
 function updateMiniNow(){
   const has = !!currentTrack;
   const wrap = $("#miniNow");
@@ -600,7 +603,7 @@ function startTimer(){
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
-/* ========= Queue en Player ========= */
+/* ========= Cola en Player ========= */
 function showPlaylistInPlayer(plId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   const panel = $("#queuePanel"); panel.classList.remove("hide");
@@ -688,20 +691,10 @@ window.onYouTubeIframeAPIReady = function(){
 };
 
 /* ========= Infinite scroll ========= */
-function ensureObserver(){
-  const sentinel = $("#sentinel");
-  if (!io) {
-    io = new IntersectionObserver((entries)=>{
-      for(const en of entries){
-        if(en.isIntersecting && paging.query){
-          loadNextPage();
-        }
-      }
-    },{ root:null, rootMargin:"800px 0px", threshold:0 });
-  }
-  io.disconnect();
-  io.observe(sentinel);
-}
+const io = new IntersectionObserver((entries)=>{
+  for(const en of entries){ if(en.isIntersecting){ loadNextPage(); } }
+},{ root:null, rootMargin:"800px 0px", threshold:0 });
+io.observe($("#sentinel"));
 
 /* ========= Init ========= */
 loadFavs();
