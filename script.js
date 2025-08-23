@@ -24,7 +24,7 @@ let selectedPlaylistId = null;   // para sheet de playlists
 
 /* ========= Búsqueda ultra rápida ========= */
 const FIRST_BATCH_SIZE = 19;   // primera tanda inmediata
-const BATCH_SIZE = 19;         // siguientes tandas
+const BATCH_SIZE = 0;         // siguientes tandas
 const MAX_CONCURRENT = 1;      // hilos paralelos para metadatos
 
 let paging = { query:"", page:0, loading:false, hasMore:true };
