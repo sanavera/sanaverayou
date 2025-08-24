@@ -137,7 +137,7 @@ async function startSearch(query) {
     paging.pageToken = result.nextPageToken;
     paging.hasMore = result.hasMore;
 
-    setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
+    setCount(` ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
 
   } catch (error) {
     console.error('Search failed:', error);
@@ -176,12 +176,12 @@ async function loadNextPage() {
     paging.hasMore = result.hasMore;
     paging.loading = false;
 
-    setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
+    setCount(` ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
 
   } catch (error) {
     paging.loading = false;
     paging.hasMore = false;
-    setCount(`🎵 ${items.length} canciones • Error cargando más`);
+    setCount(` ${items.length} canciones • Error cargando más`);
   }
 }
 
