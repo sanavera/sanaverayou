@@ -24,7 +24,7 @@ let selectedPlaylistId = null;   // para sheet de playlists
 
 /* ========= Búsqueda ultra rápida con API oficial ========= */
 // ¡IMPORTANTE! Reemplazá 'TU_API_KEY' con tu clave de API de YouTube
-const YOUTUBE_API_KEY = "AIzaSyCrnAd5jd79yluQvoAiscTY6Ht9BD_Peh0";
+const YOUTUBE_API_KEY = "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY";
 const BATCH_SIZE = 20;
 
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
