@@ -4,9 +4,9 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 const uniq = a => [...new Set(a)];
 const cleanTitle = t => (t||"")
-  .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"")
-  .replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"")
-  .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
+  .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"-MP3")
+  .replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"-MP3")
+  .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"-MP3")
   .replace(/\s{2,}/g," ").trim();
 
 /* ========= Estado ========= */
