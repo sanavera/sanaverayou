@@ -298,7 +298,7 @@ function renderFavs(){
       if(currentTrack?.id === it.id){ togglePlay(); }
       else{ playFromFav(it, true); }
       refreshIndicators();
-    });
+    };
 
     li.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
