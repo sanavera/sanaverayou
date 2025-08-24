@@ -1,4 +1,3 @@
-Script.js
 /* ========= Utils ========= */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
