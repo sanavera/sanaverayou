@@ -9,6 +9,17 @@ const cleanTitle = t => (t||"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"-MP3")
   .replace(/\s{2,}/g," ").trim();
 
+// 👉 VEVО / Topic  →  MP3 (dejando un espacio antes si hace falta)
+const cleanAuthor = a => (a||"")
+  // "- Topic", "— Topic", "(Topic)", " Topic" → " MP3"
+  .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, " MP3")
+  // "VEVO" pegado o separado → " MP3"
+  .replace(/VEVO/gi, " MP3")
+  // arreglos finales
+  .replace(/\s{2,}/g, " ")
+  .replace(/\s*-\s*$/,"")
+  .trim();
+
 /* ========= Estado ========= */
 let items = [];            // resultados
 let favs  = [];            // favoritos
@@ -33,9 +44,9 @@ const YOUTUBE_API_KEYS = [
 let currentApiKeyIndex = 0;
 
 function getRotatedApiKey() {
-    const key = YOUTUBE_API_KEYS[currentApiKeyIndex];
-    currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
-    return key;
+  const key = YOUTUBE_API_KEYS[currentApiKeyIndex];
+  currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+  return key;
 }
 
 const BATCH_SIZE = 20;
@@ -77,15 +88,13 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   url.searchParams.append('type', 'video');
   url.searchParams.append('videoCategoryId', '10');
   url.searchParams.append('maxResults', limit);
-  if (pageToken) {
-    url.searchParams.append('pageToken', pageToken);
-  }
+  if (pageToken) url.searchParams.append('pageToken', pageToken);
 
   try {
     const response = await fetch(url);
     if (!response.ok) {
       if (response.status === 403) {
-        console.warn(`API key ${apiKey} ha fallado con error 403. Intentando con la siguiente...`);
+        console.warn(`API key ${apiKey} falló con 403. Probando la siguiente...`);
         return youtubeSearch(query, pageToken, limit, retryCount + 1);
       }
       throw new Error(`API error: ${response.status}`);
@@ -95,7 +104,7 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     const resultItems = data.items.map(item => ({
       id: item.id.videoId,
       title: cleanTitle(item.snippet.title),
-      author: item.snippet.channelTitle,
+      author: cleanAuthor(item.snippet.channelTitle),   // ← limpieza acá
       thumb: item.snippet.thumbnails.high.url
     }));
 
@@ -156,7 +165,6 @@ function dedupeById(arr) {
 
 async function loadNextPage() {
   if (paging.loading || !paging.hasMore || !paging.query) return;
-
   paging.loading = true;
 
   try {
@@ -201,11 +209,11 @@ function appendResults(chunk){
           <span class="title-text">${it.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
-        <div class="subtitle">${it.author||""}</div>
+        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
       </div>
       <div class="actions">
         <button class="icon-btn more" title="Opciones">
-          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+          <svg viewBox="0 0 24 24"><path fill="#ff3b30" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
       </div>`;
 
@@ -272,11 +280,11 @@ function renderFavs(){
           <span class="title-text">${it.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
-        <div class="subtitle">${it.author||""}</div>
+        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
       </div>
       <div class="actions">
         <button class="icon-btn more" title="Opciones">
-          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+          <svg viewBox="0 0 24 24"><path fill="#ff3b30" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
       </div>`;
 
@@ -290,7 +298,7 @@ function renderFavs(){
       if(currentTrack?.id === it.id){ togglePlay(); }
       else{ playFromFav(it, true); }
       refreshIndicators();
-    };
+    });
 
     li.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
@@ -335,7 +343,7 @@ function renderPlaylists(){
         </div>
       </div>
       <button class="icon-btn more" title="Opciones">
-        <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="#ff3b30" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
       </button>`;
 
     li.addEventListener("click", (e)=>{
@@ -436,7 +444,7 @@ function updateHero(track){
   $("#favNowTitle").textContent = t ? t.title : "—";
   $("#npHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
   $("#npTitle").textContent = t ? t.title : "Elegí una canción";
-  $("#npSub").textContent = t ? (t.author||"—") : "—";
+  $("#npSub").textContent = t ? (cleanAuthor(t.author)||"—") : "—";
   updateMiniNow();
 }
 
@@ -526,7 +534,7 @@ function showPlaylistInPlayer(plId){
           <span class="title-text">${t.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
-        <div class="subtitle">${t.author||""}</div>
+        <div class="subtitle">${cleanAuthor(t.author)||""}</div>
       </div>`;
     li.onclick = ()=> playFromPlaylist(pl.id, i, true);
     ul.appendChild(li);
