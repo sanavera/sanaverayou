@@ -172,16 +172,13 @@ async function loadNextPage() {
 function appendResults(chunk){
   const root = $("#results");
   for(const it of chunk){
-    const card = document.createElement("article");
-    card.className = "card";
-    card.dataset.trackId = it.id;
-    card.innerHTML = `
+    // CAMBIO: Ahora usamos 'result-item' en vez de 'card'
+    const item = document.createElement("article");
+    item.className = "result-item";
+    item.dataset.trackId = it.id;
+    item.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
-        <button class="card-play" title="Play/Pause">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
       </div>
       <div class="meta">
         <div class="title-line">
@@ -196,26 +193,18 @@ function appendResults(chunk){
         </button>
       </div>`;
 
-    // Tap en card -> reproducir pero quedarse en Búsqueda
-    card.addEventListener("click", e=>{
-      if(e.target.closest(".more") || e.target.closest(".card-play")) return;
+    // CAMBIO: Tap en item, no en card
+    item.addEventListener("click", e=>{
+      if(e.target.closest(".more")) return;
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
     });
 
-    // Play/Pause overlay
-    card.querySelector(".card-play").onclick = (e)=>{
-      e.stopPropagation();
-      if(currentTrack?.id === it.id){ togglePlay(); }
-      else{
-        const pos = items.findIndex(x=>x.id===it.id);
-        playFromSearch(pos>=0?pos:0, true);
-      }
-      refreshIndicators();
-    };
-
+    // CAMBIO: El botón de play del overlay ya no existe en la lista
+    // En su lugar, el tap en el item lo reproduce
+    
     // Menú 3 puntos (track)
-    card.querySelector(".more").onclick = (e)=>{
+    item.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
       openActionSheet({
         title: "Opciones",
@@ -232,13 +221,13 @@ function appendResults(chunk){
     };
 
     // Animación de entrada
-    card.style.opacity='0'; 
-    card.style.transform='translateY(5px)';
-    root.appendChild(card);
+    item.style.opacity='0'; 
+    item.style.transform='translateY(5px)';
+    root.appendChild(item);
     requestAnimationFrame(()=>{
-      card.style.transition='all .2s ease-out'; 
-      card.style.opacity='1'; 
-      card.style.transform='translateY(0)';
+      item.style.transition='all .2s ease-out'; 
+      item.style.opacity='1'; 
+      item.style.transform='translateY(0)';
     });
   }
   refreshIndicators();
@@ -541,9 +530,12 @@ function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
 
-  $$("#results .card").forEach(c=>{
+  // CAMBIO: Ahora buscamos `.result-item` en lugar de `.card`
+  $$("#results .result-item").forEach(c=>{
     const isCur = c.dataset.trackId===curId;
+    // CAMBIO: Usamos `is-playing` para el estilo de card
     c.classList.toggle("is-playing", playing && isCur);
+    // CAMBIO: El botón de play solo se muestra si el item está seleccionado
     const btn = c.querySelector(".card-play");
     if(btn) btn.classList.toggle("playing", playing && isCur);
   });
