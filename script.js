@@ -1,3 +1,4 @@
+Script.js
 /* ========= Utils ========= */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -458,18 +459,6 @@ function playCurrent(autoplay=false){
   startTimer();
   updateHero(currentTrack);
   refreshIndicators();
-
-  // 👉 Actualiza los metadatos para el control del reproductor en segundo plano
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title,
-      artist: cleanAuthor(currentTrack.author),
-      artwork: [
-        { src: currentTrack.thumb, sizes: '96x96',   type: 'image/jpeg' },
-        { src: currentTrack.thumb, sizes: '512x512', type: 'image/jpeg' } // Usa la misma imagen, pero simula un tamaño mayor
-      ]
-    });
-  }
 }
 function playFromSearch(i, autoplay=false){ setQueue(items, "search", i); playCurrent(autoplay); }
 function playFromFav(track, autoplay=false){
@@ -580,8 +569,14 @@ function refreshIndicators(){
 }
 
 /* ========= Visibilidad ========= */
-// Se ha eliminado el código que recarga el video al cambiar de pestaña
-// Ahora usamos Media Session API para un mejor rendimiento en segundo plano
+document.addEventListener("visibilitychange", ()=>{
+  if(!YT_READY || !currentTrack) return;
+  if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
+    const t = ytPlayer.getCurrentTime()||0;
+    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds:t, suggestedQuality:"auto" });
+    ytPlayer.playVideo();
+  }
+});
 
 /* ========= YouTube API ========= */
 function loadYTApi(){
@@ -593,16 +588,7 @@ window.onYouTubeIframeAPIReady = function(){
     width:300, height:150, videoId:"",
     playerVars:{autoplay:0, controls:0, rel:0, playsinline:1},
     events:{
-      onReady:()=>{
-        YT_READY=true;
-        // 👉 Manejo de los controles de "siguiente" y "anterior" desde la pantalla de bloqueo
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.setActionHandler('play', () => { ytPlayer.playVideo(); });
-            navigator.mediaSession.setActionHandler('pause', () => { ytPlayer.pauseVideo(); });
-            navigator.mediaSession.setActionHandler('nexttrack', () => { next(); });
-            navigator.mediaSession.setActionHandler('previoustrack', () => { prev(); });
-        }
-      },
+      onReady:()=>{ YT_READY=true; },
       onStateChange:(e)=>{
         const st=e.data, playing=(st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING);
         $("#npPlay").classList.toggle("playing", playing);
