@@ -22,12 +22,12 @@ let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
 let selectedTrack = null;        // para sheets desde cards/favs
 let selectedPlaylistId = null;   // para sheet de playlists
 
-/* ========= Búsqueda ultra rápida ========= */
-const FIRST_BATCH_SIZE = 19;   // primera tanda inmediata
-const BATCH_SIZE = 0;         // siguientes tandas
-const MAX_CONCURRENT = 1;      // hilos paralelos para metadatos
+/* ========= Búsqueda ultra rápida con API oficial ========= */
+// ¡IMPORTANTE! Reemplazá 'TU_API_KEY' con tu clave de API de YouTube
+const YOUTUBE_API_KEY = "AIzaSyCrnAd5jd79yluQvoAiscTY6Ht9BD_Peh0";
+const BATCH_SIZE = 20;
 
-let paging = { query:"", page:0, loading:false, hasMore:true };
+let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 let searchAbort = null;
 
 /* ========= Nav ========= */
@@ -49,122 +49,45 @@ $("#searchInput").addEventListener("keydown", async e=>{
 });
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
-/* ========= Motor de búsqueda (sin caché) ========= */
-async function fastYouTubeSearch(query, page = 1, limit = BATCH_SIZE) {
-  // Scraping directo más rápido
-  const searchUrl = `https://www.youtube.com.ar/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
+/* ========= Motor de búsqueda (con API) ========= */
+async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE) {
+  const url = new URL('https://www.googleapis.com/youtube/v3/search');
+  url.searchParams.append('key', YOUTUBE_API_KEY);
+  url.searchParams.append('q', query);
+  url.searchParams.append('part', 'snippet');
+  url.searchParams.append('type', 'video');
+  url.searchParams.append('videoCategoryId', '10'); // Categoría Música
+  url.searchParams.append('maxResults', limit);
+  if (pageToken) {
+    url.searchParams.append('pageToken', pageToken);
+  }
+
   try {
-    // HTML limpio más rápido
-    const response = await fetch(`https://r.jina.ai/${searchUrl}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-    if (!response.ok) throw new Error('Network error');
-
-    const html = await response.text();
-
-    // Extraer IDs
-    const videoIds = [];
-    const matches = html.matchAll(/watch\?v=([\w-]{11})/g);
-    const seenIds = new Set();
-    for (const m of matches) {
-      const id = m[1];
-      if (!seenIds.has(id) && videoIds.length < limit * 2) {
-        seenIds.add(id);
-        videoIds.push(id);
+    const response = await fetch(url);
+    if (!response.ok) {
+      if(response.status === 403){
+        console.error('API Error: Posiblemente la clave de API sea incorrecta o no esté habilitada.');
       }
+      throw new Error(`API error: ${response.status}`);
     }
+    const data = await response.json();
 
-    // Paginación simple
-    const startIdx = (page - 1) * limit;
-    const pageIds = videoIds.slice(startIdx, startIdx + limit);
-    if (pageIds.length === 0) return { items: [], hasMore: false };
-
-    // Items base inmediatos
-    const items = pageIds.map(id => ({
-      id,
-      title: `♪ Video ${id}`,
-      author: '',
-      thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-      loading: true
+    const resultItems = data.items.map(item => ({
+      id: item.id.videoId,
+      title: cleanTitle(item.snippet.title),
+      author: item.snippet.channelTitle,
+      thumb: item.snippet.thumbnails.high.url
     }));
 
-    // Hidratar metadatos en background
-    hydrateMetadata(pageIds, query, page);
-
-    return { items, hasMore: videoIds.length > startIdx + limit };
+    return {
+      items: resultItems,
+      nextPageToken: data.nextPageToken,
+      hasMore: !!data.nextPageToken
+    };
 
   } catch (error) {
-    console.warn('Search error:', error);
-    return await fallbackSearch(query, page, limit);
-  }
-}
-
-// Fallback usando Invidious
-async function fallbackSearch(query, page, limit) {
-  try {
-    const response = await fetch(`https://vid.puffyan.us/api/v1/search?q=${encodeURIComponent(query)}&page=${page}&type=video&region=AR`);
-    if (!response.ok) throw new Error('Fallback failed');
-    const data = await response.json();
-    const items = data.slice(0, limit).map(item => ({
-      id: item.videoId,
-      title: cleanTitle(item.title || 'Video'),
-      author: item.author || '',
-      thumb: `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg`,
-      loading: false
-    }));
-    return { items, hasMore: data.length === limit };
-  } catch {
+    console.error('YouTube API search failed:', error);
     return { items: [], hasMore: false };
-  }
-}
-
-// Hidratar metadatos en paralelo
-async function hydrateMetadata(videoIds, query, page) {
-  const chunks = [];
-  for (let i = 0; i < videoIds.length; i += MAX_CONCURRENT) {
-    chunks.push(videoIds.slice(i, i + MAX_CONCURRENT));
-  }
-
-  for (const chunk of chunks) {
-    await Promise.allSettled(chunk.map(async (videoId) => {
-      try {
-        const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, {
-          signal: AbortSignal.timeout(3000)
-        });
-        if (response.ok) {
-          const meta = await response.json();
-
-          // DOM si visible
-          const el = document.querySelector(`[data-track-id="${videoId}"]`);
-          if (el) {
-            const titleEl = el.querySelector('.title-text');
-            const authorEl = el.querySelector('.subtitle');
-            if (titleEl && meta.title) {
-              titleEl.textContent = cleanTitle(meta.title);
-              titleEl.style.color = '';
-            }
-            if (authorEl && meta.author_name) authorEl.textContent = meta.author_name;
-          }
-
-          // Actualizar array items
-          const idx = items.findIndex(x => x.id === videoId);
-          if (idx !== -1) {
-            items[idx].title = cleanTitle(meta.title) || items[idx].title;
-            items[idx].author = meta.author_name || '';
-            items[idx].loading = false;
-          }
-        }
-      } catch {
-        const el = document.querySelector(`[data-track-id="${videoId}"]`);
-        if (el) {
-          const titleEl = el.querySelector('.title-text');
-          if (titleEl) {
-            titleEl.textContent = `♪ ${videoId}`;
-            titleEl.style.color = '#888';
-          }
-        }
-      }
-    }));
   }
 }
 
@@ -175,14 +98,13 @@ async function startSearch(query) {
   searchAbort = new AbortController();
 
   // Reset estado
-  paging = { query, page: 0, loading: false, hasMore: true };
+  paging = { query, pageToken: "", loading: false, hasMore: true };
   items = [];
   $("#results").innerHTML = "";
   setCount("🔍 Buscando...");
 
   try {
-    // Primera página inmediata
-    const result = await fastYouTubeSearch(query, 1, FIRST_BATCH_SIZE);
+    const result = await youtubeSearch(query, '', 20); // Más resultados de golpe
     if (searchAbort.signal.aborted) return;
 
     if (result.items.length === 0) {
@@ -190,18 +112,15 @@ async function startSearch(query) {
       return;
     }
 
-    // Mostrar ya
+    // Mostrar resultados
     const deduped = dedupeById(result.items);
     appendResults(deduped);
     items = deduped;
 
-    paging.page = 1;
+    paging.pageToken = result.nextPageToken;
     paging.hasMore = result.hasMore;
 
     setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
-
-    // Pre-cargar segunda página en background
-    if (result.hasMore) setTimeout(() => preloadNextPage(), 500);
 
   } catch (error) {
     console.error('Search failed:', error);
@@ -218,24 +137,13 @@ function dedupeById(arr) {
   });
 }
 
-async function preloadNextPage() {
-  if (paging.loading || !paging.hasMore || !paging.query) return;
-  try {
-    const nextPage = paging.page + 1;
-    await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
-  } catch (error) {
-    console.warn('Preload failed:', error);
-  }
-}
-
 async function loadNextPage() {
   if (paging.loading || !paging.hasMore || !paging.query) return;
 
   paging.loading = true;
-  const nextPage = paging.page + 1;
 
   try {
-    const result = await fastYouTubeSearch(paging.query, nextPage, BATCH_SIZE);
+    const result = await youtubeSearch(paging.query, paging.pageToken, BATCH_SIZE);
 
     if (result.items.length === 0) {
       paging.hasMore = false;
@@ -247,13 +155,11 @@ async function loadNextPage() {
     appendResults(newItems);
     items = items.concat(newItems);
 
-    paging.page = nextPage;
+    paging.pageToken = result.nextPageToken;
     paging.hasMore = result.hasMore;
     paging.loading = false;
 
     setCount(`🎵 ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
-
-    if (result.hasMore) setTimeout(() => preloadNextPage(), 300);
 
   } catch (error) {
     paging.loading = false;
@@ -269,8 +175,6 @@ function appendResults(chunk){
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.trackId = it.id;
-
-    const titleStyle = it.loading ? 'color:#666;font-style:italic;' : '';
     card.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
@@ -281,7 +185,7 @@ function appendResults(chunk){
       </div>
       <div class="meta">
         <div class="title-line">
-          <span class="title-text" style="${titleStyle}">${it.title}</span>
+          <span class="title-text">${it.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
         <div class="subtitle">${it.author||""}</div>
