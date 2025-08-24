@@ -23,10 +23,22 @@ let selectedTrack = null;        // para sheets desde cards/favs
 let selectedPlaylistId = null;   // para sheet de playlists
 
 /* ========= Búsqueda ultra rápida con API oficial ========= */
-// ¡IMPORTANTE! Reemplazá 'TU_API_KEY' con tu clave de API de YouTube
-const YOUTUBE_API_KEY = "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY";
-const BATCH_SIZE = 20;
+const YOUTUBE_API_KEYS = [
+  "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
+  "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
+  "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE",
+  "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM",
+  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0"
+];
+let currentApiKeyIndex = 0;
 
+function getRotatedApiKey() {
+    const key = YOUTUBE_API_KEYS[currentApiKeyIndex];
+    currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+    return key;
+}
+
+const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 let searchAbort = null;
 
@@ -50,13 +62,20 @@ $("#searchInput").addEventListener("keydown", async e=>{
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
 /* ========= Motor de búsqueda (con API) ========= */
-async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE) {
+async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0) {
+  const MAX_RETRIES = YOUTUBE_API_KEYS.length;
+  if (retryCount >= MAX_RETRIES) {
+    console.error('Todas las API keys han fallado. Es posible que el límite diario se haya alcanzado.');
+    throw new Error('Todas las API keys han fallado.');
+  }
+
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
-  url.searchParams.append('key', YOUTUBE_API_KEY);
+  const apiKey = getRotatedApiKey();
+  url.searchParams.append('key', apiKey);
   url.searchParams.append('q', query);
   url.searchParams.append('part', 'snippet');
   url.searchParams.append('type', 'video');
-  url.searchParams.append('videoCategoryId', '10'); // Categoría Música
+  url.searchParams.append('videoCategoryId', '10');
   url.searchParams.append('maxResults', limit);
   if (pageToken) {
     url.searchParams.append('pageToken', pageToken);
@@ -65,8 +84,9 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE) {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      if(response.status === 403){
-        console.error('API Error: Posiblemente la clave de API sea incorrecta o no esté habilitada.');
+      if (response.status === 403) {
+        console.warn(`API key ${apiKey} ha fallado con error 403. Intentando con la siguiente...`);
+        return youtubeSearch(query, pageToken, limit, retryCount + 1);
       }
       throw new Error(`API error: ${response.status}`);
     }
@@ -93,18 +113,16 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE) {
 
 /* ========= API pública de búsqueda ========= */
 async function startSearch(query) {
-  // Cancelar anterior
   if (searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
 
-  // Reset estado
   paging = { query, pageToken: "", loading: false, hasMore: true };
   items = [];
   $("#results").innerHTML = "";
   setCount("🔍 Buscando...");
 
   try {
-    const result = await youtubeSearch(query, '', 20); // Más resultados de golpe
+    const result = await youtubeSearch(query, '', 20);
     if (searchAbort.signal.aborted) return;
 
     if (result.items.length === 0) {
@@ -112,7 +130,6 @@ async function startSearch(query) {
       return;
     }
 
-    // Mostrar resultados
     const deduped = dedupeById(result.items);
     appendResults(deduped);
     items = deduped;
@@ -172,7 +189,6 @@ async function loadNextPage() {
 function appendResults(chunk){
   const root = $("#results");
   for(const it of chunk){
-    // CAMBIO: Ahora usamos 'result-item' en vez de 'card'
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.trackId = it.id;
@@ -193,17 +209,12 @@ function appendResults(chunk){
         </button>
       </div>`;
 
-    // CAMBIO: Tap en item, no en card
     item.addEventListener("click", e=>{
       if(e.target.closest(".more")) return;
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
     });
 
-    // CAMBIO: El botón de play del overlay ya no existe en la lista
-    // En su lugar, el tap en el item lo reproduce
-    
-    // Menú 3 puntos (track)
     item.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
       openActionSheet({
@@ -220,7 +231,6 @@ function appendResults(chunk){
       });
     };
 
-    // Animación de entrada
     item.style.opacity='0'; 
     item.style.transform='translateY(5px)';
     root.appendChild(item);
@@ -530,12 +540,9 @@ function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
 
-  // CAMBIO: Ahora buscamos `.result-item` en lugar de `.card`
   $$("#results .result-item").forEach(c=>{
     const isCur = c.dataset.trackId===curId;
-    // CAMBIO: Usamos `is-playing` para el estilo de card
     c.classList.toggle("is-playing", playing && isCur);
-    // CAMBIO: El botón de play solo se muestra si el item está seleccionado
     const btn = c.querySelector(".card-play");
     if(btn) btn.classList.toggle("playing", playing && isCur);
   });
