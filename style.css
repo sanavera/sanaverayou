@@ -396,7 +396,7 @@ body.modal-open {
 
 .title-text {
     font-weight: 600;
-    font-size: 16px;
+    font-size: 15px; /* MODIFICACIÓN: Tamaño de fuente más chico */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -420,29 +420,30 @@ body.modal-open {
     width: 44px;
     height: 44px;
     border-radius: 14px;
-    border: 1px solid var(--border);
+    border: none; /* MODIFICACIÓN: Borde eliminado */
     color: var(--text-secondary);
-    background: var(--surface);
+    background: transparent; /* MODIFICACIÓN: Fondo transparente */
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--neu-shadow);
+    box-shadow: none; /* MODIFICACIÓN: Sombra eliminada */
     transition: var(--fast);
     cursor: pointer;
 }
 
 .icon-btn:hover {
     transform: translateY(-1px) scale(1.05);
-    background: var(--surface-hover);
+    background: transparent;
     border-color: var(--accent);
     color: var(--text-primary);
-    box-shadow: var(--neu-elevated-shadow);
+    box-shadow: none;
 }
 
-.icon-btn svg {
-    width: 18px;
-    height: 18px;
+/* MODIFICACIÓN: Color rojo para el botón de 3 puntitos */
+.icon-btn.more {
+    color: var(--accent);
 }
+
 
 /* EQ */
 .eq {
@@ -765,7 +766,7 @@ body.modal-open {
 .nav-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-secondary); /* MODIFICACIÓN: Color gris por defecto */
     font-weight: 600;
     display: flex;
     flex-direction: column;
@@ -805,8 +806,8 @@ body.modal-open {
 }
 
 .nav-btn.active {
-    color: var(--accent-light);
-    text-shadow: 0 0 12px rgba(239, 68, 68, .3);
+    color: var(--accent); /* MODIFICACIÓN: Color rojo cuando está activo */
+    text-shadow: none; /* MODIFICACIÓN: Sombra de texto eliminada */
 }
 
 .nav-btn.active svg {
