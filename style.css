@@ -181,7 +181,7 @@ body{
   border-top:1px solid rgba(255,255,255,.08);
   padding:6px 10px 8px; box-shadow:0 -4px 12px rgba(0,0,0,.18);
 }
-.mini-now{display:flex;align-items:center;gap:10px;background:rgba(36,39,49,.55);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:6px 8px}
+.mini-now{display:flex;align-items:center;gap:10px;background: rgba(11, 10, 17, 1);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:6px 8px}
 .mini-now.hide{display:none}
 .mini-thumb{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.08)}
 .mini-btn{
