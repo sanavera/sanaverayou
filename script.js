@@ -33,12 +33,12 @@ let ytPlayer = null, YT_READY = false, timer = null;
 /* ========= Curados estáticos (NO API) ========= */
 /* Reemplazá id: por el ID de YouTube o directamente url: con el link completo */
 const CURATED_RAW = [
-  { id: "XXXXXXXXXXX1", title: "Pop enganchado (1h)",   author: "Mix Pop" },
-  { id: "XXXXXXXXXXX2", title: "Rock enganchado (1h)",  author: "Mix Rock" },
-  { id: "XXXXXXXXXXX3", title: "Cumbia enganchada",     author: "Mix Cumbia" },
-  { id: "XXXXXXXXXXX4", title: "Reggaetón Session",     author: "Mix Urbano" },
-  { id: "XXXXXXXXXXX5", title: "Latinos Old School",    author: "Mix Latino" },
-  { id: "XXXXXXXXXXX6", title: "Electrónica Non-Stop",  author: "Mix EDM" },
+  { id: "ddN1Hu3Qm5s", title: "Pop enganchado (1h)",   author: "Mix Pop" },
+  { id: "1ATkrsFDhpY", title: "Rock enganchado (1h)",  author: "Mix Rock" },
+  { id: "8DIGGjaE5gg", title: "Cumbia enganchada",     author: "Mix Cumbia" },
+  { id: "SROpyGwrStc", title: "Reggaetón Session",     author: "Mix Urbano" },
+  { id: "sRIamUTkafg", title: "Latinos Old School",    author: "Mix Latino" },
+  { id: "7CyKlAX5vXE", title: "Electrónica Non-Stop",  author: "Mix EDM" },
   // podés seguir sumando…
 ];
 function extractVideoId(input){
