@@ -5,31 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SanaveraYou Pro</title>
 
-  <!-- Spotify/Tidal-like: Inter (libre) -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- Barra de arriba con logo y busqueda -->
+  <!-- Barra superior compacta -->
   <header class="topbar">
     <div class="brand-compact">
       <img id="miniLogo" src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif" alt="Logo" />
-      <div class="search-container">
-        <input id="searchInput" placeholder="Buscar ej Amar Azul Yo tomo" autocomplete="off" />
-        <div id="resultsCount" class="muted"></div>
-      </div>
+      <div class="app-title">SanaveraYou</div>
+
+      <!-- Lupa flotante (también hay otra fija fuera del header para que esté siempre visible) -->
+      <button id="searchFabHeader" class="search-fab" aria-label="Buscar">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
+      </button>
+    </div>
+
+    <!-- Conservamos el input original pero oculto (compatibilidad) -->
+    <div class="search-container hide">
+      <input id="searchInput" placeholder="Buscar" autocomplete="off" />
+      <div id="resultsCount" class="muted"></div>
     </div>
   </header>
 
   <main id="views">
-    <!-- Vista de búsqueda -->
+    <!-- Búsqueda -->
     <section id="view-search" class="view active">
       <section id="results" class="results"></section>
       <div id="sentinel" aria-hidden="true"></div>
     </section>
 
-    <!-- Vista de favoritos -->
+    <!-- Favoritos -->
     <section id="view-favs" class="view">
       <div class="fav-hero" id="favHero">
         <div class="fav-hero-text">
@@ -42,7 +49,7 @@
       </section>
     </section>
 
-    <!-- Vista de playlists -->
+    <!-- Playlists -->
     <section id="view-playlists" class="view">
       <header class="section-head">
         <h3>Playlists</h3>
@@ -51,18 +58,12 @@
         </div>
       </header>
       <ul id="plList" class="pl-list"></ul>
-      <div id="plEmpty" class="empty muted">Aun no hay playlists Crea la primera ✨</div>
+      <div id="plEmpty" class="empty muted">Aún no hay playlists. Crea la primera ✨</div>
     </section>
 
-    <!-- Vista del reproductor -->
+    <!-- Reproductor -->
     <section id="view-player" class="view now-playing">
-      <section id="queuePanel" class="queue-panel hide">
-        <header class="section-head">
-          <h3 id="queueTitle">Playlist</h3>
-        </header>
-        <ul id="queueList" class="fav-list"></ul>
-      </section>
-
+      <!-- Hero SIEMPRE ARRIBA -->
       <div id="npHero" class="np-hero">
         <button id="npPlay" class="np-play" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -73,12 +74,21 @@
         </button>
       </div>
       <div class="np-meta">
-        <div id="npTitle" class="np-title">Elegi una cancion</div>
+        <div id="npTitle" class="np-title">Elegí una canción</div>
         <div id="npSub" class="np-sub muted">-</div>
       </div>
+
+      <!-- Cola debajo del hero -->
+      <section id="queuePanel" class="queue-panel hide">
+        <header class="section-head">
+          <h3 id="queueTitle">Playlist</h3>
+        </header>
+        <ul id="queueList" class="fav-list"></ul>
+      </section>
     </section>
   </main>
 
+  <!-- Mini reproductor integrado con la barra inferior -->
   <section id="seekDock" class="seek-dock">
     <div id="miniNow" class="mini-now hide">
       <img id="miniThumb" class="mini-thumb" alt="" />
@@ -87,18 +97,16 @@
         <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
       <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" />
-      <div class="time-inline">
-        <span id="cur">0:00</span>
-        <span id="dur">0:00</span>
-      </div>
+      <div class="time-inline"><span id="cur">0:00</span><span id="dur">0:00</span></div>
       <div class="mini-credit">Desarrollado por Sebastian Sanavera</div>
     </div>
   </section>
 
+  <!-- Barra de navegación (estilo YouTube, más limpia) -->
   <nav id="bottomNav" class="bottom-nav">
     <button data-view="view-search" class="nav-btn active">
       <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
-      <span>Busqueda</span>
+      <span>Búsqueda</span>
     </button>
     <button data-view="view-favs" class="nav-btn">
       <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -114,6 +122,18 @@
     </button>
   </nav>
 
+  <!-- Lupa flotante global (por encima de todo) -->
+  <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
+    <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
+  </button>
+
+  <!-- Overlay de búsqueda -->
+  <div id="searchOverlay" class="search-overlay">
+    <div class="search-card">
+      <input id="overlaySearchInput" placeholder="Buscá algo… (Enter)" autocomplete="off" />
+    </div>
+  </div>
+
   <div id="menuSheet" class="sheet"></div>
 
   <div id="playlistSheet" class="sheet">
@@ -128,6 +148,7 @@
     </div>
   </div>
 
+  <!-- Player YouTube escondido -->
   <div id="yt-holder"><div id="player"></div></div>
 
   <script src="script.js"></script>
