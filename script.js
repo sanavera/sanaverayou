@@ -53,7 +53,7 @@ const CURATED_RAW = [
   { "id": "ofPx2dQmj_Y", "title": "Soda Stereo - Dynamo (Álbum Completo)", "author": "Soda Stereo" },
   { "id": "iIWKSSdo8JI", "title": "Charly García - El Aguante (Álbum Completo)", "author": "Charly García" },
   { "id": "T7rT6LkFpuA", "title": "Lo Mejor del Cuarteto Cordobés", "author": "Mix Cuarteto" },
-  { "id": "QDqvzFHFmDY", "title": "Enganchado Cuarteto Mix", "author": "Mix Cuarteto" }
+  { "id": "QDqvzFHFmDY", "title": "Enganchado Cuarteto Mix", "author": "Mix Cuarteto" }, 
 ]
   // podés seguir sumando…
 ];
