@@ -40,7 +40,7 @@ const CURATED_RAW = [
   { id: "sRIamUTkafg", title: "Latinos Old School",    author: "Mix Latino" },
   { id: "7CyKlAX5vXE", title: "Electrónica Non-Stop",  author: "Mix EDM" },
   { id: "f5U34t9KMjE", title: "Los Redondos",  author: "Sanavera Sebastian" },
-  
+  { id: "MsRzUfV8KXY", title: "Top 40 Rock",  author: "Sanavera Sebastian" },
   // podés seguir sumando…
 ];
 function extractVideoId(input){
