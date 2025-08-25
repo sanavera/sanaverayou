@@ -58,6 +58,13 @@ function switchView(id){
   $$(".view").forEach(v=>v.classList.remove("active"));
   $("#"+id).classList.add("active");
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
+  if (id === 'view-search') {
+    refreshIndicators();
+  } else if (id === 'view-favs') {
+    renderFavs();
+  } else if (id === 'view-playlists') {
+    renderPlaylists();
+  }
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -278,9 +285,8 @@ function renderFavs(){
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+          <div class="subtitle">${cleanAuthor(it.author)||""}</div>
         </div>
-        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
       </div>
       <div class="actions">
         <button class="icon-btn more" title="Opciones">
@@ -532,9 +538,8 @@ function showPlaylistInPlayer(plId){
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${t.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+          <div class="subtitle">${cleanAuthor(t.author)||""}</div>
         </div>
-        <div class="subtitle">${cleanAuthor(t.author)||""}</div>
       </div>`;
     li.onclick = ()=> playFromPlaylist(pl.id, i, true);
     ul.appendChild(li);
@@ -548,22 +553,21 @@ function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
 
-  $$("#results .result-item").forEach(c=>{
-    const isCur = c.dataset.trackId===curId;
-    c.classList.toggle("is-playing", playing && isCur);
-    const btn = c.querySelector(".card-play");
-    if(btn) btn.classList.toggle("playing", playing && isCur);
-  });
+  // Desactivar todos los indicadores antes de activar el actual
+  $$(".is-playing").forEach(el => el.classList.remove("is-playing"));
 
-  $$("#favList .fav-item").forEach(li=>{
-    const isCur = li.dataset.trackId===curId;
-    li.classList.toggle("is-playing", playing && isCur);
-    const btn = li.querySelector(".card-play");
-    if(btn) btn.classList.toggle("playing", playing && isCur);
-  });
+  if(playing && curId){
+    const items = $$(`[data-track-id="${curId}"]`);
+    items.forEach(el => el.classList.add("is-playing"));
+  }
 
-  $$("#queueList .queue-item").forEach(li=>{
-    li.classList.toggle("is-playing", playing && li.dataset.trackId===curId);
+  // Manejar el icono de play/pause
+  const playPauseBtns = $$(".card-play");
+  playPauseBtns.forEach(btn => {
+      const parent = btn.closest("[data-track-id]");
+      if (parent) {
+          btn.classList.toggle("playing", playing && parent.dataset.trackId === curId);
+      }
   });
 }
 
