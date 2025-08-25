@@ -2,21 +2,17 @@
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
-const uniq = a => [...new Set(a)];
 const cleanTitle = t => (t||"")
   .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"-MP3")
   .replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"-MP3")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"-MP3")
   .replace(/\s{2,}/g," ").trim();
-
-// VEVО / Topic → MP3
 const cleanAuthor = a => (a||"")
   .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, " MP3")
   .replace(/VEVO/gi, " MP3")
   .replace(/\s{2,}/g, " ")
   .replace(/\s*-\s*$/, "")
   .trim();
-
 function dotsSvg(){
   return `<svg class="icon-dots" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <path fill="currentColor" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/>
@@ -24,18 +20,17 @@ function dotsSvg(){
 }
 
 /* ========= Estado ========= */
-let items = [];            // resultados
-let favs  = [];            // favoritos
-let playlists = [];        // [{id,name,tracks:[]}]
-let queue = null;          // cola actual (array de tracks)
+let items = [];
+let favs  = [];
+let playlists = [];        // {id,name,tracks:[{id,title,author,thumb}]}
+let queue = null;
 let queueType = null;      // 'search'|'favs'|'playlist'
 let qIdx = -1;
 let currentTrack = null;
+let viewingPlaylistId = null;
 
-let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
+let ytPlayer = null, YT_READY = false, timer = null;
 let selectedTrack = null;
-let selectedPlaylistId = null;
-let viewingPlaylistId = null; // playlist abierta en el reproductor (para eliminar)
 
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
@@ -46,7 +41,11 @@ const YOUTUBE_API_KEYS = [
   "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0"
 ];
 let currentApiKeyIndex = 0;
-function getRotatedApiKey(){ const key = YOUTUBE_API_KEYS[currentApiKeyIndex]; currentApiKeyIndex = (currentApiKeyIndex+1) % YOUTUBE_API_KEYS.length; return key; }
+const getRotatedApiKey = ()=> {
+  const k = YOUTUBE_API_KEYS[currentApiKeyIndex];
+  currentApiKeyIndex = (currentApiKeyIndex+1)%YOUTUBE_API_KEYS.length;
+  return k;
+};
 
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
@@ -63,9 +62,10 @@ $("#bottomNav").addEventListener("click", e=>{
   switchView(btn.dataset.view);
 });
 
-/* ========= Búsqueda (overlay) ========= */
+/* ========= Búsqueda (overlay flotante) ========= */
 const searchOverlay = $("#searchOverlay");
 const overlayInput  = $("#overlaySearchInput");
+
 function openSearch(){
   searchOverlay.classList.add("show");
   overlayInput.value = "";
@@ -74,25 +74,15 @@ function openSearch(){
 function closeSearch(){ searchOverlay.classList.remove("show"); }
 
 $("#searchFab").onclick = openSearch;
-$("#searchFabHeader").onclick = openSearch;
-searchOverlay.addEventListener("click", e=>{ if(e.target === searchOverlay) closeSearch(); });
+searchOverlay.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); });
 
 overlayInput.addEventListener("keydown", async e=>{
-  if(e.key !== "Enter") return;
+  if(e.key!=="Enter") return;
   const q = overlayInput.value.trim(); if(!q) return;
   closeSearch();
   await startSearch(q);
   switchView("view-search");
 });
-
-// (input oculto histórico, sigue funcionando si lo usas)
-$("#searchInput").addEventListener("keydown", async e=>{
-  if(e.key!=="Enter") return;
-  const q = e.target.value.trim(); if(!q) return;
-  await startSearch(q);
-  switchView("view-search");
-});
-function setCount(t){ $("#resultsCount").textContent = t||""; }
 
 /* ========= Motor de búsqueda ========= */
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
@@ -112,8 +102,8 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   try{
     const response = await fetch(url);
     if(!response.ok){
-      if(response.status === 403){
-        console.warn(`API key ${apiKey} 403 → probando otra`);
+      if(response.status===403){
+        console.warn(`API key ${apiKey} 403 → rota`);
         return youtubeSearch(query, pageToken, limit, retryCount+1);
       }
       throw new Error(`API error: ${response.status}`);
@@ -140,13 +130,11 @@ async function startSearch(query){
   paging = { query, pageToken:"", loading:false, hasMore:true };
   items = [];
   $("#results").innerHTML = "";
-  setCount("🔍 Buscando...");
 
   try{
     const result = await youtubeSearch(query, '', 20);
     if(searchAbort.signal.aborted) return;
-
-    if(result.items.length === 0){ setCount("❌ No se encontraron resultados"); return; }
+    if(result.items.length===0){ return; }
 
     const deduped = dedupeById(result.items);
     appendResults(deduped);
@@ -154,11 +142,8 @@ async function startSearch(query){
 
     paging.pageToken = result.nextPageToken;
     paging.hasMore   = result.hasMore;
-
-    setCount(` ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
   }catch(e){
     console.error('Search failed:', e);
-    setCount("❌ Error en la búsqueda. Intenta de nuevo.");
   }
 }
 
@@ -172,17 +157,15 @@ async function loadNextPage(){
   paging.loading = true;
   try{
     const result = await youtubeSearch(paging.query, paging.pageToken, BATCH_SIZE);
-    if(result.items.length === 0){ paging.hasMore=false; paging.loading=false; return; }
+    if(result.items.length===0){ paging.hasMore=false; paging.loading=false; return; }
     const newItems = dedupeById(result.items);
     appendResults(newItems);
     items = items.concat(newItems);
     paging.pageToken = result.nextPageToken;
     paging.hasMore   = result.hasMore;
     paging.loading   = false;
-    setCount(` ${items.length} canciones${paging.hasMore ? ' • desliza para más' : ''}`);
   }catch(e){
     paging.loading=false; paging.hasMore=false;
-    setCount(` ${items.length} canciones • Error cargando más`);
   }
 }
 
@@ -213,7 +196,6 @@ function appendResults(chunk){
       const pos = items.findIndex(x=>x.id===it.id);
       playFromSearch(pos>=0?pos:0, true);
     });
-
     item.querySelector(".more").onclick = (e)=>{
       e.stopPropagation(); selectedTrack = it;
       openActionSheet({
@@ -333,7 +315,6 @@ function renderPlaylists(){
     });
 
     li.querySelector(".more").onclick = ()=>{
-      selectedPlaylistId = pl.id;
       openActionSheet({
         title: pl.name,
         actions:[
@@ -354,7 +335,6 @@ function renderPlaylists(){
           if(id==="delete"){
             if(confirm(`Eliminar playlist "${P.name}"?`)){
               playlists = playlists.filter(x=>x.id!==P.id); savePlaylists(); renderPlaylists();
-              // Si estabas viendo esa playlist, ocultar cola:
               if(viewingPlaylistId===P.id){ hideQueuePanel(); viewingPlaylistId=null; }
             }
           }
@@ -424,14 +404,11 @@ function updateHero(track){
   $("#favNowTitle").textContent = t ? t.title : "—";
   $("#npHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
   $("#npTitle").textContent = t ? t.title : "Elegí una canción";
-  // si estoy viendo una playlist, mostrar también su nombre
   const plName = viewingPlaylistId ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "") : "";
   $("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName?` • ${plName}`:""}` : (plName || "—");
   updateMiniNow();
 }
-
 function setQueue(srcArr, type, idx){ queue = srcArr; queueType = type; qIdx = idx; }
-
 function playCurrent(autoplay=false){
   if(!YT_READY || !queue || qIdx<0 || qIdx>=queue.length) return;
   currentTrack = queue[qIdx];
@@ -452,12 +429,11 @@ function playFromPlaylist(plId, i, autoplay=false){
 }
 function playPlaylist(id){
   const pl = playlists.find(p=>p.id===id); if(!pl||!pl.tracks.length) return;
-  playFromPlaylist(pl.id, 0, true);
   viewingPlaylistId = id;
-  updateHero(currentTrack);
+  playFromPlaylist(pl.id, 0, true);
 }
 
-/* Eliminar de playlist */
+/* Eliminar tema de playlist */
 function removeFromPlaylist(plId, trackId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   const idx = pl.tracks.findIndex(t=>t.id===trackId); if(idx<0) return;
@@ -470,18 +446,15 @@ function removeFromPlaylist(plId, trackId){
     queue = pl.tracks;
     if(idx < qIdx) qIdx--;
     if(removingIsCurrent){
-      // intenta reproducir el que queda en la misma posición
       if(qIdx >= queue.length) qIdx = queue.length-1;
-      if(qIdx >= 0) playCurrent(true); else { currentTrack = null; updateHero(null); }
-    }else{
-      refreshIndicators();
+      if(qIdx >= 0) playCurrent(true); else { currentTrack=null; updateHero(null); }
     }
   }
-  renderPlaylists(); // actualizar contador de temas
-  showPlaylistInPlayer(plId); // refrescar cola
+  renderPlaylists();
+  showPlaylistInPlayer(plId);
 }
 
-/* Play/Pause etc */
+/* Mini reproductor */
 function togglePlay(){
   if(!YT_READY) return;
   const st = ytPlayer.getPlayerState();
@@ -492,7 +465,6 @@ function togglePlay(){
 }
 $("#npPlay").onclick = togglePlay;
 
-/* Mini reproductor */
 function updateMiniNow(){
   const has = !!currentTrack;
   const wrap = $("#miniNow"); if(!wrap) return;
@@ -564,12 +536,9 @@ function showPlaylistInPlayer(plId){
           { id:"remove", label:"Eliminar de esta playlist", danger:true },
           { id:"cancel", label:"Cancelar", ghost:true }
         ],
-        onAction:(id)=>{
-          if(id==="remove") removeFromPlaylist(pl.id, t.id);
-        }
+        onAction:(id)=>{ if(id==="remove") removeFromPlaylist(pl.id, t.id); }
       });
     };
-
     ul.appendChild(li);
   });
 
@@ -620,7 +589,6 @@ window.onYouTubeIframeAPIReady = function(){
         const st=e.data, playing=(st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING);
         $("#npPlay").classList.toggle("playing", playing);
         $("#miniPlay").classList.toggle("playing", playing);
-        wasPlaying = playing;
         if(st===YT.PlayerState.ENDED){ next(); }
         refreshIndicators();
       }
@@ -635,6 +603,9 @@ const io = new IntersectionObserver((entries)=>{
 io.observe($("#sentinel"));
 
 /* ========= Init ========= */
+function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_FAVS)||"[]"); }catch{ favs=[]; } }
+function loadPlaylists(){ try{ playlists = JSON.parse(localStorage.getItem(LS_PL)||"[]"); }catch{ playlists=[]; } }
+
 loadFavs();
 loadPlaylists();
 renderFavs();
