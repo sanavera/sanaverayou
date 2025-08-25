@@ -5,13 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SanaveraYou Pro</title>
 
-  <!-- Fuente estilo Spotify/Tidal -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- Logo flotante (siempre visible) -->
+  <!-- Logo flotante -->
   <img
     id="logoFloat"
     class="logo-float"
@@ -19,14 +18,14 @@
     alt="Logo"
   />
 
-  <!-- Lupa flotante global (siempre visible) -->
+  <!-- Lupa flotante global -->
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
     <svg viewBox="0 0 24 24" width="20" height="20">
       <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
     </svg>
   </button>
 
-  <!-- Overlay de búsqueda -->
+  <!-- Overlay / card de búsqueda -->
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
       <input id="overlaySearchInput" placeholder="Buscá algo… (Enter)" autocomplete="off" />
@@ -82,7 +81,6 @@
         <div id="npSub" class="np-sub muted">-</div>
       </div>
 
-      <!-- Cola debajo del hero -->
       <section id="queuePanel" class="queue-panel hide">
         <header class="section-head">
           <h3 id="queueTitle">Playlist</h3>
@@ -92,7 +90,7 @@
     </section>
   </main>
 
-  <!-- Mini reproductor, pegado a la barra inferior -->
+  <!-- Mini-player unido a la barra -->
   <section id="seekDock" class="seek-dock">
     <div id="miniNow" class="mini-now hide">
       <img id="miniThumb" class="mini-thumb" alt="" />
@@ -106,7 +104,7 @@
     </div>
   </section>
 
-  <!-- Barra inferior estilo YouTube -->
+  <!-- Barra inferior -->
   <nav id="bottomNav" class="bottom-nav">
     <button data-view="view-search" class="nav-btn active">
       <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
