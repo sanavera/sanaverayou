@@ -260,7 +260,7 @@ function shuffle(arr){
 function renderHomeGrid(){
   const grid = $("#homeGrid"); if(!grid) return;
   grid.innerHTML = "";
-  const source = shuffle(CURATED_VIDEOS).slice(0,6);
+  const source = shuffle(CURATED_VIDEOS); // sin .slice
   HOME_QUEUE = source;
 
   source.forEach((it, i)=>{
