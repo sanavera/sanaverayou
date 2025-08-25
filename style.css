@@ -12,6 +12,7 @@
     --accent: #ef4444;
     --accent-hover: #dc2626;
     --accent-light: #f87171;
+    --accent-more: #f34343; /* Nuevo color para los 3 puntitos */
 
     --radius: 16px;
     --radius-sm: 12px;
@@ -46,7 +47,7 @@ body {
     margin: 0;
     background: radial-gradient(circle at 20% 80%, rgba(59, 130, 246, .05) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(139, 92, 246, .03) 0%, transparent 50%), linear-gradient(135deg, var(--bg) 0%, var(--bg-secondary) 100%);
     color: var(--text-primary);
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-family: 'Inter', sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
@@ -81,11 +82,6 @@ body.modal-open {
     border-bottom: 1px solid rgba(255, 255, 255, .08);
     box-shadow: 0 8px 32px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
-
-/* .header { */
-/*     background: #000; */
-/*     padding: 10px; */
-/* } */
 
 .brand-compact {
     display: flex;
@@ -167,11 +163,6 @@ body.modal-open {
 .mini-now.hide {
     display: none;
 }
-
-/* .mini-player { */
-/*     height: 60px; */
-/*     background: #111; */
-/* } */
 
 .mini-thumb {
     width: 36px;
@@ -271,11 +262,6 @@ body.modal-open {
     display: block;
 }
 
-/* .section { */
-/*     padding: 10px; */
-/*     display: none; */
-/* } */
-
 /* Lista de resultados */
 .results {
     display: flex;
@@ -342,11 +328,6 @@ body.modal-open {
     border: 2px solid rgba(255, 255, 255, .08);
     box-shadow: 0 6px 16px rgba(0, 0, 0, .25);
 }
-
-/* .thumbnail { */
-/*     width: 50px; */
-/*     border-radius: 8px; */
-/* } */
 
 .card .thumb {
     width: 100%;
@@ -421,7 +402,7 @@ body.modal-open {
 }
 
 .subtitle {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-secondary);
     margin-top: 4px;
     font-weight: 400;
@@ -457,14 +438,9 @@ body.modal-open {
     box-shadow: none;
 }
 
-.icon-btn.more {
-    color: var(--accent); /* Boton de 3 puntitos rojo */
+.icon-btn.more svg path {
+    fill: var(--accent-more); /* Nuevo color de los 3 puntitos */
 }
-
-/* .btn-icon { */
-/*     background: #222; */
-/*     padding: 10px; */
-/* } */
 
 /* Efecto EQ */
 .eq {
@@ -503,9 +479,7 @@ body.modal-open {
     }
 }
 
-.card.is-playing .eq,
-.fav-item.is-playing .eq,
-.queue-item.is-playing .eq {
+.is-playing .eq {
     display: inline-flex;
 }
 
@@ -552,32 +526,43 @@ body.modal-open {
     gap: 14px;
     padding: 12px 14px;
     cursor: pointer;
-    background: var(--surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius);
-    box-shadow: var(--neu-shadow);
-    transition: var(--transition);
+    border-bottom: 1px solid var(--border-subtle);
+}
+/* Limpiar estilos de tarjeta en favs y queue */
+.fav-item, .queue-item {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    transition: background-color .2s ease-out;
 }
 
-.fav-item:hover,
-.queue-item:hover {
-    background: var(--surface-hover);
-    border-color: var(--border);
-    transform: translateY(-2px);
-    box-shadow: var(--neu-elevated-shadow);
+.fav-item:last-child,
+.queue-item:last-child {
+  border-bottom: none;
 }
 
 .fav-item.is-playing,
 .queue-item.is-playing {
     background: var(--surface-hover);
-    border: 1px solid var(--accent);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15);
+    border-left: 3px solid var(--accent);
 }
 
-/* .fav-card { */
-/*     border: 1px solid #333; */
-/*     padding: 8px; */
-/* } */
+.fav-item:hover,
+.queue-item:hover {
+    background: var(--surface-hover);
+    transform: none;
+}
+
+.thumb-wrap .card-play {
+    opacity: 0;
+    transition: opacity .2s ease-in-out;
+}
+
+.fav-item:hover .thumb-wrap .card-play,
+.queue-item:hover .thumb-wrap .card-play {
+    opacity: 1;
+}
 
 /* Playlists */
 .section-head {
@@ -754,11 +739,6 @@ body.modal-open {
     font-size: 13px;
     font-weight: 400;
 }
-
-/* .player-main { */
-/*     width: 100%; */
-/*     background: #111; */
-/* } */
 
 /* Panel de cola */
 .queue-panel {
@@ -970,11 +950,6 @@ body.modal-open {
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(148, 163, 184, 0.5);
 }
-
-/* .scrollbar { */
-/*     width: 10px; */
-/*     background: #222; */
-/* } */
 
 /* Esconder YouTube */
 #yt-holder,
