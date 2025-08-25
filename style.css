@@ -318,12 +318,12 @@ body{
 }
 
 /* Fuerza el color base exacto en todo el documento */
-html, body { background-color: #08090c; }
+html, body { background-color: #0b0a11; }
 
 /* Unifica mini-player y barra inferior con el mismo negro del sitio */
 .seek-dock,
 .bottom-nav {
-  background: #08090c;
+  background: #0b0a11;
 }
 
 
