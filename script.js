@@ -9,13 +9,10 @@ const cleanTitle = t => (t||"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"-MP3")
   .replace(/\s{2,}/g," ").trim();
 
-// 👉 VEVО / Topic  →  MP3 (dejando un espacio antes si hace falta)
+// VEVО / Topic  →  MP3
 const cleanAuthor = a => (a||"")
-  // "- Topic", "— Topic", "(Topic)", " Topic" → " MP3"
   .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, " MP3")
-  // "VEVO" pegado o separado → " MP3"
   .replace(/VEVO/gi, " MP3")
-  // arreglos finales
   .replace(/\s{2,}/g, " ")
   .replace(/\s*-\s*$/,"")
   .trim();
@@ -30,10 +27,10 @@ let qIdx = -1;
 let currentTrack = null;
 
 let ytPlayer = null, YT_READY = false, wasPlaying = false, timer = null;
-let selectedTrack = null;        // para sheets desde cards/favs
-let selectedPlaylistId = null;   // para sheet de playlists
+let selectedTrack = null;        // para sheet
+let selectedPlaylistId = null;   // playlist actual en panel
 
-/* ========= Búsqueda ultra rápida con API oficial ========= */
+/* ========= API ========= */
 const YOUTUBE_API_KEYS = [
   "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
   "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
@@ -58,13 +55,6 @@ function switchView(id){
   $$(".view").forEach(v=>v.classList.remove("active"));
   $("#"+id).classList.add("active");
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
-  if (id === 'view-search') {
-    refreshIndicators();
-  } else if (id === 'view-favs') {
-    renderFavs();
-  } else if (id === 'view-playlists') {
-    renderPlaylists();
-  }
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -79,7 +69,7 @@ $("#searchInput").addEventListener("keydown", async e=>{
 });
 function setCount(t){ $("#resultsCount").textContent = t||""; }
 
-/* ========= Motor de búsqueda (con API) ========= */
+/* ========= Motor de búsqueda ========= */
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0) {
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if (retryCount >= MAX_RETRIES) {
@@ -111,7 +101,7 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     const resultItems = data.items.map(item => ({
       id: item.id.videoId,
       title: cleanTitle(item.snippet.title),
-      author: cleanAuthor(item.snippet.channelTitle),   // ← limpieza acá
+      author: cleanAuthor(item.snippet.channelTitle || ""),
       thumb: item.snippet.thumbnails.high.url
     }));
 
@@ -219,8 +209,8 @@ function appendResults(chunk){
         <div class="subtitle">${cleanAuthor(it.author)||""}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn more" title="Opciones">
-          <svg viewBox="0 0 24 24"><path fill="#ff3b30" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
       </div>`;
 
@@ -246,12 +236,12 @@ function appendResults(chunk){
       });
     };
 
-    item.style.opacity='0'; 
+    item.style.opacity='0';
     item.style.transform='translateY(5px)';
     root.appendChild(item);
     requestAnimationFrame(()=>{
-      item.style.transition='all .2s ease-out'; 
-      item.style.opacity='1'; 
+      item.style.transition='all .2s ease-out';
+      item.style.opacity='1';
       item.style.transform='translateY(0)';
     });
   }
@@ -273,11 +263,12 @@ function renderFavs(){
   const ul = $("#favList"); ul.innerHTML="";
   favs.forEach(it=>{
     const li = document.createElement("li");
-    li.className = "fav-item"; li.dataset.trackId = it.id;
+    li.className = "fav-item";
+    li.dataset.trackId = it.id;
     li.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" src="${it.thumb}" alt="">
-        <button class="card-play" title="Play/Pause">
+        <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
         </button>
@@ -285,12 +276,13 @@ function renderFavs(){
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${it.title}</span>
-          <div class="subtitle">${cleanAuthor(it.author)||""}</div>
+          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
+        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn more" title="Opciones">
-          <svg viewBox="0 0 24 24"><path fill="#ff3b30" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
       </div>`;
 
@@ -348,8 +340,8 @@ function renderPlaylists(){
           <div class="subtitle">${pl.tracks.length} temas</div>
         </div>
       </div>
-      <button class="icon-btn more" title="Opciones">
-        <svg viewBox="0 0 24 24"><path fill="#ff3b30" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+      <button class="icon-btn more" title="Opciones" aria-label="Opciones">
+        <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
       </button>`;
 
     li.addEventListener("click", (e)=>{
@@ -381,6 +373,8 @@ function renderPlaylists(){
           if(id==="delete"){
             if(confirm(`Eliminar playlist "${P.name}"?`)){
               playlists = playlists.filter(x=>x.id!==P.id); savePlaylists(); renderPlaylists();
+              // si borramos la que estaba abierta, cerrar panel
+              if(selectedPlaylistId===pl.id){ hideQueuePanel(); }
             }
           }
         }
@@ -472,6 +466,7 @@ function playFromFav(track, autoplay=false){
 }
 function playFromPlaylist(plId, i, autoplay=false){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
+  selectedPlaylistId = plId;
   setQueue(pl.tracks, "playlist", i); playCurrent(autoplay);
 }
 function playPlaylist(id){ const pl = playlists.find(p=>p.id===id); if(!pl||!pl.tracks.length) return; playFromPlaylist(pl.id, 0, true); }
@@ -520,8 +515,21 @@ function startTimer(){
 function stopTimer(){ clearInterval(timer); timer=null; }
 
 /* ========= Cola en Player ========= */
+function removeFromPlaylist(plId, trackId){
+  const pl = playlists.find(p=>p.id===plId); if(!pl) return;
+  pl.tracks = pl.tracks.filter(t=>t.id !== trackId);
+  savePlaylists();
+  showPlaylistInPlayer(plId);
+  // si se estaba reproduciendo esa canción, ajustar índice
+  if(currentTrack?.id === trackId){
+    qIdx = Math.min(qIdx, (pl.tracks.length - 1));
+    if(qIdx >= 0) { setQueue(pl.tracks, "playlist", qIdx); playCurrent(true); }
+  }
+}
+
 function showPlaylistInPlayer(plId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
+  selectedPlaylistId = plId;
   const panel = $("#queuePanel"); panel.classList.remove("hide");
   $("#queueTitle").textContent = pl.name;
   const ul = $("#queueList"); ul.innerHTML="";
@@ -530,7 +538,7 @@ function showPlaylistInPlayer(plId){
     li.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" src="${t.thumb}" alt="">
-        <button class="card-play" title="Play">
+        <button class="card-play" title="Play" aria-label="Play">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
         </button>
@@ -538,10 +546,32 @@ function showPlaylistInPlayer(plId){
       <div class="meta">
         <div class="title-line">
           <span class="title-text">${t.title}</span>
-          <div class="subtitle">${cleanAuthor(t.author)||""}</div>
+          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
+        <div class="subtitle">${cleanAuthor(t.author)||""}</div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
       </div>`;
-    li.onclick = ()=> playFromPlaylist(pl.id, i, true);
+    li.onclick = (e)=>{ if(!e.target.closest(".more")) playFromPlaylist(pl.id, i, true); };
+    li.querySelector(".card-play").onclick = (e)=>{ e.stopPropagation(); playFromPlaylist(pl.id, i, true); };
+    li.querySelector(".more").onclick = (e)=>{
+      e.stopPropagation(); selectedTrack = t;
+      openActionSheet({
+        title: t.title,
+        actions: [
+          { id:"removeFromPl", label:"Eliminar de esta playlist", danger:true },
+          { id:"fav", label: isFav(t.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
+          { id:"cancel", label:"Cancelar", ghost:true }
+        ],
+        onAction:(id)=>{
+          if(id==="removeFromPl"){ removeFromPlaylist(pl.id, t.id); }
+          if(id==="fav"){ toggleFav(t); }
+        }
+      });
+    };
     ul.appendChild(li);
   });
   refreshIndicators();
@@ -553,21 +583,18 @@ function refreshIndicators(){
   const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
   const curId = currentTrack?.id || "";
 
-  // Desactivar todos los indicadores antes de activar el actual
-  $$(".is-playing").forEach(el => el.classList.remove("is-playing"));
+  $$("#results .result-item").forEach(c=>{
+    const isCur = c.dataset.trackId===curId;
+    c.classList.toggle("is-playing", playing && isCur);
+  });
 
-  if(playing && curId){
-    const items = $$(`[data-track-id="${curId}"]`);
-    items.forEach(el => el.classList.add("is-playing"));
-  }
+  $$("#favList .fav-item").forEach(li=>{
+    const isCur = li.dataset.trackId===curId;
+    li.classList.toggle("is-playing", playing && isCur);
+  });
 
-  // Manejar el icono de play/pause
-  const playPauseBtns = $$(".card-play");
-  playPauseBtns.forEach(btn => {
-      const parent = btn.closest("[data-track-id]");
-      if (parent) {
-          btn.classList.toggle("playing", playing && parent.dataset.trackId === curId);
-      }
+  $$("#queueList .queue-item").forEach(li=>{
+    li.classList.toggle("is-playing", playing && li.dataset.trackId===curId);
   });
 }
 
@@ -617,5 +644,4 @@ renderFavs();
 renderPlaylists();
 loadYTApi();
 
-// 👉 Título de la página
 document.title = "SanaveraYou";
