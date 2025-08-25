@@ -72,6 +72,7 @@ body{
 
 /* Filas */
 .results,.fav-list{display:flex;flex-direction:column;gap:0}
+.fav-list, #queueList, .pl-list{ list-style:none; margin:0; padding:0; } /* ← FIX ancho completo */
 .result-item,.fav-item,.queue-item{
   display:flex;align-items:center;gap:14px;padding:12px 14px;cursor:pointer;
   transition:var(--transition);border-bottom:1px solid var(--border-subtle);
@@ -113,7 +114,7 @@ body{
 .fav-hero-text{position:absolute;left:var(--side-pad);right:var(--side-pad);bottom:16px}
 
 /* Playlists (lista de playlists) */
-.pl-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.pl-list{display:flex;flex-direction:column;gap:8px}
 .pl-item{display:flex;align-items:center;gap:12px;background:var(--surface);padding:10px 12px;border-radius:14px;border:1px solid var(--border-subtle)}
 .pl-item:hover{background:var(--surface-hover);border-color:var(--border)}
 .pl-meta{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
@@ -215,6 +216,7 @@ body{
   gap:4px;border-radius:12px;padding:6px 0; cursor:pointer; transition:var(--fast);
 }
 .nav-btn svg{width:22px;height:22px}
+.nav-btn svg, .nav-btn path{ fill:currentColor !important; stroke:none !important; } /* ← FIX iconos negros */
 .nav-btn span{font-size:11px}
 .nav-btn:hover{ color:#e5e7eb; }
 .nav-btn.active{ color:#ffffff; }
