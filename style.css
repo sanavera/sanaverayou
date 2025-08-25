@@ -316,3 +316,14 @@ body{
   .nav-btn svg{width:20px;height:20px}
   .home-grid{ grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
+
+/* Fuerza el color base exacto en todo el documento */
+html, body { background-color: #08090c; }
+
+/* Unifica mini-player y barra inferior con el mismo negro del sitio */
+.seek-dock,
+.bottom-nav {
+  background: #08090c;
+}
+
+
