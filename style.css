@@ -18,12 +18,10 @@
     --radius-lg: 24px;
     --side-pad: 20px;
 
-    /* Nuevas alturas más compactas */
     --seek-h: 80px;
     --nav-h: 68px;
     --safe: env(safe-area-inset-bottom);
 
-    /* Sombras neumórficas */
     --neu-shadow: 6px 6px 16px rgba(0, 0, 0, .3), -6px -6px 12px rgba(255, 255, 255, .02);
     --neu-elevated-shadow: 10px 10px 24px rgba(0, 0, 0, .4), -8px -8px 16px rgba(255, 255, 255, .03);
     --neu-inset-shadow: inset 4px 4px 8px rgba(0, 0, 0, .2), inset -4px -4px 8px rgba(255, 255, 255, .01);
@@ -32,8 +30,12 @@
     --fast: all .15s ease-out;
 }
 
+/* --color-bg: #000; */
+/* --shadow: 0 4px 8px rgba(0,0,0,.2); */
+/* --border-radius: 10px; */
+
 html {
-    color-scheme: dark;
+    color-scheme: dark; /* Tema oscuro por defecto */
 }
 
 * {
@@ -67,7 +69,7 @@ body.modal-open {
     width: 100%;
 }
 
-/* Header */
+/* Barra de arriba */
 .topbar {
     position: sticky;
     top: 0;
@@ -79,6 +81,11 @@ body.modal-open {
     border-bottom: 1px solid rgba(255, 255, 255, .08);
     box-shadow: 0 8px 32px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
+
+/* .header { */
+/*     background: #000; */
+/*     padding: 10px; */
+/* } */
 
 .brand-compact {
     display: flex;
@@ -129,7 +136,7 @@ body.modal-open {
     color: var(--text-secondary);
 }
 
-/* Mini reproductor (más chico verticalmente) */
+/* Mini reproductor abajo */
 .seek-dock {
     position: fixed;
     left: 0;
@@ -160,6 +167,11 @@ body.modal-open {
 .mini-now.hide {
     display: none;
 }
+
+/* .mini-player { */
+/*     height: 60px; */
+/*     background: #111; */
+/* } */
 
 .mini-thumb {
     width: 36px;
@@ -249,7 +261,7 @@ body.modal-open {
     margin-top: 4px;
 }
 
-/* Vistas */
+/* Vistas principales */
 .view {
     display: none;
     padding: 12px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 28px + var(--safe));
@@ -259,14 +271,18 @@ body.modal-open {
     display: block;
 }
 
-/* Resultados (Lista simple) */
+/* .section { */
+/*     padding: 10px; */
+/*     display: none; */
+/* } */
+
+/* Lista de resultados */
 .results {
     display: flex;
     flex-direction: column;
     gap: 0;
 }
 
-/* Estilo para los elementos de la lista de resultados */
 .result-item {
     display: flex;
     align-items: center;
@@ -292,7 +308,6 @@ body.modal-open {
     background: var(--surface-hover);
 }
 
-/* Estilo para la canción seleccionada (card) */
 .result-item.is-playing {
     background: var(--surface-hover);
     border-color: var(--accent);
@@ -302,17 +317,15 @@ body.modal-open {
     padding: 12px 14px;
 }
 
-/* El `eq` solo se muestra si la canción está activa */
 .result-item.is-playing .eq {
     display: inline-flex;
 }
 
-/* Ocultar el botón de play en la lista, solo se ve en la selección */
 .result-item .card-play {
     display: none;
 }
 
-/* Thumb circular + overlay */
+/* Miniaturas */
 .thumb-wrap {
     position: relative;
     width: 64px;
@@ -329,6 +342,11 @@ body.modal-open {
     border: 2px solid rgba(255, 255, 255, .08);
     box-shadow: 0 6px 16px rgba(0, 0, 0, .25);
 }
+
+/* .thumbnail { */
+/*     width: 50px; */
+/*     border-radius: 8px; */
+/* } */
 
 .card .thumb {
     width: 100%;
@@ -396,7 +414,7 @@ body.modal-open {
 
 .title-text {
     font-weight: 600;
-    font-size: 15px; /* MODIFICACIÓN: Tamaño de fuente más chico */
+    font-size: 15px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -415,18 +433,18 @@ body.modal-open {
     margin-left: auto;
 }
 
-/* Botones de iconos */
+/* Botones chicos */
 .icon-btn {
     width: 44px;
     height: 44px;
     border-radius: 14px;
-    border: none; /* MODIFICACIÓN: Borde eliminado */
+    border: none;
     color: var(--text-secondary);
-    background: transparent; /* MODIFICACIÓN: Fondo transparente */
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: none; /* MODIFICACIÓN: Sombra eliminada */
+    box-shadow: none;
     transition: var(--fast);
     cursor: pointer;
 }
@@ -439,13 +457,16 @@ body.modal-open {
     box-shadow: none;
 }
 
-/* MODIFICACIÓN: Color rojo para el botón de 3 puntitos */
 .icon-btn.more {
-    color: var(--accent);
+    color: var(--accent); /* Boton de 3 puntitos rojo */
 }
 
+/* .btn-icon { */
+/*     background: #222; */
+/*     padding: 10px; */
+/* } */
 
-/* EQ */
+/* Efecto EQ */
 .eq {
     display: none;
     align-items: flex-end;
@@ -488,7 +509,7 @@ body.modal-open {
     display: inline-flex;
 }
 
-/* Favoritos */
+/* Seccion favoritos */
 .fav-hero {
     position: relative;
     aspect-ratio: 16/9;
@@ -552,6 +573,11 @@ body.modal-open {
     border: 1px solid var(--accent);
     box-shadow: 0 6px 20px rgba(239, 68, 68, 0.15);
 }
+
+/* .fav-card { */
+/*     border: 1px solid #333; */
+/*     padding: 8px; */
+/* } */
 
 /* Playlists */
 .section-head {
@@ -638,7 +664,7 @@ body.modal-open {
     margin-left: auto;
 }
 
-/* Now Playing */
+/* Reproductor */
 .np-hero {
     position: relative;
     aspect-ratio: 1/1;
@@ -729,7 +755,12 @@ body.modal-open {
     font-weight: 400;
 }
 
-/* Queue panel */
+/* .player-main { */
+/*     width: 100%; */
+/*     background: #111; */
+/* } */
+
+/* Panel de cola */
 .queue-panel {
     margin-bottom: 12px;
 }
@@ -744,7 +775,7 @@ body.modal-open {
     gap: 8px;
 }
 
-/* Botonera de abajo (más linda) */
+/* Barra de navegacion abajo */
 .bottom-nav {
     position: fixed;
     left: 0;
@@ -766,7 +797,7 @@ body.modal-open {
 .nav-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary); /* MODIFICACIÓN: Color gris por defecto */
+    color: var(--text-secondary);
     font-weight: 600;
     display: flex;
     flex-direction: column;
@@ -777,7 +808,7 @@ body.modal-open {
     transition: var(--transition);
     border-radius: 12px;
     position: relative;
-    padding: 8px 0; /* Agregado para mejor espaciado */
+    padding: 8px 0;
 }
 
 .nav-btn::before {
@@ -795,7 +826,7 @@ body.modal-open {
 }
 
 .nav-btn svg {
-    width: 24px; /* Iconos un poco más grandes */
+    width: 24px;
     height: 24px;
     filter: drop-shadow(0 0 8px rgba(0, 0, 0, .3));
 }
@@ -806,8 +837,8 @@ body.modal-open {
 }
 
 .nav-btn.active {
-    color: var(--accent); /* MODIFICACIÓN: Color rojo cuando está activo */
-    text-shadow: none; /* MODIFICACIÓN: Sombra de texto eliminada */
+    color: var(--accent);
+    text-shadow: none;
 }
 
 .nav-btn.active svg {
@@ -823,7 +854,7 @@ body.modal-open {
     transform: scale(.95);
 }
 
-/* Sheets */
+/* Menus emergentes */
 .sheet {
     position: fixed;
     inset: 0;
@@ -940,7 +971,12 @@ body.modal-open {
     background: rgba(148, 163, 184, 0.5);
 }
 
-/* Ocultar YouTube */
+/* .scrollbar { */
+/*     width: 10px; */
+/*     background: #222; */
+/* } */
+
+/* Esconder YouTube */
 #yt-holder,
 #player,
 #player iframe {
@@ -954,7 +990,7 @@ body.modal-open {
     z-index: -1 !important;
 }
 
-/* Utils */
+/* Cosas utiles */
 .hide {
     display: none !important;
 }
