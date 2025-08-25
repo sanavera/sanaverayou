@@ -5,19 +5,15 @@
   --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b;
 
   --accent:#ef4444; --accent-hover:#dc2626; --accent-light:#f87171;
-  --dots:#ff6b6b;
+  --dots:#ff6b6b; /* color suave para los 3 puntitos */
 
   --title-size:14px; --subtitle-size:12px;
 
-  --radius:16px; --radius-sm:12px; --radius-lg:24px; --side-pad:20px;
+  --radius:16px; --radius-sm:12px; --side-pad:20px;
 
-  --seek-h:72px;   /* más compacto para unirse con la barra */
+  --seek-h:72px;  /* mini-player compacto */
   --nav-h:64px;
   --safe:env(safe-area-inset-bottom);
-
-  --neu-shadow:6px 6px 16px rgba(0,0,0,.3), -6px -6px 12px rgba(255,255,255,.02);
-  --neu-elevated-shadow:10px 10px 24px rgba(0,0,0,.4), -8px -8px 16px rgba(255,255,255,.03);
-  --neu-inset-shadow:inset 4px 4px 8px rgba(0,0,0,.2), inset -4px -4px 8px rgba(255,255,255,.01);
 
   --transition:all .3s cubic-bezier(.4,0,.2,1);
   --fast:all .15s ease-out;
@@ -38,22 +34,13 @@ body{
 .up{ text-transform:uppercase; letter-spacing:.08em; font-weight:700; font-size:.7rem; }
 .hide{display:none !important}
 
-/* Topbar */
-.topbar{
-  position:sticky; top:0; z-index:50;
-  background:rgba(26,28,36,.85);
-  backdrop-filter:blur(16px) saturate(180%);
-  -webkit-backdrop-filter:blur(16px) saturate(180%);
-  padding:12px var(--side-pad) 10px;
-  border-bottom:1px solid rgba(255,255,255,.08);
+/* === Flotantes arriba === */
+.logo-float{
+  position:fixed; left:12px; top:12px; z-index:1200;
+  width:36px; height:36px; border-radius:10px; object-fit:cover;
+  border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06);
 }
-.brand-compact{display:flex; align-items:center; gap:12px;}
-#miniLogo{width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.1)}
-.app-title{font-weight:700;}
-
-/* Lupa flotante */
 .search-fab{
-  margin-left:auto;
   width:36px;height:36px;border-radius:18px;border:1px solid rgba(255,255,255,.1);
   display:grid;place-items:center;cursor:pointer;background:rgba(255,255,255,.06);
   color:#cbd5e1; transition:var(--fast);
@@ -83,11 +70,11 @@ body{
 }
 #overlaySearchInput:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(239,68,68,.1);}
 
-/* Vistas */
-.view{display:none; padding:12px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 16px + var(--safe));}
+/* Vistas (un pequeño padding top para que no choquen con los flotantes) */
+.view{display:none; padding:52px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 16px + var(--safe));}
 .view.active{display:block}
 
-/* Filas (solo la seleccionada parece “card”) */
+/* Listas (solo la seleccionada se “cardea”) */
 .results,.fav-list{display:flex;flex-direction:column;gap:0}
 .result-item,.fav-item,.queue-item{
   display:flex;align-items:center;gap:14px;padding:12px 14px;cursor:pointer;
@@ -113,7 +100,7 @@ body{
 .title-text{font-weight:600;font-size:var(--title-size);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .subtitle{font-size:var(--subtitle-size);color:var(--text-secondary);margin-top:4px}
 
-/* Acciones (tres puntitos) */
+/* Acciones (tres puntitos suaves por CSS) */
 .actions{display:flex;gap:6px;margin-left:auto}
 .icon-btn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .icon-btn.more, .icon-btn.more svg, .icon-btn.more path{color:var(--dots)!important;fill:var(--dots)!important}
@@ -131,21 +118,21 @@ body{
 .fav-hero::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(to top,rgba(8,9,12,.9)0%,rgba(8,9,12,.5)40%,rgba(8,9,12,0)100%)}
 .fav-hero-text{position:absolute;left:var(--side-pad);right:var(--side-pad);bottom:16px}
 
-/* Reproductor */
+/* Reproductor (hero fijo arriba en la vista) */
 .np-hero{position:relative;aspect-ratio:1/1;max-width:520px;margin:8px auto 10px;background:var(--surface) center/cover no-repeat;border-radius:22px;border:1px solid rgba(255,255,255,.1)}
 .np-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:82px;height:82px;border-radius:50%;border:none;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-hover));box-shadow:0 12px 32px rgba(239,68,68,.35)}
 .np-play .i-pause{display:none}.np-play.playing .i-play{display:none}.np-play.playing .i-pause{display:block}
 .np-menu{position:absolute;right:12px;top:12px;width:44px;height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(36,39,49,.8);display:grid;place-items:center}
 .np-meta{text-align:center}.np-title{font-size:18px;font-weight:700;margin:6px 0 4px}.np-sub{font-size:13px}
 
-/* Cola (debajo del hero) */
+/* Cola */
 .queue-panel{margin-top:6px}
 .queue-item .actions{margin-left:auto}
 
-/* Mini-reproductor unido a la barra inferior */
+/* Mini-player unido a la barra inferior */
 .seek-dock{
   position:fixed;left:0;right:0;bottom:var(--nav-h);z-index:70;
-  background:rgba(13,14,18,.95); /* igual a bottom-nav */
+  background:rgba(13,14,18,.95); /* mismo fondo que la barra */
   border-top:1px solid rgba(255,255,255,.08);
   padding:6px 10px 8px; box-shadow:0 -4px 12px rgba(0,0,0,.18);
 }
@@ -156,11 +143,10 @@ body{
 .mini-btn .i-pause{display:none}.mini-btn.playing .i-play{display:none}.mini-btn.playing .i-pause{display:block}
 .mini-now .seek-bar{flex:1;min-width:120px;appearance:none;height:6px;border-radius:3px;background:rgba(255,255,255,.12)}
 .mini-now .seek-bar::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-light))}
-
 .time-inline{display:flex;gap:6px;color:var(--text-secondary);font-size:12px}
 .mini-credit{flex-basis:100%;text-align:center;font-size:10px;color:var(--text-muted);margin-top:2px}
 
-/* Bottom nav más limpia (look YouTube) */
+/* Barra inferior limpia (look YouTube) */
 .bottom-nav{
   position:fixed;left:0;right:0;bottom:0;z-index:80;height:var(--nav-h);
   padding:4px 6px max(6px,var(--safe)); background:rgba(13,14,18,.95);
@@ -173,12 +159,12 @@ body{
 .nav-btn.active{color:#fff}
 .nav-btn:active{transform:scale(.96)}
 
+/* Esconder YouTube */
 #yt-holder,#player,#player iframe{
   position:absolute!important;width:1px!important;height:1px!important;left:-9999px!important;top:-9999px!important;opacity:0!important;pointer-events:none!important;z-index:-1!important;
 }
 
 @media (max-width:480px){
   :root{--side-pad:16px}
-  .np-hero{border-radius:18px}
   .nav-btn svg{width:20px;height:20px}
 }
