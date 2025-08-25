@@ -157,17 +157,67 @@ body{
 .time-inline{display:flex;gap:6px;color:var(--text-secondary);font-size:12px}
 .mini-credit{flex-basis:100%;text-align:center;font-size:10px;color:var(--text-muted);margin-top:2px}
 
+/* ===== Menú de los 3 puntitos (Sheet) ===== */
+.sheet{
+  position:fixed; inset:0; display:none; z-index:1300;
+  background:rgba(8,9,12,.55); backdrop-filter:blur(6px);
+}
+.sheet.show{ display:block; }
+.sheet-content{
+  position:absolute; left:0; right:0; bottom:0;
+  background:rgba(26,28,36,.96);
+  border-top-left-radius:18px; border-top-right-radius:18px;
+  border:1px solid rgba(255,255,255,.1); border-bottom:none;
+  padding:12px var(--side-pad) calc(12px + var(--safe));
+  box-shadow:0 -12px 40px rgba(0,0,0,.5);
+}
+.sheet-title{ font-weight:700; margin:6px 2px 8px; }
+.sheet-list{ display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow:auto; }
+
+.sheet-item{
+  width:100%; text-align:left; background:var(--surface);
+  color:#fff; border:1px solid var(--border-subtle);
+  padding:12px; border-radius:12px; margin:8px 0;
+  cursor:pointer; transition:var(--fast); box-shadow:var(--neu-shadow);
+  font-weight:500;
+}
+.sheet-item:hover{ background:var(--surface-hover); border-color:var(--border); }
+.sheet-item.ghost{ background:transparent; color:var(--text-secondary); border:1px solid var(--border-subtle); }
+.sheet-item.ghost:hover{ border-color:var(--text-secondary); }
+.sheet-item.danger{ background:rgba(127,29,29,.15); border-color:#7f1d1d; color:#fecaca; }
+
+.sheet-row{ display:flex; gap:8px; margin-top:8px; }
+.sheet-row input{
+  flex:1; background:var(--surface); color:#fff;
+  border:1px solid var(--border-subtle); border-radius:12px;
+  padding:12px; outline:none;
+}
+.sheet-row input:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(239,68,68,.12); }
+
 /* Barra inferior */
 .bottom-nav{
   position:fixed;left:0;right:0;bottom:0;z-index:80;height:var(--nav-h);
-  padding:4px 6px max(6px,var(--safe)); background:rgba(13,14,18,.95);
+  padding:6px 8px max(6px,var(--safe)); background:rgba(13,14,18,.95);
   border-top:1px solid rgba(255,255,255,.08);
-  display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
 }
-.nav-btn{background:transparent;border:none;color:#cbd5e1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:10px;padding:4px 0}
+
+/* Botones en gris claro */
+.nav-btn{
+  background:rgba(255,255,255,.10); /* gris claro translúcido */
+  border:1px solid rgba(255,255,255,.14);
+  color:#e5e7eb;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;border-radius:12px;padding:6px 0; cursor:pointer; transition:var(--fast);
+}
+.nav-btn:hover{ background:rgba(255,255,255,.16); }
+.nav-btn.active{
+  background:rgba(255,255,255,.20);
+  color:#ffffff;
+  border-color:rgba(255,255,255,.26);
+}
 .nav-btn svg{width:22px;height:22px}
 .nav-btn span{font-size:11px}
-.nav-btn.active{color:#fff}
 .nav-btn:active{transform:scale(.96)}
 
 /* Esconder YouTube */
