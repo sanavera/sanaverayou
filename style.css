@@ -177,7 +177,7 @@ body{
 /* Mini-player unido a la barra inferior */
 .seek-dock{
   position:fixed;left:0;right:0;bottom:var(--nav-h);z-index:70;
-  background:rgba(13,14,18,.95);
+  background: rgba(11, 10, 17, 0.85);
   border-top:1px solid rgba(255,255,255,.08);
   padding:6px 10px 8px; box-shadow:0 -4px 12px rgba(0,0,0,.18);
 }
