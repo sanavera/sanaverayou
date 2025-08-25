@@ -1,3 +1,12 @@
+/*
+ * Archivo: style.css
+ * Descripción: Estilos para la interfaz de un reproductor de música.
+ * Autor: Sebastián Sanavera.
+ */
+
+/*
+ * Estilos generales y variables
+ */
 :root {
     --bg: #08090c;
     --bg-secondary: #0d0e12;
@@ -12,7 +21,10 @@
     --accent: #ef4444;
     --accent-hover: #dc2626;
     --accent-light: #f87171;
-    --accent-more: #f34343; /* Nuevo color para los 3 puntitos */
+    --accent-more: #f34343; /* Color anterior para los 3 puntitos */
+
+    /* Agregamos una nueva variable para un color menos intenso */
+    --options-color: #94a3b8; /* Un gris sutil para los 3 puntitos */
 
     --radius: 16px;
     --radius-sm: 12px;
@@ -30,10 +42,6 @@
     --transition: all .3s cubic-bezier(.4, 0, .2, 1);
     --fast: all .15s ease-out;
 }
-
-/* --color-bg: #000; */
-/* --shadow: 0 4px 8px rgba(0,0,0,.2); */
-/* --border-radius: 10px; */
 
 html {
     color-scheme: dark; /* Tema oscuro por defecto */
@@ -262,7 +270,7 @@ body.modal-open {
     display: block;
 }
 
-/* Lista de resultados */
+/* Lista de resultados (la de búsqueda) */
 .results {
     display: flex;
     flex-direction: column;
@@ -277,6 +285,7 @@ body.modal-open {
     cursor: pointer;
     transition: var(--transition);
     border-bottom: 1px solid var(--border-subtle);
+    width: 100%; /* Hacemos que la canción ocupe todo el ancho */
 }
 
 .result-item:first-child {
@@ -381,9 +390,12 @@ body.modal-open {
     height: 18px;
 }
 
+/* Contenedor del título y artista */
 .meta {
     min-width: 0;
     flex: 1;
+    display: flex; /* Hacemos este contenedor un flexbox */
+    flex-direction: column; /* Apilamos los elementos verticalmente */
 }
 
 .title-line {
@@ -406,6 +418,7 @@ body.modal-open {
     color: var(--text-secondary);
     margin-top: 4px;
     font-weight: 400;
+    /* Eliminamos el `display: inline-block` o similar si existiera */
 }
 
 .actions {
@@ -438,8 +451,9 @@ body.modal-open {
     box-shadow: none;
 }
 
+/* Estilo para los 3 puntitos */
 .icon-btn.more svg path {
-    fill: var(--accent-more); /* Nuevo color de los 3 puntitos */
+    fill: var(--options-color); /* Usamos el nuevo color gris */
 }
 
 /* Efecto EQ */
@@ -527,7 +541,9 @@ body.modal-open {
     padding: 12px 14px;
     cursor: pointer;
     border-bottom: 1px solid var(--border-subtle);
+    width: 100%; /* Hacemos que la canción ocupe todo el ancho */
 }
+
 /* Limpiar estilos de tarjeta en favs y queue */
 .fav-item, .queue-item {
     background: transparent;
