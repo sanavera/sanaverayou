@@ -33,14 +33,28 @@ let ytPlayer = null, YT_READY = false, timer = null;
 /* ========= Curados estáticos (NO API) ========= */
 /* Reemplazá id: por el ID de YouTube o directamente url: con el link completo */
 const CURATED_RAW = [
-  { id: "ddN1Hu3Qm5s", title: "Pop enganchado (1h)",   author: "Mix Pop" },
-  { id: "1ATkrsFDhpY", title: "Rock enganchado (1h)",  author: "Mix Rock" },
-  { id: "8DIGGjaE5gg", title: "Cumbia enganchada",     author: "Mix Cumbia" },
-  { id: "SROpyGwrStc", title: "Reggaetón Session",     author: "Mix Urbano" },
-  { id: "sRIamUTkafg", title: "Latinos Old School",    author: "Mix Latino" },
-  { id: "7CyKlAX5vXE", title: "Electrónica Non-Stop",  author: "Mix EDM" },
-  { id: "f5U34t9KMjE", title: "Los Redondos",  author: "Sanavera Sebastian" },
-  { id: "MsRzUfV8KXY", title: "Top 40 Rock",  author: "Sanavera Sebastian" },
+[
+  { "id": "ddN1Hu3Qm5s", "title": "Pop enganchado (1h)",   "author": "Mix Pop" },
+  { "id": "1ATkrsFDhpY", "title": "Rock enganchado (1h)",  "author": "Mix Rock" },
+  { "id": "8DIGGjaE5gg", "title": "Cumbia enganchada",     "author": "Mix Cumbia" },
+  { "id": "SROpyGwrStc", "title": "Reggaetón Session",     "author": "Mix Urbano" },
+  { "id": "sRIamUTkafg", "title": "Latinos Old School",    "author": "Mix Latino" },
+  { "id": "7CyKlAX5vXE", "title": "Electrónica Non-Stop",  "author": "Mix EDM" },
+  { "id": "f5U34t9KMjE", "title": "Los Redondos",  "author": "Sanavera Sebastian" },
+  { "id": "MsRzUfV8KXY", "title": "Top 40 Rock",  "author": "Sanavera Sebastian" },
+  { "id": "u32rPttWrnY", "title": "Enganchado Rock Nacional", "author": "Mix Rock Nacional" },
+  { "id": "6GB5plODaPU", "title": "La 25 - Enganchado de Rock", "author": "La 25" },
+  { "id": "y0f0rn_D8Tw", "title": "Enganchado Rock Nacional (2hs)", "author": "Mix Rock Nacional" },
+  { "id": "HB39kFzmUP0", "title": "Mix Reggae En Español", "author": "Mix Reggae" },
+  { "id": "rj4rLSUrnPY", "title": "Mix Reggae En Español 2022", "author": "Mix Reggae" },
+  { "id": "4YRbs3WEMO4", "title": "Mix Cumbia Villera de Oro", "author": "Mix Cumbia" },
+  { "id": "Xbcu8zLpjGY", "title": "Cumbia Villera Mix", "author": "Dj Lichen" },
+  { "id": "hb21DFZF7Pw", "title": "Soda Stereo - Sueño Stereo (Álbum Completo)", "author": "Soda Stereo" },
+  { "id": "ofPx2dQmj_Y", "title": "Soda Stereo - Dynamo (Álbum Completo)", "author": "Soda Stereo" },
+  { "id": "iIWKSSdo8JI", "title": "Charly García - El Aguante (Álbum Completo)", "author": "Charly García" },
+  { "id": "T7rT6LkFpuA", "title": "Lo Mejor del Cuarteto Cordobés", "author": "Mix Cuarteto" },
+  { "id": "QDqvzFHFmDY", "title": "Enganchado Cuarteto Mix", "author": "Mix Cuarteto" }
+]
   // podés seguir sumando…
 ];
 function extractVideoId(input){
