@@ -33,7 +33,7 @@ let ytPlayer = null, YT_READY = false, timer = null;
 /* ========= Curados estáticos (NO API) ========= */
 /* Reemplazá id: por el ID de YouTube o directamente url: con el link completo */
 const CURATED_RAW = [
-[
+
   { "id": "ddN1Hu3Qm5s", "title": "Pop enganchado (1h)",   "author": "Mix Pop" },
   { "id": "1ATkrsFDhpY", "title": "Rock enganchado (1h)",  "author": "Mix Rock" },
   { "id": "8DIGGjaE5gg", "title": "Cumbia enganchada",     "author": "Mix Cumbia" },
@@ -54,7 +54,7 @@ const CURATED_RAW = [
   { "id": "iIWKSSdo8JI", "title": "Charly García - El Aguante (Álbum Completo)", "author": "Charly García" },
   { "id": "T7rT6LkFpuA", "title": "Lo Mejor del Cuarteto Cordobés", "author": "Mix Cuarteto" },
   { "id": "QDqvzFHFmDY", "title": "Enganchado Cuarteto Mix", "author": "Mix Cuarteto" }, 
-]
+
   // podés seguir sumando…
 ];
 function extractVideoId(input){
