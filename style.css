@@ -43,8 +43,13 @@ body{
 .search-fab{
   width:36px; height:36px; border-radius:18px; border:1px solid rgba(255,255,255,.1);
   display:grid; place-items:center; cursor:pointer; background:rgba(255,255,255,.06);
-  color:#cbd5e1; transition:var(--fast); padding:0;
+  color:#e5e7eb;                /* gris claro para la lupa */
+  transition:var(--fast); padding:0;
 }
+/* hace que el SVG use el color anterior */
+.search-fab svg,
+.search-fab path{ fill:currentColor; }
+
 .search-fab:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
 .search-fab-global{
   position:fixed; right:12px; top:12px; z-index:1200;
