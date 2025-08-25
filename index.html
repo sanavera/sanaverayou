@@ -1,68 +1,43 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <!-- Meta básico para que la página ande bien -->
-  <meta charset="utf-8" /> <!-- Codificación para que no se rompa el texto -->
-  <meta name="viewport" content="width=device-width, initial-scale=1" /> <!-- Para que se vea bien en celular -->
-  <title>SanaveraYou Pro</title>
+  <meta charset="utf-8" /> <meta name="viewport" content="width=device-width, initial-scale=1" /> <title>SanaveraYou Pro</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- <meta name="description" content="Reproductor de musica"> -->
-  <!-- <link href="css/reset.css" rel="stylesheet"> -->
-  <!-- <link href="css/main.css" rel="stylesheet"> -->
 </head>
 <body>
 
-  <!-- Barra de arriba con logo y busqueda -->
   <header class="topbar">
     <div class="brand-compact">
-      <img id="miniLogo" src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif" alt="Logo" /> <!-- Logo chiquito -->
-      <div class="search-container">
-        <input id="searchInput" placeholder="Buscar ej Amar Azul Yo tomo" autocomplete="off" /> <!-- Input para buscar temas -->
-        <div id="resultsCount" class="muted"></div> <!-- Muestra cantidad de resultados -->
-      </div>
+      <img id="miniLogo" src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif" alt="Logo" /> <div class="search-container">
+        <input id="searchInput" placeholder="Buscar ej Amar Azul Yo tomo" autocomplete="off" /> <div id="resultsCount" class="muted"></div> </div>
     </div>
   </header>
 
-  <!-- Secciones principales de la app -->
   <main id="views">
-    <!-- Vista de busqueda -->
     <section id="view-search" class="view active">
-      <section id="results" class="results"></section> <!-- Donde van los resultados -->
-      <div id="sentinel" aria-hidden="true"></div> <!-- Para el scroll infinito -->
-    </section>
+      <section id="results" class="results"></section> <div id="sentinel" aria-hidden="true"></div> </section>
 
-    <!-- Vista de favoritos -->
     <section id="view-favs" class="view">
       <div class="fav-hero" id="favHero">
         <div class="fav-hero-text">
           <p class="muted up">TUS FAVORITOS</p>
-          <h2 id="favNowTitle">-</h2> <!-- Título del tema favorito -->
-        </div>
+          <h2 id="favNowTitle">-</h2> </div>
       </div>
       <section class="fav-list-wrap">
-        <ul id="favList" class="fav-list"></ul> <!-- Lista de temas favoritos -->
-      </section>
+        <ul id="favList" class="fav-list"></ul> </section>
     </section>
 
-    <!-- <div class="fav-header">Favoritos</div> -->
-    <!-- <ul class="favs"></ul> -->
-    <!-- <div class="empty-favs">Sin favoritos</div> -->
-
-    <!-- Vista de playlists -->
     <section id="view-playlists" class="view">
       <header class="section-head">
         <h3>Playlists</h3>
         <div class="pl-actions">
-          <button id="btnNewPlaylist" class="pill">Nueva</button> <!-- Botón para crear playlist -->
-        </div>
+          <button id="btnNewPlaylist" class="pill">Nueva</button> </div>
       </header>
       <ul id="plList" class="pl-list"></ul>
       <div id="plEmpty" class="empty muted">Aun no hay playlists Crea la primera ✨</div>
     </section>
 
-    <!-- Vista del reproductor -->
     <section id="view-player" class="view now-playing">
-      <!-- Panel para mostrar la cola -->
       <section id="queuePanel" class="queue-panel hide">
         <header class="section-head">
           <h3 id="queueTitle">Playlist</h3>
@@ -70,7 +45,6 @@
         <ul id="queueList" class="fav-list"></ul>
       </section>
 
-      <!-- Portada y controles -->
       <div id="npHero" class="np-hero">
         <button id="npPlay" class="np-play" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -87,12 +61,6 @@
     </section>
   </main>
 
-  <!-- <div class="player-controls"> -->
-  <!--   <button id="playBtn">Play</button> -->
-  <!--   <div id="songTitle"></div> -->
-  <!-- </div> -->
-
-  <!-- Barra de abajo con mini reproductor -->
   <section id="seekDock" class="seek-dock">
     <div id="miniNow" class="mini-now hide">
       <img id="miniThumb" class="mini-thumb" alt="" />
@@ -100,8 +68,7 @@
         <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
-      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" /> <!-- Barra para adelantar o retroceder -->
-      <div class="time-inline">
+      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" /> <div class="time-inline">
         <span id="cur">0:00</span>
         <span id="dur">0:00</span>
       </div>
@@ -109,7 +76,6 @@
     </div>
   </section>
 
-  <!-- Barra de navegacion -->
   <nav id="bottomNav" class="bottom-nav">
     <button data-view="view-search" class="nav-btn active">
       <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
@@ -129,13 +95,6 @@
     </button>
   </nav>
 
-  <!-- <nav class="nav-bottom"> -->
-  <!--   <button id="searchBtn">Buscar</button> -->
-  <!--   <button id="favsBtn">Favs</button> -->
-  <!--   <button id="playerBtn">Player</button> -->
-  <!-- </nav> -->
-
-  <!-- Menus emergentes -->
   <div id="menuSheet" class="sheet"></div>
 
   <div id="playlistSheet" class="sheet">
@@ -150,11 +109,6 @@
     </div>
   </div>
 
-  <!-- <div class="popup" id="menuPopup"></div> -->
-  <!-- <div class="popup-content"></div> -->
-  <!-- <button class="popup-close">Cerrar</button> -->
-
-  <!-- Reproductor de YouTube escondido -->
   <div id="yt-holder"><div id="player"></div></div>
 
   <script src="script.js"></script>
