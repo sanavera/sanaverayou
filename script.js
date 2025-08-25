@@ -23,12 +23,46 @@ let items = [];
 let favs  = [];
 let playlists = [];        // {id,name,tracks:[{id,title,author,thumb}]}
 let queue = null;
-let queueType = null;      // 'search'|'favs'|'playlist'
+let queueType = null;      // 'search'|'favs'|'playlist'|'curated'
 let qIdx = -1;
 let currentTrack = null;
 let viewingPlaylistId = null;
 
 let ytPlayer = null, YT_READY = false, timer = null;
+
+/* ========= Curados estáticos (NO API) ========= */
+/* Reemplazá id: por el ID de YouTube o directamente url: con el link completo */
+const CURATED_RAW = [
+  { id: "XXXXXXXXXXX1", title: "Pop enganchado (1h)",   author: "Mix Pop" },
+  { id: "XXXXXXXXXXX2", title: "Rock enganchado (1h)",  author: "Mix Rock" },
+  { id: "XXXXXXXXXXX3", title: "Cumbia enganchada",     author: "Mix Cumbia" },
+  { id: "XXXXXXXXXXX4", title: "Reggaetón Session",     author: "Mix Urbano" },
+  { id: "XXXXXXXXXXX5", title: "Latinos Old School",    author: "Mix Latino" },
+  { id: "XXXXXXXXXXX6", title: "Electrónica Non-Stop",  author: "Mix EDM" },
+  // podés seguir sumando…
+];
+function extractVideoId(input){
+  if(!input) return "";
+  const s = String(input);
+  const m = s.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?![0-9A-Za-z_-])/);
+  return m ? m[1] : (s.length===11 ? s : "");
+}
+function mapCurated(raw){
+  return raw
+    .map((r,i)=>{
+      const id = extractVideoId(r.id || r.url || r);
+      if(!id) return null;
+      return {
+        id,
+        title: r.title || `Mix ${i+1}`,
+        author: r.author || "",
+        thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
+      };
+    })
+    .filter(Boolean);
+}
+let CURATED_VIDEOS = mapCurated(CURATED_RAW);
+let HOME_QUEUE = []; // subconjunto de 6 mostrado actualmente
 
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
@@ -55,12 +89,7 @@ function switchView(id){
   $("#"+id).classList.add("active");
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
 
-  // Mostrar portada si vamos a búsqueda y no hay resultados cargados
-  if(id === "view-search"){
-    const showHome = items.length === 0;
-    $("#homeHead")?.classList.toggle("hide", !showHome);
-    $("#homeReco")?.classList.toggle("hide", !showHome);
-  }
+  if(id==="view-search") updateHomeGridVisibility();
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -135,9 +164,7 @@ async function startSearch(query){
   items = [];
   $("#results").innerHTML = "";
 
-  // oculto portada al empezar a buscar
-  $("#homeHead")?.classList.add("hide");
-  $("#homeReco")?.classList.add("hide");
+  updateHomeGridVisibility(); // ocultar grilla cuando empieza una búsqueda
 
   try{
     const result = await youtubeSearch(query, '', 20);
@@ -174,106 +201,6 @@ async function loadNextPage(){
     paging.loading   = false;
   }catch(e){
     paging.loading=false; paging.hasMore=false;
-  }
-}
-
-/* ========= Recomendaciones (playlists de YouTube) ========= */
-async function youtubePlaylistSearch(query, limit = 1, retryCount = 0){
-  const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-  if(retryCount >= MAX_RETRIES) return [];
-  const url = new URL('https://www.googleapis.com/youtube/v3/search');
-  const apiKey = getRotatedApiKey();
-  url.searchParams.append('key', apiKey);
-  url.searchParams.append('q', query);
-  url.searchParams.append('part', 'snippet');
-  url.searchParams.append('type', 'playlist');
-  url.searchParams.append('maxResults', limit);
-  try{
-    const r = await fetch(url);
-    if(!r.ok){
-      if(r.status===403) return youtubePlaylistSearch(query, limit, retryCount+1);
-      return [];
-    }
-    const data = await r.json();
-    return data.items.map(p=>({
-      id: p.id.playlistId,
-      title: p.snippet.title,
-      channel: p.snippet.channelTitle,
-      thumb: (p.snippet.thumbnails.high || p.snippet.thumbnails.medium || p.snippet.thumbnails.default).url
-    }));
-  }catch{ return []; }
-}
-
-async function fetchPlaylistItems(playlistId, max = 80){
-  let pageToken = '', out = [];
-  while(out.length < max){
-    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
-    url.searchParams.append('key', getRotatedApiKey());
-    url.searchParams.append('part', 'snippet');
-    url.searchParams.append('playlistId', playlistId);
-    url.searchParams.append('maxResults', '50');
-    if(pageToken) url.searchParams.append('pageToken', pageToken);
-    const r = await fetch(url);
-    if(!r.ok){ break; }
-    const data = await r.json();
-    for(const it of data.items){
-      const vid = it.snippet?.resourceId?.videoId;
-      if(!vid) continue;
-      out.push({
-        id: vid,
-        title: cleanTitle(it.snippet.title),
-        author: cleanAuthor(it.snippet.videoOwnerChannelTitle || it.snippet.channelTitle || ""),
-        thumb: (it.snippet.thumbnails?.high || it.snippet.thumbnails?.medium || it.snippet.thumbnails?.default)?.url || ""
-      });
-    }
-    if(!data.nextPageToken) break;
-    pageToken = data.nextPageToken;
-  }
-  // dedup por id
-  const seen = new Set();
-  return out.filter(t=>{ if(seen.has(t.id)) return false; seen.add(t.id); return true; });
-}
-
-async function importAndOpenYtPlaylist(ytId, name){
-  const tracks = await fetchPlaylistItems(ytId, 120);
-  if(!tracks.length){ alert("No se pudo importar la playlist"); return; }
-  const localId = "pl_yt_" + ytId;
-  let pl = playlists.find(p=>p.id===localId);
-  if(pl){ pl.name = name; pl.tracks = tracks; }
-  else { pl = {id: localId, name, tracks}; playlists.unshift(pl); }
-  savePlaylists(); renderPlaylists();
-  showPlaylistInPlayer(localId);
-  switchView("view-player");
-}
-
-async function loadHomePlaylists(){
-  const ul = $("#homeReco"); if(!ul) return;
-  ul.innerHTML = "";
-  const topics = [
-    "cumbia hits playlist",
-    "reggaeton hits playlist",
-    "rock en español clásicos playlist",
-    "pop latino hits playlist",
-    "cuarteto cordobés playlist",
-    "baladas en español playlist"
-  ];
-  for(const q of topics){
-    const res = await youtubePlaylistSearch(q, 1);
-    if(!res.length) continue;
-    const p = res[0];
-    const li = document.createElement("li");
-    li.className = "pl-item";
-    li.innerHTML = `
-      <div class="pl-meta">
-        <img class="pl-thumb" src="${p.thumb}" alt="">
-        <div>
-          <div class="title-text">${p.title}</div>
-          <div class="subtitle">${p.channel}</div>
-        </div>
-      </div>
-      <button class="pill" data-yt="${p.id}">Abrir</button>`;
-    li.querySelector("button").onclick = () => importAndOpenYtPlaylist(p.id, p.title);
-    ul.appendChild(li);
   }
 }
 
@@ -317,6 +244,45 @@ function appendResults(chunk){
     root.appendChild(item);
   }
   refreshIndicators();
+}
+
+/* ========= Grilla estática (Inicio) ========= */
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function renderHomeGrid(){
+  const grid = $("#homeGrid"); if(!grid) return;
+  grid.innerHTML = "";
+  const source = shuffle(CURATED_VIDEOS).slice(0,6);
+  HOME_QUEUE = source;
+
+  source.forEach((it, i)=>{
+    const card = document.createElement("article");
+    card.className = "home-card";
+    card.innerHTML = `
+      <img loading="lazy" decoding="async" src="${it.thumb}" alt="">
+      <div class="home-meta">
+        <p class="home-title-text">${it.title}</p>
+        <p class="home-subtitle">${it.author||"Mix"}</p>
+      </div>`;
+    card.onclick = ()=>{
+      // reproducir y armar cola con los 6 de HOME_QUEUE
+      setQueue(HOME_QUEUE, "curated", i);
+      playCurrent(true);
+    };
+    grid.appendChild(card);
+  });
+}
+function updateHomeGridVisibility(){
+  const home = $("#homeSection");
+  if(!home) return;
+  const shouldShow = (!paging.query && items.length===0);
+  home.classList.toggle("hide", !shouldShow);
 }
 
 /* ========= Favoritos ========= */
@@ -369,7 +335,7 @@ function renderFavs(){
   refreshIndicators();
 }
 
-/* ========= Playlists (localStorage) ========= */
+/* ========= Playlists ========= */
 const LS_PL = "sanayera_playlists_v1";
 function loadPlaylists(){ try{ playlists = JSON.parse(localStorage.getItem(LS_PL)||"[]"); }catch{ playlists=[]; } }
 function savePlaylists(){ localStorage.setItem(LS_PL, JSON.stringify(playlists)); }
@@ -406,7 +372,7 @@ $("#btnNewPlaylist").onclick = ()=>{
   savePlaylists(); renderPlaylists();
 };
 
-/* ========= Acción sheet (menú 3 puntitos) ========= */
+/* ========= Acción sheet ========= */
 function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
   const sheet = $("#menuSheet");
   sheet.innerHTML = `
@@ -700,7 +666,7 @@ document.addEventListener("visibilitychange", ()=>{
   }
 });
 
-/* ========= YouTube API loader ========= */
+/* ========= YouTube API ========= */
 function loadYTApi(){
   if(window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
   const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
@@ -729,11 +695,16 @@ const io = new IntersectionObserver((entries)=>{
 io.observe($("#sentinel"));
 
 /* ========= Init ========= */
+function bootHome(){
+  CURATED_VIDEOS = mapCurated(CURATED_RAW); // por si editaste IDs/URLs
+  renderHomeGrid();
+  updateHomeGridVisibility();
+}
 loadFavs();
 loadPlaylists();
 renderFavs();
 renderPlaylists();
 loadYTApi();
-loadHomePlaylists();
+bootHome();
 
 document.title = "SanaveraYou";
