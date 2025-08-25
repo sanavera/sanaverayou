@@ -9,13 +9,10 @@ const cleanTitle = t => (t||"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"-MP3")
   .replace(/\s{2,}/g," ").trim();
 
-// 👉 VEVО / Topic  →  MP3 (dejando un espacio antes si hace falta)
+// VEVО / Topic  →  MP3 (dejando un espacio si hace falta)
 const cleanAuthor = a => (a||"")
-  // "- Topic", "— Topic", "(Topic)", " Topic" → " MP3"
   .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, " MP3")
-  // "VEVO" pegado o separado → " MP3"
   .replace(/VEVO/gi, " MP3")
-  // arreglos finales
   .replace(/\s{2,}/g, " ")
   .replace(/\s*-\s*$/,"")
   .trim();
@@ -44,9 +41,9 @@ const YOUTUBE_API_KEYS = [
 let currentApiKeyIndex = 0;
 
 function getRotatedApiKey() {
-    const key = YOUTUBE_API_KEYS[currentApiKeyIndex];
-    currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
-    return key;
+  const key = YOUTUBE_API_KEYS[currentApiKeyIndex];
+  currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+  return key;
 }
 
 const BATCH_SIZE = 20;
@@ -57,7 +54,7 @@ let searchAbort = null;
 function switchView(id){
   $$(".view").forEach(v=>v.classList.remove("active"));
   $("#"+id).classList.add("active");
-  $$(".nav-btn").forEach(b=>b.classList.toggle("active, b.dataset.view===id));
+  $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id)); // ← FIX
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -88,15 +85,13 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   url.searchParams.append('type', 'video');
   url.searchParams.append('videoCategoryId', '10');
   url.searchParams.append('maxResults', limit);
-  if (pageToken) {
-    url.searchParams.append('pageToken', pageToken);
-  }
+  if (pageToken) url.searchParams.append('pageToken', pageToken);
 
   try {
     const response = await fetch(url);
     if (!response.ok) {
       if (response.status === 403) {
-        console.warn(`API key ${apiKey} ha fallado con error 403. Intentando con la siguiente...`);
+        console.warn(`API key ${apiKey} falló con 403. Probando la siguiente...`);
         return youtubeSearch(query, pageToken, limit, retryCount + 1);
       }
       throw new Error(`API error: ${response.status}`);
@@ -167,7 +162,6 @@ function dedupeById(arr) {
 
 async function loadNextPage() {
   if (paging.loading || !paging.hasMore || !paging.query) return;
-
   paging.loading = true;
 
   try {
@@ -197,6 +191,13 @@ async function loadNextPage() {
 }
 
 /* ========= Render resultados ========= */
+function dotsSvg() {
+  return `
+    <svg class="icon-dots" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path fill="currentColor" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/>
+    </svg>`;
+}
+
 function appendResults(chunk){
   const root = $("#results");
   for(const it of chunk){
@@ -216,10 +217,7 @@ function appendResults(chunk){
       </div>
       <div class="actions">
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">
-          <!-- sin fill inline; delega a CSS -->
-          <svg class="icon-dots" viewBox="0 0 24 24">
-            <path d="M12 4a2 2 0 110-4 2 2 0 010 4zM12 14a2 2 0 110-4 2 2 0 010 4zM12 24a2 2 0 110-4 2 2 0 010 4z"/>
-          </svg>
+          ${dotsSvg()}
         </button>
       </div>`;
 
@@ -290,10 +288,7 @@ function renderFavs(){
       </div>
       <div class="actions">
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">
-          <!-- sin fill inline; delega a CSS -->
-          <svg class="icon-dots" viewBox="0 0 24 24">
-            <path d="M12 4a2 2 0 110-4 2 2 0 010 4zM12 14a2 2 0 110-4 2 2 0 010 4zM12 24a2 2 0 110-4 2 2 0 010 4z"/>
-          </svg>
+          ${dotsSvg()}
         </button>
       </div>`;
 
@@ -352,10 +347,7 @@ function renderPlaylists(){
         </div>
       </div>
       <button class="icon-btn more" title="Opciones" aria-label="Opciones">
-        <!-- sin fill inline; delega a CSS -->
-        <svg class="icon-dots" viewBox="0 0 24 24">
-          <path d="M12 4a2 2 0 110-4 2 2 0 010 4zM12 14a2 2 0 110-4 2 2 0 010 4zM12 24a2 2 0 110-4 2 2 0 010 4z"/>
-        </svg>
+        ${dotsSvg()}
       </button>`;
 
     li.addEventListener("click", (e)=>{
@@ -625,5 +617,5 @@ renderFavs();
 renderPlaylists();
 loadYTApi();
 
-// 👉 Título de la página
+// Título de la página
 document.title = "SanaveraYou";
