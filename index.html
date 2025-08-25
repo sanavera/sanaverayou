@@ -1,42 +1,60 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" /> <meta name="viewport" content="width=device-width, initial-scale=1" /> <title>SanaveraYou Pro</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SanaveraYou Pro</title>
+
+  <!-- Spotify/Tidal-like: Inter (libre) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <!-- Barra de arriba con logo y busqueda -->
   <header class="topbar">
     <div class="brand-compact">
-      <img id="miniLogo" src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif" alt="Logo" /> <div class="search-container">
-        <input id="searchInput" placeholder="Buscar ej Amar Azul Yo tomo" autocomplete="off" /> <div id="resultsCount" class="muted"></div> </div>
+      <img id="miniLogo" src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif" alt="Logo" />
+      <div class="search-container">
+        <input id="searchInput" placeholder="Buscar ej Amar Azul Yo tomo" autocomplete="off" />
+        <div id="resultsCount" class="muted"></div>
+      </div>
     </div>
   </header>
 
   <main id="views">
+    <!-- Vista de búsqueda -->
     <section id="view-search" class="view active">
-      <section id="results" class="results"></section> <div id="sentinel" aria-hidden="true"></div> </section>
+      <section id="results" class="results"></section>
+      <div id="sentinel" aria-hidden="true"></div>
+    </section>
 
+    <!-- Vista de favoritos -->
     <section id="view-favs" class="view">
       <div class="fav-hero" id="favHero">
         <div class="fav-hero-text">
           <p class="muted up">TUS FAVORITOS</p>
-          <h2 id="favNowTitle">-</h2> </div>
+          <h2 id="favNowTitle">-</h2>
+        </div>
       </div>
       <section class="fav-list-wrap">
-        <ul id="favList" class="fav-list"></ul> </section>
+        <ul id="favList" class="fav-list"></ul>
+      </section>
     </section>
 
+    <!-- Vista de playlists -->
     <section id="view-playlists" class="view">
       <header class="section-head">
         <h3>Playlists</h3>
         <div class="pl-actions">
-          <button id="btnNewPlaylist" class="pill">Nueva</button> </div>
+          <button id="btnNewPlaylist" class="pill">Nueva</button>
+        </div>
       </header>
       <ul id="plList" class="pl-list"></ul>
       <div id="plEmpty" class="empty muted">Aun no hay playlists Crea la primera ✨</div>
     </section>
 
+    <!-- Vista del reproductor -->
     <section id="view-player" class="view now-playing">
       <section id="queuePanel" class="queue-panel hide">
         <header class="section-head">
@@ -68,7 +86,8 @@
         <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
-      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" /> <div class="time-inline">
+      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" />
+      <div class="time-inline">
         <span id="cur">0:00</span>
         <span id="dur">0:00</span>
       </div>
