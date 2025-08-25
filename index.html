@@ -20,7 +20,7 @@
 
   <!-- Lupa flotante global -->
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="20" height="20">
       <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
     </svg>
   </button>
@@ -34,10 +34,17 @@
 
   <!-- Vistas -->
   <main id="views">
-    <!-- Búsqueda + recomendaciones de inicio -->
+    <!-- Búsqueda -->
     <section id="view-search" class="view active">
-      <p id="homeHead" class="muted up">LISTAS RECOMENDADAS</p>
-      <ul id="homeReco" class="pl-list"></ul>
+
+      <!-- NUEVO: sección de grilla estática (se oculta cuando hay búsqueda) -->
+      <section id="homeSection" class="home-section">
+        <header class="home-head">
+          <h3 class="home-title">Para arrancar 🎧</h3>
+          <p class="home-sub">Mezclas largas por género — sin usar API</p>
+        </header>
+        <section id="homeGrid" class="home-grid"></section>
+      </section>
 
       <section id="results" class="results"></section>
       <div id="sentinel" aria-hidden="true"></div>
@@ -76,7 +83,7 @@
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
         </button>
         <button id="npMenu" class="np-menu" aria-label="Menu">
-          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
       </div>
       <div class="np-meta">
