@@ -7,7 +7,6 @@
 
   <!-- Colorea la barra de navegación/estado en Android -->
   <meta name="theme-color" content="#0b0a11" />
-  <!-- (opcional) asegura el mismo color si el dispositivo usa dark mode -->
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0a11" />
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -42,7 +41,7 @@
     <!-- Búsqueda -->
     <section id="view-search" class="view active">
 
-      <!-- NUEVO: sección de grilla estática (se oculta cuando hay búsqueda) -->
+      <!-- Home estática -->
       <section id="homeSection" class="home-section">
         <header class="home-head">
           <h3 class="home-title">Para arrancar 🎧</h3>
@@ -57,6 +56,7 @@
 
     <!-- Favoritos -->
     <section id="view-favs" class="view">
+      <!-- HERO sticky + colapsable -->
       <div class="fav-hero" id="favHero">
         <div class="fav-hero-text">
           <p class="muted up">TUS FAVORITOS</p>
@@ -80,8 +80,9 @@
       <div id="plEmpty" class="empty muted">Aún no hay playlists. Crea la primera ✨</div>
     </section>
 
-    <!-- Reproductor (hero siempre arriba) -->
+    <!-- Reproductor -->
     <section id="view-player" class="view now-playing">
+      <!-- HERO sticky + colapsable -->
       <div id="npHero" class="np-hero">
         <button id="npPlay" class="np-play" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
