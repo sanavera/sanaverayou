@@ -11,7 +11,7 @@
   --dots:#ff6b6b;
 
   /* navegación / player */
-  --dock-bg:#0b0a11;        /* fondo de barra inferior y dock */
+  --dock-bg:#0b0a11;
   --mini-bg:rgba(11,10,17,1);
   --track-bg:rgba(255,255,255,.12);
   --nav-ink:#cbd5e1; --nav-ink-hover:#e5e7eb; --nav-ink-active:#ffffff;
@@ -122,17 +122,13 @@ html[data-theme="light"] .theme-toggle .moon{ display:block; }
   background:rgba(26,28,36,.95); border:1px solid rgba(255,255,255,.12);
   border-radius:14px; padding:10px 12px; box-shadow:0 8px 32px rgba(0,0,0,.35);
 }
-html[data-theme="light"] .search-card{
-  background:rgba(255,255,255,.98); border-color:var(--border);
-}
+html[data-theme="light"] .search-card{ background:rgba(255,255,255,.98); border-color:var(--border); }
 #overlaySearchInput{
   width:100%; background:rgba(36,39,49,.6); color:#fff;
   border:1px solid rgba(255,255,255,.08); border-radius:10px;
   padding:12px 14px; outline:none; font-size:15px;
 }
-html[data-theme="light"] #overlaySearchInput{
-  background:#f1f5f9; color:#0f172a; border-color:#e2e8f0;
-}
+html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a; border-color:#e2e8f0; }
 #overlaySearchInput:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(239,68,68,.1);}
 
 /* ——— Vistas ——— */
@@ -238,6 +234,11 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
   content:"";position:absolute;inset:0;border-radius:inherit;
   background:linear-gradient(to top,rgba(8,9,12,.9)0%,rgba(8,9,12,.5)40%,rgba(8,9,12,0)100%);
 }
+/* texto en el hero de favoritos */
+.fav-hero .fav-hero-text{
+  position:absolute; left:16px; right:16px; bottom:12px; z-index:1; color:#fff;
+}
+
 /* ===== HERO Player (colapsable) ===== */
 .np-hero{
   position:sticky; top:8px; z-index:10; width:min(520px, 100%); margin:8px auto 10px;
@@ -266,6 +267,12 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
 /* Cola del reproductor */
 .queue-panel{margin-top:6px}
 .queue-item .actions{margin-left:auto}
+
+/* Section headers */
+.section-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--side-pad); margin:10px 0;
+}
 
 /* Mini-player unido a la barra inferior */
 .seek-dock{
@@ -299,9 +306,7 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
   padding:12px var(--side-pad) calc(12px + var(--safe));
   box-shadow:0 -12px 40px rgba(0,0,0,.5);
 }
-html[data-theme="light"] .sheet-content{
-  background:#ffffff; border-color:var(--border);
-}
+html[data-theme="light"] .sheet-content{ background:#ffffff; border-color:var(--border); }
 .sheet-title{ font-weight:700; margin:6px 2px 8px; }
 .sheet-list{ display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow:auto; }
 .sheet-item{
@@ -314,6 +319,11 @@ html[data-theme="light"] .sheet-content{
 .sheet-item.ghost{ background:transparent; color:var(--text-secondary); border:1px solid var(--border-subtle); }
 .sheet-item.ghost:hover{ border-color:var(--text-secondary); }
 .sheet-item.danger{ background:rgba(127,29,29,.15); border-color:#7f1d1d; color:#7f1d1d; }
+.sheet-row{ display:flex; gap:8px; margin-top:8px; }
+.sheet-row input{
+  flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border-subtle);
+  background:var(--surface); color:var(--text-primary);
+}
 
 /* Botón “Nueva / Crear” */
 .pill{
@@ -322,9 +332,7 @@ html[data-theme="light"] .sheet-content{
   background:rgba(255,255,255,.08);
   color:#fff; font-weight:600; cursor:pointer; transition:var(--fast);
 }
-html[data-theme="light"] .pill{
-  border-color:#e5e7eb; background:#f8fafc; color:#0f172a;
-}
+html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:#0f172a; }
 .pill:hover{ transform:translateY(-1px); }
 
 /* Barra inferior */
@@ -356,13 +364,14 @@ html[data-theme="light"] .pill{
 
 /* ====== Home grid ====== */
 .home-section{ margin-bottom: 10px; }
-.home-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 0 0 8px; }
+.home-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 0 0 8px; padding:0 var(--side-pad); }
 .home-title{ margin:0; font-size:16px; font-weight:700; }
 .home-sub{ margin:0; font-size:12px; color:var(--text-secondary); }
 .home-grid{
   display:grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap:12px;
+  padding:0 var(--side-pad);
 }
 .home-card{
   position:relative; border-radius:14px; overflow:hidden;
