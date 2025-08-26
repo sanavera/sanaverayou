@@ -36,26 +36,28 @@ let ytPlayer = null, YT_READY = false, timer = null;
 /* ========= Persistencia de Estado ========= */
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 function savePlayerState() {
-  if (!currentTrack) return;
+  if (!currentTrack || !ytPlayer) return;
   const state = {
     queue,
     queueType,
     qIdx,
-    currentTime: ytPlayer?.getCurrentTime() || 0,
+    currentTime: ytPlayer.getCurrentTime() || 0,
     isShuffle,
     repeatMode,
     timestamp: Date.now()
   };
-  localStorage.setItem(PLAYER_STATE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(PLAYER_STATE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error("Error al guardar estado del reproductor:", e);
+  }
 }
 
 function loadPlayerState() {
   const savedState = localStorage.getItem(PLAYER_STATE_KEY);
   if (!savedState) return null;
-
   try {
     const state = JSON.parse(savedState);
-    // Considerar el estado como viejo si tiene más de 2 horas
     if (Date.now() - (state.timestamp || 0) > 2 * 60 * 60 * 1000) {
       localStorage.removeItem(PLAYER_STATE_KEY);
       return null;
@@ -69,27 +71,30 @@ function loadPlayerState() {
 
 function restorePlayerState(state) {
   if (!state || !state.queue || state.qIdx < 0) return;
+  
+  const restore = () => {
+    queue = state.queue;
+    queueType = state.queueType;
+    qIdx = state.qIdx;
+    currentTrack = queue[qIdx];
+    isShuffle = state.isShuffle || false;
+    repeatMode = state.repeatMode || 'none';
 
-  queue = state.queue;
-  queueType = state.queueType;
-  qIdx = state.qIdx;
-  currentTrack = queue[qIdx];
-  isShuffle = state.isShuffle || false;
-  repeatMode = state.repeatMode || 'none';
-
-  if (YT_READY) {
     ytPlayer.loadVideoById({
       videoId: currentTrack.id,
       startSeconds: state.currentTime || 0,
       suggestedQuality: "auto"
     });
+    ytPlayer.setVolume($("#volumeSeek").value);
     ytPlayer.pauseVideo();
     updateUIOnTrackChange();
     startTimer();
-    updateMiniNow();
+  };
+  
+  if (YT_READY) {
+    restore();
   } else {
-    // Si YT no está listo, intentarlo de nuevo cuando lo esté
-    window.addEventListener('yt-ready', () => restorePlayerState(state), { once: true });
+    window.addEventListener('yt-ready', restore, { once: true });
   }
 }
 
@@ -173,6 +178,7 @@ const CURATED_RAW = [
   { "id": "hnIGIEYhOwY", "title": "Fito Paez - Grandes éxitos", "author": "Federico Peñaloza" },
   { "id": "dSgWyiKptVE", "title": "Fito Páez - Abre (1999) (Álbum completo)", "author": "Capitán Fugitivo" }
 ];
+
 function extractVideoId(input){
   if(!input) return "";
   const s = String(input);
@@ -213,10 +219,14 @@ let searchAbort = null;
 /* ========= Nav ========= */
 function switchView(id){
   $$(".view").forEach(v=>v.classList.remove("active"));
-  $("#"+id)?.classList.add("active");
+  const view = $("#"+id);
+  if (view) {
+    view.classList.add("active");
+    view.scrollTop = 0; // Reset scroll on view change
+  }
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
-
   if(id==="view-search") updateHomeGridVisibility();
+  heroScrollTick();
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -450,7 +460,6 @@ function renderFavs(){
       e.stopPropagation();
       if(currentTrack?.id === it.id){ togglePlay(); }
       else{ playFromFav(it, true); }
-      refreshIndicators();
     };
     ul.appendChild(li);
   });
@@ -484,7 +493,7 @@ function renderPlaylists(){
       showPlaylistInPlayer(pl.id);
       switchView("view-player");
     });
-    li.classList.toggle("is-playing", viewingPlaylistId === pl.id);
+    li.classList.toggle("is-playing", viewingPlaylistId === pl.id && queueType === 'playlist');
     list.appendChild(li);
   });
 }
@@ -555,21 +564,16 @@ function updateHero(track){
   $("#favNowTitle").textContent = t ? t.title : "—";
   $("#npHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
   $("#npTitle").textContent = t ? t.title : "Elegí una canción";
-  const plName = viewingPlaylistId ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "") : "";
+  const plName = (viewingPlaylistId && queueType === 'playlist') ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "") : "";
   $("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName?` • ${plName}`:""}` : (plName || "—");
 }
 function setQueue(srcArr, type, idx){
     let finalSrc = srcArr;
     if (isShuffle && type !== 'curated') {
-        finalSrc = shuffle(srcArr.slice());
         const currentItem = srcArr[idx];
-        const newIdx = finalSrc.findIndex(item => item.id === currentItem.id);
-        if (newIdx > -1) {
-             // Mover el item actual al principio para que suene primero
-            finalSrc.splice(newIdx, 1);
-            finalSrc.unshift(currentItem);
-            idx = 0;
-        }
+        finalSrc = shuffle(srcArr.filter(item => item.id !== currentItem.id));
+        finalSrc.unshift(currentItem);
+        idx = 0;
     }
     queue = finalSrc;
     queueType = type;
@@ -583,20 +587,21 @@ function playCurrent(autoplay=false){
   startTimer();
   updateUIOnTrackChange();
 }
-function playFromSearch(i, autoplay=false){ setQueue(items, "search", i); playCurrent(autoplay); }
+function playFromSearch(i, autoplay=false){ setQueue(items, "search", i); viewingPlaylistId = null; playCurrent(autoplay); }
 function playFromFav(track, autoplay=false){
   const i = favs.findIndex(f=>f.id===track.id);
-  setQueue(favs, "favs", Math.max(i,0)); playCurrent(autoplay);
+  setQueue(favs, "favs", Math.max(i,0)); viewingPlaylistId = null; playCurrent(autoplay);
 }
 function playFromPlaylist(plId, i, autoplay=false){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
-  setQueue(pl.tracks, "playlist", i); viewingPlaylistId = plId; playCurrent(autoplay);
+  viewingPlaylistId = plId;
+  setQueue(pl.tracks, "playlist", i);
+  playCurrent(autoplay);
+  renderPlaylists();
 }
 function playPlaylist(id){
   const pl = playlists.find(p=>p.id===id); if(!pl||!pl.tracks.length) return;
-  viewingPlaylistId = id;
   playFromPlaylist(pl.id, 0, true);
-  renderPlaylists();
 }
 function togglePlay(){
   if(!YT_READY || !currentTrack) return;
@@ -620,7 +625,7 @@ function removeFromPlaylist(plId, trackId){
     if(idx < qIdx) qIdx--;
     if(removingIsCurrent){
       if(qIdx >= queue.length) qIdx = queue.length-1;
-      if(qIdx >= 0) playCurrent(true); else { currentTrack=null; updateHero(null); }
+      if(qIdx >= 0) playCurrent(true); else { currentTrack=null; updateUIOnTrackChange(); }
     }
   }
   renderPlaylists();
@@ -636,25 +641,21 @@ function updateMiniNow(){
   $("#miniThumb").src = currentTrack.thumb;
   $("#miniTitle").textContent = currentTrack.title;
   $("#miniAuthor").textContent = cleanAuthor(currentTrack.author) || "";
-  const playing = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
-  $("#miniPlay").classList.toggle("playing", playing);
 }
 
 function getNextIndex() {
     if (!queue) return -1;
     if (repeatMode === 'one') return qIdx;
     
-    // Si es shuffle, busca un índice aleatorio que no sea el actual
     if (isShuffle) {
-        if (queue.length <= 1) return 0;
+        if (queue.length <= 1) return (repeatMode === 'all') ? 0 : -1;
         let nextIdx;
         do {
             nextIdx = Math.floor(Math.random() * queue.length);
-        } while (nextIdx === qIdx);
+        } while (queue.length > 1 && nextIdx === qIdx);
         return nextIdx;
     }
 
-    // Normal
     let next = qIdx + 1;
     if (next >= queue.length) {
         return (repeatMode === 'all') ? 0 : -1;
@@ -668,7 +669,6 @@ function next(){
         qIdx = nextIdx;
         playCurrent(true);
     } else {
-        // Fin de la cola
         ytPlayer.stopVideo();
         currentTrack = null;
         updateUIOnTrackChange();
@@ -677,10 +677,7 @@ function next(){
 
 function prev(){
     if (!queue) return;
-    if (isShuffle) { // En shuffle, 'prev' también es aleatorio
-        next();
-        return;
-    }
+    if (isShuffle) { next(); return; }
     if (ytPlayer.getCurrentTime() > 3) {
         ytPlayer.seekTo(0, true);
     } else if (qIdx - 1 >= 0) {
@@ -697,19 +694,16 @@ $("#seek").addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/
 function startTimer(){
   stopTimer();
   timer = setInterval(()=>{
-    if(!YT_READY) return;
+    if(!YT_READY || !currentTrack) return;
+    const state = ytPlayer.getPlayerState();
+    if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
+
     const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
     $("#cur").textContent = fmt(cur); $("#dur").textContent = fmt(dur);
     $("#seek").value = dur? Math.floor((cur/dur)*1000) : 0;
-    const playing = ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING;
-    $("#npPlay").classList.toggle("playing", playing);
-    $("#miniPlay").classList.toggle("playing", playing);
-    refreshIndicators();
-
-    // Guardar estado periódicamente
-    if (playing) {
-      savePlayerState();
-    }
+    
+    // Guardar estado periódicamente solo si está sonando
+    savePlayerState();
   }, 500);
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
@@ -718,11 +712,14 @@ function stopTimer(){ clearInterval(timer); timer=null; }
 function toggleShuffle() {
     isShuffle = !isShuffle;
     $("#btnShuffle").classList.toggle('active', isShuffle);
-    // Re-crear la cola si se activa shuffle, manteniendo la canción actual
     if (currentTrack) {
-        const currentQueueSource = (queueType === 'search') ? items : (queueType === 'favs') ? favs :
-                                   (queueType === 'playlist') ? playlists.find(p=>p.id===viewingPlaylistId)?.tracks || [] : HOME_QUEUE;
-        setQueue(currentQueueSource, queueType, currentQueueSource.findIndex(t => t.id === currentTrack.id));
+        const currentQueueSource = 
+            (queueType === 'search') ? items : 
+            (queueType === 'favs') ? favs :
+            (queueType === 'playlist') ? playlists.find(p=>p.id===viewingPlaylistId)?.tracks || [] : 
+            (queueType === 'curated') ? HOME_QUEUE : [];
+        const originalIndex = currentQueueSource.findIndex(t => t.id === currentTrack.id);
+        setQueue(currentQueueSource, queueType, originalIndex);
     }
 }
 
@@ -735,9 +732,9 @@ function cycleRepeat() {
     btn.classList.toggle('active', repeatMode !== 'none');
     
     if (repeatMode === 'one') {
-        btn.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>`; // Repeat One icon
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>`;
     } else {
-        btn.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`; // Repeat icon
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
     }
 }
 function updateControlStates() {
@@ -899,7 +896,23 @@ function refreshIndicators(){
           cardPlay.classList.toggle("playing", isPlaying && isCurrentTrack);
       }
   });
+
+  const playing = isPlaying;
+  $("#npPlay").classList.toggle("playing", playing);
+  $("#miniPlay").classList.toggle("playing", playing);
 }
+
+/* ========= Visibilidad y reproducción en segundo plano ========= */
+document.addEventListener("visibilitychange", ()=>{
+  if(!YT_READY || !currentTrack) return;
+  if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
+    const t = ytPlayer.getCurrentTime()||0;
+    // Este truco fuerza al navegador (especialmente en móviles) a mantener el audio activo
+    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds:t, suggestedQuality:"auto" });
+    ytPlayer.playVideo();
+  }
+});
+
 
 /* ========= YouTube API ========= */
 function loadYTApi(){
@@ -916,9 +929,7 @@ window.onYouTubeIframeAPIReady = function(){
         window.dispatchEvent(new Event('yt-ready'));
       },
       onStateChange:(e)=>{
-        const st=e.data;
-        if(st===YT.PlayerState.ENDED){ next(); }
-        updateMiniNow();
+        if(e.data===YT.PlayerState.ENDED){ next(); }
         refreshIndicators();
       }
     }
@@ -930,6 +941,25 @@ const io = new IntersectionObserver((entries)=>{
   for(const en of entries){ if(en.isIntersecting){ loadNextPage(); } }
 },{ root:null, rootMargin:"800px 0px", threshold:0 });
 io.observe($("#sentinel"));
+
+/* ========= HERO shrink en scroll ========= */
+function heroScrollTick(){
+  const activeView = document.querySelector(".view.active");
+  if(!activeView) return;
+
+  const hero = activeView.querySelector(".fav-hero, .np-hero");
+  if(!hero) return;
+  
+  const y = activeView.scrollTop;
+  const DIST = 240; // Distancia en píxeles para completar la transición
+  const t = Math.max(0, Math.min(1, y / DIST));
+  hero.style.setProperty("--hero-t", t);
+}
+
+$$('.view').forEach(view => {
+    view.addEventListener("scroll", heroScrollTick, { passive: true });
+});
+window.addEventListener("resize", heroScrollTick);
 
 
 /* ========= Init ========= */
@@ -943,15 +973,16 @@ function boot(){
   loadPlaylists();
   renderFavs();
   renderPlaylists();
-
+  
+  loadYTApi();
+  
   const savedState = loadPlayerState();
   if (savedState) {
-    // Retrasar la restauración para asegurar que la UI esté lista
-    setTimeout(() => restorePlayerState(savedState), 100);
+    restorePlayerState(savedState);
   }
-
-  loadYTApi();
-  document.title = "SanaveraYou";
+  
+  heroScrollTick();
+  document.title = "SanaveraYou Pro";
 }
 
 // Iniciar la app
