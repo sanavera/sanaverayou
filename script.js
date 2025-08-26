@@ -30,6 +30,45 @@ let viewingPlaylistId = null;
 
 let ytPlayer = null, YT_READY = false, timer = null;
 
+/* ========= Tema (oscuro/clave por defecto) ========= */
+const THEME_KEY = "sy_theme_v1";
+function applyTheme(theme){
+  const root = document.documentElement;
+  root.setAttribute("data-theme", theme);                // activa variables CSS
+  localStorage.setItem(THEME_KEY, theme);
+
+  // icono del botón (sun/moon hecho en CSS)
+  const tBtn = $("#themeToggle");
+  if(tBtn){
+    const isLight = theme === "light";
+    tBtn.classList.toggle("is-light", isLight);
+    tBtn.setAttribute("aria-label", isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro");
+    tBtn.title = tBtn.getAttribute("aria-label");
+  }
+
+  // sincroniza <meta name="theme-color"> con la variable CSS --theme-color
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta){
+    // si el CSS define --theme-color la usamos; si no, fallback por tema
+    const cssColor = getComputedStyle(root).getPropertyValue("--theme-color").trim();
+    meta.setAttribute("content", cssColor || (theme==="light" ? "#ffffff" : "#0b0a11"));
+  }
+
+  // pista para el navegador
+  document.documentElement.style.colorScheme = (theme === "light" ? "light" : "dark");
+}
+function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY) || "dark"; // por defecto oscuro
+  applyTheme(saved);
+  const tBtn = $("#themeToggle");
+  if(tBtn){
+    tBtn.addEventListener("click", ()=>{
+      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      applyTheme(cur === "dark" ? "light" : "dark");
+    });
+  }
+}
+
 /* ========= Curados estáticos (NO API) ========= */
 const CURATED_RAW = [
   { "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
@@ -708,5 +747,6 @@ renderPlaylists();
 loadYTApi();
 bootHome();
 heroScrollTick(); // estado inicial
+initTheme();      // aplica tema guardado y engancha el botón
 
 document.title = "SanaveraYou";
