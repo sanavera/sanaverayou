@@ -1,13 +1,12 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SanaveraYou Pro</title>
 
-  <!-- Colorea la barra de navegación/estado en Android -->
+  <!-- Color de la barra del navegador (se actualiza también vía JS al cambiar el tema) -->
   <meta name="theme-color" content="#0b0a11" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0a11" />
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
@@ -21,6 +20,12 @@
     src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif"
     alt="Logo"
   />
+
+  <!-- Botón de tema (CSS puro) -->
+  <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
+    <span class="ico sun" aria-hidden="true"></span>
+    <span class="ico moon" aria-hidden="true"></span>
+  </button>
 
   <!-- Lupa flotante global -->
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
@@ -40,7 +45,6 @@
   <main id="views">
     <!-- Búsqueda -->
     <section id="view-search" class="view active">
-
       <!-- Home estática -->
       <section id="homeSection" class="home-section">
         <header class="home-head">
