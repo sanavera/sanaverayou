@@ -79,7 +79,7 @@ body{
   margin: 0 auto;
 }
 
-/* Filas */
+/* Filas comunes */
 .results,.fav-list{display:flex;flex-direction:column;gap:0}
 .fav-list, #queueList, .pl-list{ list-style:none; margin:0; padding:0; }
 .result-item,.fav-item,.queue-item{
@@ -142,6 +142,47 @@ body{
 .icon-btn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 .icon-btn.more, .icon-btn.more svg, .icon-btn.more path{color:var(--dots)!important;fill:var(--dots)!important}
 
+/* ====== PLAYLISTS (corregido) ====== */
+.pl-list{ display:flex; flex-direction:column; gap:10px; }
+
+.pl-item{
+  display:grid;
+  grid-template-columns: 50px 1fr auto; /* thumb | meta | botón */
+  align-items:center;
+  gap:12px;
+  background:var(--surface);
+  padding:12px;
+  border-radius:14px;
+  border:1px solid var(--border-subtle);
+}
+.pl-item:hover{ background:var(--surface-hover); border-color:var(--border); }
+
+.pl-item .more{ margin-left:auto; }
+
+.pl-thumb{
+  width:48px !important;
+  height:48px !important;
+  aspect-ratio:1/1;
+  border-radius:50%;
+  object-fit:cover;
+  display:block;
+  background:var(--surface-elevated);
+  border:2px solid rgba(255,255,255,.08);
+}
+
+.pl-meta{ min-width:0; }
+.pl-meta .title-text{
+  font-weight:600;
+  font-size:var(--title-size);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.pl-meta .subtitle{
+  margin-top:2px;
+  font-size:var(--subtitle-size);
+  color:var(--text-secondary);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
 /* ===== HERO Favoritos (colapsable) ===== */
 .fav-hero{
   position:sticky; top:8px; z-index:10;
@@ -159,7 +200,6 @@ body{
   background:linear-gradient(to top,rgba(8,9,12,.9)0%,rgba(8,9,12,.5)40%,rgba(8,9,12,0)100%);
 }
 .fav-hero-text{position:absolute;left:var(--side-pad);right:var(--side-pad);bottom:16px;transition:transform .25s ease, opacity .25s ease;}
-/* cuando colapsa, sube un poco el texto */
 .fav-hero{ --textShift: calc(6px * var(--hero-t, 0)); }
 .fav-hero .fav-hero-text{ transform:translateY(calc(-1 * var(--textShift))); }
 
