@@ -70,7 +70,9 @@ function initTheme(){
 }
 
 /* ========= Curados estáticos (NO API) ========= */
-const{ "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
+const CURATED_RAW = [
+
+{ "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
   { "id": "ANo7dUx0nM4", "title": "POP DE LOS 80'S EN ESPAÑOL / EXITOS DEL RECUERDO VOL 1", "author": "coyomanidj" },
   { "id": "iRR3DQBI4wo", "title": "Pop en Español Megamix (1980 a 1984)", "author": "DJ Páez de México" },
   { "id": "TBTQcdhsfZU", "title": "Pop En Español De Los 80 Y 90 Mix", "author": "bavikon" },
@@ -121,8 +123,8 @@ const{ "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "auth
   { "id": "3cJc-sxMTeE", "title": "Fito Páez - Euforia (1996) (Álbum Completo)", "author": "Capitán Fugitivo" },
   { "id": "hnIGIEYhOwY", "title": "Fito Paez - Grandes éxitos", "author": "Federico Peñaloza" },
   { "id": "dSgWyiKptVE", "title": "Fito Páez - Abre (1999) (Álbum completo)", "author": "Capitán Fugitivo" },
-      
-      // agregá los que quieras…
+  
+  // agregá los que quieras…
 ];
 function extractVideoId(input){
   if(!input) return "";
