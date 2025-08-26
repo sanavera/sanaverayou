@@ -31,17 +31,9 @@ let viewingPlaylistId = null;
 let ytPlayer = null, YT_READY = false, timer = null;
 
 /* ========= Curados estáticos (NO API) ========= */
-/* Reemplazá id: por el ID de YouTube o directamente url: con el link completo */
 const CURATED_RAW = [
-
-  
-  
   { "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
-
-
-
-
-  // podés seguir sumando…
+  // agregá los que quieras…
 ];
 function extractVideoId(input){
   if(!input) return "";
@@ -54,17 +46,12 @@ function mapCurated(raw){
     .map((r,i)=>{
       const id = extractVideoId(r.id || r.url || r);
       if(!id) return null;
-      return {
-        id,
-        title: r.title || `Mix ${i+1}`,
-        author: r.author || "",
-        thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
-      };
+      return { id, title: r.title || `Mix ${i+1}`, author: r.author || "", thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` };
     })
     .filter(Boolean);
 }
 let CURATED_VIDEOS = mapCurated(CURATED_RAW);
-let HOME_QUEUE = []; // subconjunto de 6 mostrado actualmente
+let HOME_QUEUE = [];
 
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
@@ -92,6 +79,7 @@ function switchView(id){
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
 
   if(id==="view-search") updateHomeGridVisibility();
+  heroScrollTick(); // refresca estado del hero al cambiar de vista
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -166,7 +154,7 @@ async function startSearch(query){
   items = [];
   $("#results").innerHTML = "";
 
-  updateHomeGridVisibility(); // ocultar grilla cuando empieza una búsqueda
+  updateHomeGridVisibility();
 
   try{
     const result = await youtubeSearch(query, '', 20);
@@ -249,20 +237,12 @@ function appendResults(chunk){
 }
 
 /* ========= Grilla estática (Inicio) ========= */
-function shuffle(arr){
-  const a = arr.slice();
-  for(let i=a.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]] = [a[j],a[i]];
-  }
-  return a;
-}
+function shuffle(arr){ const a = arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function renderHomeGrid(){
   const grid = $("#homeGrid"); if(!grid) return;
   grid.innerHTML = "";
-  const source = shuffle(CURATED_VIDEOS); // sin .slice
+  const source = shuffle(CURATED_VIDEOS);
   HOME_QUEUE = source;
-
   source.forEach((it, i)=>{
     const card = document.createElement("article");
     card.className = "home-card";
@@ -273,7 +253,6 @@ function renderHomeGrid(){
         <p class="home-subtitle">${it.author||"Mix"}</p>
       </div>`;
     card.onclick = ()=>{
-      // reproducir y armar cola con los 6 de HOME_QUEUE
       setQueue(HOME_QUEUE, "curated", i);
       playCurrent(true);
     };
@@ -696,9 +675,29 @@ const io = new IntersectionObserver((entries)=>{
 },{ root:null, rootMargin:"800px 0px", threshold:0 });
 io.observe($("#sentinel"));
 
+/* ========= HERO shrink en scroll ========= */
+function heroScrollTick(){
+  const active = document.querySelector(".view.active");
+  if(!active) return;
+
+  // Sólo en Favoritos y Reproductor
+  const hero = active.id==="view-favs" ? $("#favHero")
+             : active.id==="view-player" ? $("#npHero")
+             : null;
+  if(!hero) return;
+
+  const viewTop = active.getBoundingClientRect().top + window.scrollY;
+  const y = Math.max(0, window.scrollY - viewTop);    // desplazamiento dentro de la vista
+  const DIST = 240;                                    // recorrido para colapsar del todo
+  const t = Math.max(0, Math.min(1, y / DIST));        // 0→1
+  hero.style.setProperty("--hero-t", t);
+}
+window.addEventListener("scroll", heroScrollTick, {passive:true});
+window.addEventListener("resize", heroScrollTick);
+
 /* ========= Init ========= */
 function bootHome(){
-  CURATED_VIDEOS = mapCurated(CURATED_RAW); // por si editaste IDs/URLs
+  CURATED_VIDEOS = mapCurated(CURATED_RAW);
   renderHomeGrid();
   updateHomeGridVisibility();
 }
@@ -708,5 +707,6 @@ renderFavs();
 renderPlaylists();
 loadYTApi();
 bootHome();
+heroScrollTick(); // estado inicial
 
 document.title = "SanaveraYou";
