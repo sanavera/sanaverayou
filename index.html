@@ -1,17 +1,21 @@
+Index.html
 <!doctype html>
-<html lang="es" data-theme="dark">
+<html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SanaveraYou Pro</title>
 
+  <!-- Colorea la barra de navegación/estado en Android -->
   <meta name="theme-color" content="#0b0a11" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0a11" />
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <!-- Logo flotante -->
   <img
     id="logoFloat"
     class="logo-float"
@@ -19,23 +23,108 @@
     alt="Logo"
   />
 
-  <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
-    <span class="ico sun" aria-hidden="true"></span>
-    <span class="ico moon" aria-hidden="true"></span>
-  </button>
-
+  <!-- Lupa flotante global -->
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-    <span>Búsqueda</span>
+    <svg viewBox="0 0 24 24" width="20" height="20">
+      <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
+    </svg>
   </button>
 
-  <nav class="nav-dock">
-    <button data-view="view-home" class="nav-btn active">
-      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-      <span>Inicio</span>
-    </button>
-    <button data-view="view-search" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.51 6.51 0 00-6.02 6.02c.35 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.07.41 1.48 0 .41-.41.41-1.07 0-1.48L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM21.5 21.5 20 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
+  <!-- Overlay / card de búsqueda -->
+  <div id="searchOverlay" class="search-overlay">
+    <div class="search-card">
+      <input id="overlaySearchInput" placeholder="Buscá algo… (Enter)" autocomplete="off" />
+    </div>
+  </div>
+
+  <!-- Vistas -->
+  <main id="views">
+    <!-- Búsqueda -->
+    <section id="view-search" class="view active">
+
+      <!-- Home estática -->
+      <section id="homeSection" class="home-section">
+        <header class="home-head">
+          <h3 class="home-title">Para arrancar 🎧</h3>
+          <p class="home-sub"><marquee>Página en desarrollo..</marquee></p>
+        </header>
+        <section id="homeGrid" class="home-grid"></section>
+      </section>
+
+      <section id="results" class="results"></section>
+      <div id="sentinel" aria-hidden="true"></div>
+    </section>
+
+    <!-- Favoritos -->
+    <section id="view-favs" class="view">
+      <!-- HERO sticky + colapsable -->
+      <div class="fav-hero" id="favHero">
+        <div class="fav-hero-text">
+          <p class="muted up">TUS FAVORITOS</p>
+          <h2 id="favNowTitle">-</h2>
+        </div>
+      </div>
+      <section class="fav-list-wrap">
+        <ul id="favList" class="fav-list"></ul>
+      </section>
+    </section>
+
+    <!-- Playlists -->
+    <section id="view-playlists" class="view">
+      <header class="section-head">
+        <h3>Playlists</h3>
+        <div class="pl-actions">
+          <button id="btnNewPlaylist" class="pill">Nueva</button>
+        </div>
+      </header>
+      <ul id="plList" class="pl-list"></ul>
+      <div id="plEmpty" class="empty muted">Aún no hay playlists. Crea la primera ✨</div>
+    </section>
+
+    <!-- Reproductor -->
+    <section id="view-player" class="view now-playing">
+      <!-- HERO sticky + colapsable -->
+      <div id="npHero" class="np-hero">
+        <button id="npPlay" class="np-play" aria-label="Play/Pause">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+        <button id="npMenu" class="np-menu" aria-label="Menu">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
+      </div>
+      <div class="np-meta">
+        <div id="npTitle" class="np-title">Elegí una canción</div>
+        <div id="npSub" class="np-sub muted">-</div>
+      </div>
+
+      <section id="queuePanel" class="queue-panel hide">
+        <header class="section-head">
+          <h3 id="queueTitle">Playlist</h3>
+        </header>
+        <ul id="queueList" class="fav-list"></ul>
+      </section>
+    </section>
+  </main>
+
+  <!-- Mini-player unido a la barra -->
+  <section id="seekDock" class="seek-dock">
+    <div id="miniNow" class="mini-now hide">
+      <img id="miniThumb" class="mini-thumb" alt="" />
+      <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+      </button>
+      <input id="seek" class="seek-bar mini" type="range" min="0" max="1000" value="0" />
+      <div class="time-inline"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+      <div class="mini-credit">Desarrollado por Sebastian Sanavera</div>
+    </div>
+  </section>
+
+  <!-- Barra inferior -->
+  <nav id="bottomNav" class="bottom-nav">
+    <button data-view="view-search" class="nav-btn active">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
       <span>Búsqueda</span>
     </button>
     <button data-view="view-favs" class="nav-btn">
@@ -43,102 +132,31 @@
       <span>Favoritos</span>
     </button>
     <button data-view="view-playlists" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M3 6h14v2H3V6zm0 4h14v2H3v-2zm0 4h10v2H3v-2zm16-8h2v1h-2V6zm0 4h2v1h-2v-1zM19 14h2v1h-2v-1z"/></svg>
-      <span>Listas</span>
+      <svg viewBox="0 0 24 24"><path d="M3 6h14v2H3V6zm0 4h14v2H3v-2zm0 4h10v2H3v-2zm16-8h2v10h-2V6zm0 12h2v2h-2v-2z"/></svg>
+      <span>Playlists</span>
+    </button>
+    <button data-view="view-player" class="nav-btn">
+      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
+      <span>Reproductor</span>
     </button>
   </nav>
 
-  <div class="mini-player">
-    <div class="mini-cover">
-      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'><path d='M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-12h2v6h-2v-6zm3 0h2v6h-2v-6zm-6 0h2v6h-2v-6z'/></svg>" alt="" id="miniCover" />
-    </div>
-    <div class="mini-meta">
-      <div class="mini-artist" id="miniArtist"></div>
-      <div class="mini-title" id="miniTitle"></div>
-    </div>
-    <div class="mini-controls">
-      <button class="mini-btn" id="miniPrev"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
-      <button class="mini-btn play-btn" id="miniPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-      <button class="mini-btn" id="miniNext"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg></button>
-    </div>
-    <div class="track-progress" id="trackProgress"></div>
-  </div>
-
-  <div id="view-player" class="view">
-    <div class="player-header">
-      <button class="player-close" aria-label="Cerrar reproductor">
-        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
-      <div class="player-title">Reproduciendo</div>
-      <div class="player-queue-btn">
-        <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm0 4h18v2H3v-2zm0 4h18v2H3v-2zm0 4h18v2H3v-2z"/></svg>
+  <!-- Sheets -->
+  <div id="menuSheet" class="sheet"></div>
+  <div id="playlistSheet" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-title">Agregar a playlist</div>
+      <div id="plChoices" class="sheet-list"></div>
+      <div class="sheet-row">
+        <input id="plNewName" placeholder="Nombre nueva playlist" />
+        <button id="plCreate" class="pill">Crear</button>
       </div>
-    </div>
-    <div id="npHero" class="player-hero">
-      <img id="npCover" src="" alt="" />
-      <div class="player-meta">
-        <h1 id="npTitle"></h1>
-        <div id="npAuthor"></div>
-      </div>
-    </div>
-    <div class="player-controls">
-      <div class="player-time" id="playerTime"></div>
-      <div class="track-progress large" id="trackProgressLarge"></div>
-      <div class="player-time" id="playerDuration"></div>
-      <div class="player-btns">
-        <button id="playerPrev" class="player-btn"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
-        <button id="playerPlay" class="player-btn play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-        <button id="playerNext" class="player-btn"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg></button>
-      </div>
-      <div class="player-bottom">
-        <button id="playerShuffle" class="player-btn btn-dots"><svg viewBox="0 0 24 24"><path d="M14.83 13.91l-1.34-1.34c.09-.34.2-.66.3-1.01l-1.63-1.63c-.22.18-.47.34-.74.48L9.93 9.4c.5-.18.99-.41 1.47-.68l-1.57-1.57c-.72.63-1.62 1.14-2.61 1.47L3 9.4V6h1.22l2.1-2.1c1.23-.48 2.53-.7 3.84-.7 4.96 0 9 4.04 9 9s-4.04 9-9 9c-1.31 0-2.61-.22-3.84-.7l-2.1-2.1H3v-3.41l1.57-1.57c.72.63 1.62 1.14 2.61 1.47L6 14.59v.88l-1.12.87c-.83.65-1.92 1.02-3.05 1.02a4.994 4.994 0 01-5-5 5.01 5.01 0 015-5c1.13 0 2.22.37 3.05 1.02l.87 1.12V13.8a.997.997 0 01-.1-.3c.48-.27.97-.5 1.45-.68l1.63 1.63c-.22.18-.47.34-.74.48L13 14.8c.5-.18.99-.41 1.47-.68l1.57 1.57c-.72.63-1.62 1.14-2.61 1.47L3 18.4V15h1.22l2.1-2.1c1.23-.48 2.53-.7 3.84-.7 4.96 0 9 4.04 9 9s-4.04 9-9 9c-1.31 0-2.61-.22-3.84-.7l-2.1-2.1H3v-3.41l1.57-1.57c.72.63 1.62 1.14 2.61 1.47L6 14.59v.88l-1.12.87c-.83.65-1.92 1.02-3.05 1.02a4.994 4.994 0 01-5-5 5.01 5.01 0 015-5c1.13 0 2.22.37 3.05 1.02l.87 1.12V13.8a.997.997 0 01-.1-.3z"/></svg></button>
-        <button id="playerRepeat" class="player-btn btn-dots"><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
-      </div>
+      <button id="plCancel" class="sheet-item ghost">Cancelar</button>
     </div>
   </div>
 
-  <main class="app-main">
-
-    <div id="view-home" class="view active">
-      <div class="header">
-        <h1 class="header-title">Inicio</h1>
-      </div>
-      <div id="homeGrid" class="home-grid"></div>
-    </div>
-
-    <div id="view-search" class="view">
-      <div class="search-header">
-        <div class="search-bar">
-          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-          <input type="search" placeholder="Busca videos, música..." id="searchBox" />
-          <button id="clearSearch" class="clear-btn" aria-label="Limpiar búsqueda">
-            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-          </button>
-        </div>
-      </div>
-      <div id="searchGrid" class="search-grid"></div>
-      <div id="sentinel"></div>
-    </div>
-
-    <div id="view-favs" class="view">
-      <div id="favHero" class="hero-container">
-        <img id="favCover" class="hero-cover" src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif" alt="Favoritos" />
-        <div class="hero-meta">
-          <h1 class="hero-title">Favoritos</h1>
-          <div class="hero-subtitle">Los que amás</div>
-        </div>
-      </div>
-      <ul id="favsList" class="track-list"></ul>
-    </div>
-
-    <div id="view-playlists" class="view">
-      <div class="header">
-        <h1 class="header-title">Listas de reproducción</h1>
-      </div>
-      <div id="playlistsGrid" class="home-grid"></div>
-    </div>
-
-  </main>
+  <!-- Player de YouTube oculto -->
+  <div id="yt-holder"><div id="player"></div></div>
 
   <script src="script.js"></script>
 </body>
