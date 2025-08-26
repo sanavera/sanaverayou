@@ -47,7 +47,6 @@ body{
 }
 .search-fab svg,
 .search-fab path{ fill:currentColor; }
-
 .search-fab:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
 .search-fab-global{
   position:fixed; right:12px; top:12px; z-index:1200;
@@ -73,7 +72,7 @@ body{
 .view{display:none; padding:52px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 16px + var(--safe));}
 .view.active{display:block}
 
-/* Centro listas */
+/* Centro de listas */
 :where(.results, .fav-list, #queueList, .pl-list){
   max-width: 820px;
   margin: 0 auto;
@@ -142,44 +141,38 @@ body{
 .icon-btn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 .icon-btn.more, .icon-btn.more svg, .icon-btn.more path{color:var(--dots)!important;fill:var(--dots)!important}
 
-/* ====== PLAYLISTS (corregido) ====== */
+/* ====== PLAYLISTS (fix: vuelven a FLEX) ====== */
 .pl-list{ display:flex; flex-direction:column; gap:10px; }
 
 .pl-item{
-  display:grid;
-  grid-template-columns: 50px 1fr auto; /* thumb | meta | botón */
+  display:flex;                          /* ← antes grid (rompía el alto) */
   align-items:center;
   gap:12px;
   background:var(--surface);
-  padding:12px;
+  padding:10px 12px;
   border-radius:14px;
   border:1px solid var(--border-subtle);
 }
 .pl-item:hover{ background:var(--surface-hover); border-color:var(--border); }
 
-.pl-item .more{ margin-left:auto; }
-
+.pl-meta{
+  display:flex; align-items:center; gap:12px;
+  min-width:0; flex:1;                  /* textos con ellipsis */
+}
 .pl-thumb{
-  width:48px !important;
-  height:48px !important;
-  aspect-ratio:1/1;
+  width:48px; height:48px;
   border-radius:50%;
-  object-fit:cover;
-  display:block;
+  object-fit:cover; display:block;
   background:var(--surface-elevated);
   border:2px solid rgba(255,255,255,.08);
 }
-
-.pl-meta{ min-width:0; }
+.pl-item .more{ margin-left:auto; }
 .pl-meta .title-text{
-  font-weight:600;
-  font-size:var(--title-size);
+  font-weight:600; font-size:var(--title-size);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .pl-meta .subtitle{
-  margin-top:2px;
-  font-size:var(--subtitle-size);
-  color:var(--text-secondary);
+  margin-top:2px; font-size:var(--subtitle-size); color:var(--text-secondary);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
@@ -333,7 +326,6 @@ body{
 .home-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 0 0 8px; }
 .home-title{ margin:0; font-size:16px; font-weight:700; }
 .home-sub{ margin:0; font-size:12px; color:var(--text-secondary); }
-
 .home-grid{
   display:grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
