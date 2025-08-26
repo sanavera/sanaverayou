@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="es" data-theme="dark">
+<html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SanaveraYou Pro</title>
 
-  <!-- Color de la barra del navegador (se actualiza y JS al cambiar el tema) -->
+  <!-- Colorea la barra de navegación/estado en Android -->
   <meta name="theme-color" content="#0b0a11" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0a11" />
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
@@ -17,15 +18,9 @@
   <img
     id="logoFloat"
     class="logo-float"
-    src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlÃ©tico-independiente-avellaneda.gif"
+    src="https://media.tenor.com/1cXi0R-pjyoAAAAj/club-atlético-independiente-avellaneda.gif"
     alt="Logo"
   />
-
-  <!-- BotÃ³n de tema (CSS puro) -->
-  <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
-    <span class="ico sun" aria-hidden="true"></span>
-    <span class="ico moon" aria-hidden="true"></span>
-  </button>
 
   <!-- Lupa flotante global -->
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
@@ -34,22 +29,23 @@
     </svg>
   </button>
 
-  <!-- Overlay / card de bÃºsqueda -->
+  <!-- Overlay / card de búsqueda -->
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
-      <input id="overlaySearchInput" placeholder="BuscÃ¡ algoâ€¦ (Enter)" autocomplete="off" />
+      <input id="overlaySearchInput" placeholder="Buscá algo… (Enter)" autocomplete="off" />
     </div>
   </div>
 
   <!-- Vistas -->
   <main id="views">
-    <!-- BÃºsqueda -->
+    <!-- Búsqueda -->
     <section id="view-search" class="view active">
-      <!-- Home estÃ¡tica -->
+
+      <!-- Home estática -->
       <section id="homeSection" class="home-section">
         <header class="home-head">
-          <h3 class="home-title">Para arrancar ðŸŽ§</h3>
-          <p class="home-sub"><marquee>PÃ¡gina en desarrollo..</marquee></p>
+          <h3 class="home-title">Para arrancar 🎧</h3>
+          <p class="home-sub"><marquee>Página en desarrollo..</marquee></p>
         </header>
         <section id="homeGrid" class="home-grid"></section>
       </section>
@@ -81,7 +77,7 @@
         </div>
       </header>
       <ul id="plList" class="pl-list"></ul>
-      <div id="plEmpty" class="empty muted">AÃºn no hay playlists. Crea la primera âœ¨</div>
+      <div id="plEmpty" class="empty muted">Aún no hay playlists. Crea la primera ✨</div>
     </section>
 
     <!-- Reproductor -->
@@ -97,7 +93,7 @@
         </button>
       </div>
       <div class="np-meta">
-        <div id="npTitle" class="np-title">ElegÃ­ una canciÃ³n</div>
+        <div id="npTitle" class="np-title">Elegí una canción</div>
         <div id="npSub" class="np-sub muted">-</div>
       </div>
 
@@ -128,7 +124,7 @@
   <nav id="bottomNav" class="bottom-nav">
     <button data-view="view-search" class="nav-btn active">
       <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
-      <span>BÃºsqueda</span>
+      <span>Búsqueda</span>
     </button>
     <button data-view="view-favs" class="nav-btn">
       <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
