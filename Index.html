@@ -25,96 +25,110 @@
   </button>
 
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-    <span>Búsqueda</span>
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
+    </svg>
   </button>
 
-  <div class="content-wrapper">
-    <div id="view-home" class="view active view-home">
-      <div class="home-hero-header">
-        <h1 class="home-title">Bienvenido, usuario de YouTube</h1>
-        <p class="home-sub">Videos destacados elegidos para ti</p>
-      </div>
-      <div id="homeGrid" class="home-grid"></div>
-      <div id="sentinel"></div>
-    </div>
-
-    <div id="view-search" class="view view-search">
-      <div class="search-input-wrapper">
-        <input
-          type="text"
-          id="searchInput"
-          class="search-input"
-          placeholder="Buscar videos..."
-          autocomplete="off"
-          autocorrect="off"
-        />
-        <button id="search-clear-btn" class="search-clear-btn" aria-label="Borrar búsqueda">
-          <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-      </div>
-      <div id="searchResults" class="search-results-grid"></div>
-      <div id="sentinel-search"></div>
-    </div>
-
-    <div id="view-player" class="view view-player">
-      <div id="npHero" class="hero-header">
-        <button id="playerHeroBack" class="back-btn" aria-label="Volver">
-          <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-        </button>
-        <div class="hero-title-box">
-          <h1 id="npHeroTitle" class="hero-title"></h1>
-          <p id="npHeroAuthor" class="hero-sub"></p>
-        </div>
-      </div>
-      <div id="youtubePlayer"></div>
-    </div>
-    <div id="view-favs" class="view view-favs">
-      <div id="favHero" class="hero-header">
-        <div class="hero-title-box">
-          <h1 class="hero-title">Favoritos</h1>
-          <p class="hero-sub">Tus videos guardados</p>
-        </div>
-      </div>
-      <div id="favsGrid" class="favs-grid"></div>
-    </div>
-
-    <div id="view-playlists" class="view view-playlists">
-      <div id="playlistsHero" class="hero-header">
-        <div class="hero-title-box">
-          <h1 class="hero-title">Playlists</h1>
-          <p class="hero-sub">Tus listas de reproducción guardadas</p>
-        </div>
-      </div>
-      <div id="playlistsGrid" class="playlists-grid"></div>
+  <div id="searchOverlay" class="search-overlay">
+    <div class="search-card">
+      <input id="overlaySearchInput" placeholder="Buscá algo… (Enter)" autocomplete="off" />
     </div>
   </div>
 
-  <div id="miniplayer" class="miniplayer-container">
-    <div class="miniplayer-track-info">
-      <button id="miniPlayerTrack" class="miniplayer-track">
-        <h2 id="miniPlayerTitle" class="miniplayer-title"></h2>
-        <p id="miniPlayerAuthor" class="miniplayer-author"></p>
+  <main id="views">
+    <section id="view-search" class="view active">
+      <section id="homeSection" class="home-section">
+        <header class="home-head">
+          <h3 class="home-title">Para arrancar 🎧</h3>
+          <p class="home-sub"><marquee>Página en desarrollo..</marquee></p>
+        </header>
+        <section id="homeGrid" class="home-grid"></section>
+      </section>
+
+      <section id="results" class="results"></section>
+      <div id="sentinel" aria-hidden="true"></div>
+    </section>
+
+    <section id="view-favs" class="view">
+      <div class="fav-hero" id="favHero">
+        <div class="fav-hero-text">
+          <p class="muted up">TUS FAVORITOS</p>
+          <h2 id="favNowTitle">-</h2>
+        </div>
+      </div>
+      <section class="fav-list-wrap">
+        <ul id="favList" class="fav-list"></ul>
+      </section>
+    </section>
+
+    <section id="view-playlists" class="view">
+      <header class="section-head">
+        <h3>Playlists</h3>
+        <div class="pl-actions">
+          <button id="btnNewPlaylist" class="pill">Nueva</button>
+        </div>
+      </header>
+      <ul id="plList" class="pl-list"></ul>
+      <div id="plEmpty" class="empty muted hide">Aún no hay playlists. Crea la primera ✨</div>
+    </section>
+
+    <section id="view-player" class="view now-playing">
+      <div id="npHero" class="np-hero"></div>
+      <div class="np-meta">
+        <div id="npTitle" class="np-title">Elegí una canción</div>
+        <div id="npSub" class="np-sub muted">-</div>
+      </div>
+
+      <div class="player-controls">
+        <div class="time-control">
+            <span id="cur">0:00</span>
+            <input id="seek" type="range" min="0" max="1000" value="0" />
+            <span id="dur">0:00</span>
+        </div>
+        <div class="buttons-control">
+            <button id="btnShuffle" class="icon-btn-player" aria-label="Aleatorio"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+            <button id="btnPrev" class="icon-btn-player" aria-label="Anterior"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+            <button id="npPlay" class="np-play" aria-label="Play/Pause">
+                <svg class="i-play" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                <svg class="i-pause" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <button id="btnNext" class="icon-btn-player" aria-label="Siguiente"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+            <button id="btnRepeat" class="icon-btn-player" aria-label="Repetir"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
+        </div>
+         <div class="volume-control">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <input id="volumeSeek" type="range" min="0" max="100" value="100">
+        </div>
+      </div>
+
+      <section id="queuePanel" class="queue-panel hide">
+        <header class="section-head">
+          <h3 id="queueTitle">Playlist</h3>
+        </header>
+        <ul id="queueList" class="fav-list"></ul>
+      </section>
+    </section>
+  </main>
+
+  <section id="seekDock" class="seek-dock">
+    <div id="miniNow" class="mini-now hide">
+      <img id="miniThumb" class="mini-thumb" alt="" />
+      <div class="mini-meta" onclick="switchView('view-player')">
+        <div id="miniTitle" class="title-text"></div>
+        <div id="miniAuthor" class="subtitle"></div>
+      </div>
+      <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
       </button>
-      <div class="miniplayer-controls">
-        <button id="miniPlayerToggle" class="miniplayer-btn" aria-label="Reproducir/Pausar">
-          <svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="pause-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-        </button>
-        <button id="miniPlayerClose" class="miniplayer-btn" aria-label="Cerrar reproductor">
-          <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-      </div>
+      <div class="mini-credit">Desarrollado por Sebastian Sanavera</div>
     </div>
-  </div>
+  </section>
 
-  <nav id="navBar" class="nav-bar">
-    <button data-view="view-home" class="nav-btn active">
-      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-      <span>Inicio</span>
-    </button>
-    <button data-view="view-search" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.28.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+  <nav id="bottomNav" class="bottom-nav">
+    <button data-view="view-search" class="nav-btn active">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
       <span>Búsqueda</span>
     </button>
     <button data-view="view-favs" class="nav-btn">
@@ -122,12 +136,30 @@
       <span>Favoritos</span>
     </button>
     <button data-view="view-playlists" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M3 6h14v2H3V6zm0 4h14v2H3v-2zm0 4h10v2H3v-2zm16-8h2v10h-2V6zm0 12h2v4h-2v-4z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M3 6h14v2H3V6zm0 4h14v2H3v-2zm0 4h10v2H3v-2zm16-8h2v10h-2V6zm0 12h2v2h-2v-2z"/></svg>
       <span>Playlists</span>
+    </button>
+    <button data-view="view-player" class="nav-btn">
+      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
+      <span>Reproductor</span>
     </button>
   </nav>
 
+  <div id="menuSheet" class="sheet"></div>
+  <div id="playlistSheet" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-title">Agregar a playlist</div>
+      <div id="plChoices" class="sheet-list"></div>
+      <div class="sheet-row">
+        <input id="plNewName" placeholder="Nombre nueva playlist" />
+        <button id="plCreate" class="pill">Crear</button>
+      </div>
+      <button id="plCancel" class="sheet-item ghost">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="yt-holder"><div id="player"></div></div>
+
   <script src="script.js"></script>
-  <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
