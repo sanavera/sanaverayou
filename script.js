@@ -34,10 +34,9 @@ let ytPlayer = null, YT_READY = false, timer = null;
 const THEME_KEY = "sy_theme_v1";
 function applyTheme(theme){
   const root = document.documentElement;
-  root.setAttribute("data-theme", theme);                // activa variables CSS
+  root.setAttribute("data-theme", theme);
   localStorage.setItem(THEME_KEY, theme);
 
-  // icono del botón (sun/moon hecho en CSS)
   const tBtn = $("#themeToggle");
   if(tBtn){
     const isLight = theme === "light";
@@ -46,19 +45,16 @@ function applyTheme(theme){
     tBtn.title = tBtn.getAttribute("aria-label");
   }
 
-  // sincroniza <meta name="theme-color"> con la variable CSS --theme-color
   const meta = document.querySelector('meta[name="theme-color"]');
   if(meta){
-    // si el CSS define --theme-color la usamos; si no, fallback por tema
     const cssColor = getComputedStyle(root).getPropertyValue("--theme-color").trim();
     meta.setAttribute("content", cssColor || (theme==="light" ? "#ffffff" : "#0b0a11"));
   }
 
-  // pista para el navegador
   document.documentElement.style.colorScheme = (theme === "light" ? "light" : "dark");
 }
 function initTheme(){
-  const saved = localStorage.getItem(THEME_KEY) || "dark"; // por defecto oscuro
+  const saved = localStorage.getItem(THEME_KEY) || "dark";
   applyTheme(saved);
   const tBtn = $("#themeToggle");
   if(tBtn){
@@ -71,8 +67,7 @@ function initTheme(){
 
 /* ========= Curados estáticos (NO API) ========= */
 const CURATED_RAW = [
-
-{ "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
+  { "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
   { "id": "ANo7dUx0nM4", "title": "POP DE LOS 80'S EN ESPAÑOL / EXITOS DEL RECUERDO VOL 1", "author": "coyomanidj" },
   { "id": "iRR3DQBI4wo", "title": "Pop en Español Megamix (1980 a 1984)", "author": "DJ Páez de México" },
   { "id": "TBTQcdhsfZU", "title": "Pop En Español De Los 80 Y 90 Mix", "author": "bavikon" },
@@ -122,9 +117,7 @@ const CURATED_RAW = [
   { "id": "iA6JCPP1Ehs", "title": "Fito Páez - El amor después del amor (1992) (Álbum completo)", "author": "Capitán Fugitivo" },
   { "id": "3cJc-sxMTeE", "title": "Fito Páez - Euforia (1996) (Álbum Completo)", "author": "Capitán Fugitivo" },
   { "id": "hnIGIEYhOwY", "title": "Fito Paez - Grandes éxitos", "author": "Federico Peñaloza" },
-  { "id": "dSgWyiKptVE", "title": "Fito Páez - Abre (1999) (Álbum completo)", "author": "Capitán Fugitivo" },
-  
-  // agregá los que quieras…
+  { "id": "dSgWyiKptVE", "title": "Fito Páez - Abre (1999) (Álbum completo)", "author": "Capitán Fugitivo" }
 ];
 function extractVideoId(input){
   if(!input) return "";
@@ -170,7 +163,7 @@ function switchView(id){
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
 
   if(id==="view-search") updateHomeGridVisibility();
-  heroScrollTick(); // refresca estado del hero al cambiar de vista
+  heroScrollTick();
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -771,16 +764,15 @@ function heroScrollTick(){
   const active = document.querySelector(".view.active");
   if(!active) return;
 
-  // Sólo en Favoritos y Reproductor
   const hero = active.id==="view-favs" ? $("#favHero")
              : active.id==="view-player" ? $("#npHero")
              : null;
   if(!hero) return;
 
   const viewTop = active.getBoundingClientRect().top + window.scrollY;
-  const y = Math.max(0, window.scrollY - viewTop);    // desplazamiento dentro de la vista
-  const DIST = 240;                                    // recorrido para colapsar del todo
-  const t = Math.max(0, Math.min(1, y / DIST));        // 0→1
+  const y = Math.max(0, window.scrollY - viewTop);
+  const DIST = 240;
+  const t = Math.max(0, Math.min(1, y / DIST));
   hero.style.setProperty("--hero-t", t);
 }
 window.addEventListener("scroll", heroScrollTick, {passive:true});
@@ -798,7 +790,7 @@ renderFavs();
 renderPlaylists();
 loadYTApi();
 bootHome();
-heroScrollTick(); // estado inicial
-initTheme();      // aplica tema guardado y engancha el botón
+heroScrollTick();
+initTheme();
 
 document.title = "SanaveraYou";
