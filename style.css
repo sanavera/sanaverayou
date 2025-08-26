@@ -42,7 +42,7 @@ html[data-theme="light"]{
   --nav-ink:#475569; --nav-ink-hover:#111827; --nav-ink-active:#111827;
 }
 
-html{color-scheme:dark}
+html{color-scheme:dark; scroll-behavior: smooth;}
 *{box-sizing:border-box}
 body{
   margin:0;
@@ -134,7 +134,7 @@ html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a;
 /* ——— Vistas ——— */
 .view{
     display:none;
-    padding:52px var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 16px + var(--safe));
+    padding:var(--side-pad) var(--side-pad) calc(var(--seek-h) + var(--nav-h) + 16px + var(--safe));
     animation: fadeIn .4s ease-in-out;
 }
 .view.active{display:block}
@@ -234,38 +234,61 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
 .pl-meta .title-text{ font-weight:600; font-size:var(--title-size); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pl-meta .subtitle{ margin-top:2px; font-size:var(--subtitle-size); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-/* ===== HERO Favoritos (colapsable) ===== */
-.fav-hero{
-  position:sticky; top:8px; z-index:10; width:100%;
-  --hero-big: clamp(200px, 42vh, 360px); --hero-small: 120px;
+/* ===== HERO (Favoritos y Player) ===== */
+.fav-hero, .np-hero {
+  position: sticky;
+  top: var(--side-pad); /* Se pega debajo del padding superior de la vista */
+  z-index: 10;
+  background: var(--surface) center/cover no-repeat;
+  border: 1px solid rgba(255,255,255,.08);
+  margin-bottom: 12px;
+  transition: height .3s ease, border-radius .3s ease;
+  will-change: height;
+  --hero-t: 0; /* Variable para controlar la compresión */
+}
+
+/* HERO Favoritos */
+.fav-hero {
+  width: 100%;
+  --hero-big: clamp(200px, 42vh, 360px);
+  --hero-small: 120px;
   height: calc(var(--hero-big) - (var(--hero-big) - var(--hero-small)) * var(--hero-t, 0));
-  background:var(--surface) center/cover no-repeat; border-radius:16px; border:1px solid rgba(255,255,255,.08);
-  margin-bottom:12px; transition:height .3s ease, border-radius .3s ease; will-change: height;
+  border-radius: 16px;
 }
 .fav-hero::before{
   content:"";position:absolute;inset:0;border-radius:inherit;
   background:linear-gradient(to top,rgba(8,9,12,.9)0%,rgba(8,9,12,.5)40%,rgba(8,9,12,0)100%);
 }
-/* texto en el hero de favoritos */
-.fav-hero .fav-hero-text{
+.fav-hero-text{
   position:absolute; left:16px; right:16px; bottom:12px; z-index:1; color:#fff;
+  opacity: calc(1 - var(--hero-t, 0) * 2); /* Desaparece el texto al encoger */
 }
 
-/* ===== HERO Player (colapsable) ===== */
-.np-hero{
-  width:min(420px, 90vw); margin:8px auto 10px;
-  aspect-ratio: 1/1;
-  background:var(--surface) center/cover no-repeat;
-  border-radius:22px;
-  border:1px solid rgba(255,255,255,.1);
-  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+/* HERO Player */
+.np-hero {
+    width: min(420px, 90vw);
+    margin-left: auto;
+    margin-right: auto;
+    --hero-big: clamp(260px, 56vw, 420px);
+    --hero-small: 160px;
+    height: calc(var(--hero-big) - (var(--hero-big) - var(--hero-small)) * var(--hero-t, 0));
+    aspect-ratio: 1/1;
+    border-radius: 22px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.2);
 }
-.np-meta{text-align:center; padding: 0 10px; margin-bottom: 20px;}
+
+/* Contenido del player que no es el hero */
+.player-content {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.np-meta{text-align:center; padding: 0 10px; margin: 16px 0 20px;}
 .np-title{font-size:18px;font-weight:700;margin:6px 0 4px}
 .np-sub{font-size:13px}
 
 /* Controles Player */
-.player-controls { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; max-width: 500px; margin: 0 auto; }
+.player-controls { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;}
 .time-control { display: flex; align-items: center; gap: 12px; width: 100%; font-size: 12px; color: var(--text-secondary); }
 .time-control input[type="range"] { flex: 1; }
 .buttons-control { display: flex; align-items: center; justify-content: center; gap: 16px; width: 100%; }
@@ -284,7 +307,7 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
 .np-play .i-pause{display:none}.np-play.playing .i-play{display:none}.np-play.playing .i-pause{display:block}
 
 /* Volume Control */
-.volume-control { display: flex; align-items: center; gap: 8px; width: 50%; max-width: 200px; color: var(--text-secondary); }
+.volume-control { display: flex; align-items: center; gap: 8px; width: 70%; max-width: 240px; color: var(--text-secondary); }
 .volume-control input[type="range"] { flex: 1; }
 
 /* Input Range Styles */
@@ -308,13 +331,17 @@ input[type="range"]::-webkit-slider-thumb {
     background: var(--accent-light);
     cursor: pointer;
     border-radius: 50%;
+    border: 3px solid var(--dock-bg);
 }
+html[data-theme="light"] input[type="range"]::-webkit-slider-thumb { border-color: #fff; }
+
 input[type="range"]::-moz-range-thumb {
     width: 16px;
     height: 16px;
     background: var(--accent-light);
     cursor: pointer;
     border-radius: 50%;
+    border: 3px solid var(--dock-bg);
 }
 
 
@@ -327,6 +354,9 @@ input[type="range"]::-moz-range-thumb {
   display:flex; align-items:center; justify-content:space-between;
   padding:0 var(--side-pad); margin:10px 0;
 }
+#view-search .section-head {
+    padding: 0;
+}
 
 /* Mini-player unido a la barra inferior */
 .seek-dock{
@@ -335,12 +365,12 @@ input[type="range"]::-moz-range-thumb {
   border-top:1px solid var(--border-subtle);
   padding:6px 10px 8px;
   box-shadow:0 -4px 12px rgba(0,0,0,.18);
-  transform: translateY(100%);
-  transition: transform .3s ease-in-out;
+  transform: translateY(120%);
+  transition: transform .4s cubic-bezier(.4,0,.2,1);
 }
 .seek-dock.show { transform: translateY(0); }
 
-.mini-now{display:flex;align-items:center;gap:12px;background:var(--mini-bg);border:1px solid var(--border-subtle);border-radius:12px;padding:6px 8px}
+.mini-now{display:flex;align-items:center;gap:12px;}
 .mini-thumb{width:40px;height:40px;border-radius:8px;object-fit:cover;border:2px solid var(--border-subtle)}
 .mini-meta { flex: 1; min-width: 0; cursor: pointer; }
 #miniTitle { font-size: 13px; font-weight: 600; }
@@ -353,7 +383,6 @@ input[type="range"]::-moz-range-thumb {
   flex-shrink: 0;
 }
 .mini-btn .i-pause{display:none}.mini-btn.playing .i-play{display:none}.mini-btn.playing .i-pause{display:block}
-.mini-credit{display:none; text-align:center;font-size:10px;color:var(--text-muted);margin-top:2px}
 
 /* ===== Menú de los 3 puntitos (Sheet) ===== */
 .sheet{position:fixed; inset:0; display:none; z-index:1300; background:rgba(8,9,12,.55); backdrop-filter:blur(6px);}
@@ -439,11 +468,11 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   background:var(--surface); border:1px solid var(--border-subtle);
   cursor:pointer; transition:var(--fast); aspect-ratio:1/1;
   opacity: 0;
-  transform: translateY(20px);
-  animation: card-appear .5s forwards;
+  transform: translateY(20px) scale(0.98);
+  animation: card-appear .6s cubic-bezier(.4,0,.2,1) forwards;
 }
 @keyframes card-appear {
-    to { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .home-card:hover{ transform:translateY(-2px) scale(1.02); background:var(--surface-hover); border-color:var(--border); }
 .home-card img{ width:100%; height:100%; object-fit:cover; display:block; }
