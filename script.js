@@ -178,7 +178,6 @@ const CURATED_RAW = [
   { "id": "hnIGIEYhOwY", "title": "Fito Paez - Grandes éxitos", "author": "Federico Peñaloza" },
   { "id": "dSgWyiKptVE", "title": "Fito Páez - Abre (1999) (Álbum completo)", "author": "Capitán Fugitivo" }
 ];
-
 function extractVideoId(input){
   if(!input) return "";
   const s = String(input);
@@ -222,10 +221,11 @@ function switchView(id){
   const view = $("#"+id);
   if (view) {
     view.classList.add("active");
-    view.scrollTop = 0; // Reset scroll on view change
   }
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
   if(id==="view-search") updateHomeGridVisibility();
+  document.body.scrollTop = 0; // For Safari
+  document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
   heroScrollTick();
 }
 $("#bottomNav").addEventListener("click", e=>{
@@ -702,7 +702,6 @@ function startTimer(){
     $("#cur").textContent = fmt(cur); $("#dur").textContent = fmt(dur);
     $("#seek").value = dur? Math.floor((cur/dur)*1000) : 0;
     
-    // Guardar estado periódicamente solo si está sonando
     savePlayerState();
   }, 500);
 }
@@ -907,7 +906,6 @@ document.addEventListener("visibilitychange", ()=>{
   if(!YT_READY || !currentTrack) return;
   if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
     const t = ytPlayer.getCurrentTime()||0;
-    // Este truco fuerza al navegador (especialmente en móviles) a mantener el audio activo
     ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds:t, suggestedQuality:"auto" });
     ytPlayer.playVideo();
   }
@@ -948,17 +946,24 @@ function heroScrollTick(){
   if(!activeView) return;
 
   const hero = activeView.querySelector(".fav-hero, .np-hero");
-  if(!hero) return;
+  if(!hero) { return; }
   
-  const y = activeView.scrollTop;
+  // Calcula la posición Y de la vista activa en el documento
+  const viewTop = activeView.getBoundingClientRect().top + window.scrollY;
+  // Calcula cuánto se ha scrolleado DENTRO de la vista
+  const y = Math.max(0, window.scrollY - viewTop);
+  
   const DIST = 240; // Distancia en píxeles para completar la transición
   const t = Math.max(0, Math.min(1, y / DIST));
   hero.style.setProperty("--hero-t", t);
-}
 
-$$('.view').forEach(view => {
-    view.addEventListener("scroll", heroScrollTick, { passive: true });
-});
+  // También se puede afectar a otros elementos
+  const playerControls = activeView.querySelector('.player-controls');
+  if(playerControls) {
+      playerControls.style.setProperty("--hero-t", t);
+  }
+}
+window.addEventListener("scroll", heroScrollTick, { passive: true });
 window.addEventListener("resize", heroScrollTick);
 
 
