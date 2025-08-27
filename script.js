@@ -85,7 +85,7 @@ function restorePlayerState(state) {
       startSeconds: state.currentTime || 0,
       suggestedQuality: "auto"
     });
-    ytPlayer.setVolume(100); // Volumen al 100% por defecto
+    ytPlayer.setVolume(100);
     ytPlayer.pauseVideo();
     updateUIOnTrackChange();
     startTimer();
@@ -225,6 +225,8 @@ function switchView(id){
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
   
   if(id==="view-search" || id === 'view-playlists') {
+      // Solo resetea el scroll en vistas que no deben recordar la posición,
+      // como al iniciar una nueva búsqueda.
     document.body.scrollTop = 0;
     document.documentElement.scrollTop = 0;
   }
@@ -234,6 +236,10 @@ function switchView(id){
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
+  // **LA SOLUCIÓN AL SCROLL**
+  // No hacer nada si se hace clic en la pestaña ya activa.
+  // Esto evita que el scroll se resetee innecesariamente.
+  if (btn.classList.contains('active')) return;
   switchView(btn.dataset.view);
 });
 
@@ -956,18 +962,16 @@ function heroScrollTick(){
 
   const hero = activeView.querySelector(".fav-hero, .player-header-sticky");
   if (!hero) {
-    // Si no hay hero, asegurarse de que no haya valor residual.
-    document.documentElement.style.removeProperty('--hero-t');
+    document.documentElement.style.setProperty("--hero-t", 0);
     return;
   }
   
   const viewTop = activeView.getBoundingClientRect().top + window.scrollY;
-  const y = Math.max(0, window.scrollY - viewTop);
+  const y = window.scrollY - viewTop;
   
-  const DIST = 240;
-  const t = Math.min(1, y / DIST);
+  const DIST = 200; // Distancia reducida para un efecto más rápido
+  const t = Math.max(0, Math.min(1, y / DIST));
   
-  // Aplicar la variable a todo el documento para que cualquier elemento pueda usarla
   document.documentElement.style.setProperty("--hero-t", t);
 }
 window.addEventListener("scroll", heroScrollTick, { passive: true });
