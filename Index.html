@@ -96,10 +96,6 @@
               <button id="btnNext" class="icon-btn-player" aria-label="Siguiente"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
               <button id="btnRepeat" class="icon-btn-player" aria-label="Repetir"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
           </div>
-           <div class="volume-control">
-              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-              <input id="volumeSeek" type="range" min="0" max="100" value="100">
-          </div>
         </div>
       </div>
       <section id="queuePanel" class="queue-panel hide">
@@ -113,15 +109,22 @@
 
   <section id="seekDock" class="seek-dock">
     <div id="miniNow" class="mini-now">
-      <img id="miniThumb" class="mini-thumb" alt="" />
-      <div class="mini-meta" onclick="switchView('view-player')">
-        <div id="miniTitle" class="title-text"></div>
-        <div id="miniAuthor" class="subtitle"></div>
-      </div>
-      <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
-        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-      </button>
+        <img id="miniThumb" class="mini-thumb" alt="" />
+        <div class="mini-content-wrapper">
+            <div class="mini-meta" onclick="switchView('view-player')">
+                <div id="miniTitle" class="title-text"></div>
+                <div id="miniAuthor" class="subtitle"></div>
+            </div>
+            <div class="mini-progress">
+                <span id="miniCur">0:00</span>
+                <input id="miniSeek" class="seek-bar-mini" type="range" min="0" max="1000" value="0" />
+                <span id="miniDur">0:00</span>
+            </div>
+        </div>
+        <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
+            <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
     </div>
   </section>
 
