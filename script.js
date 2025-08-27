@@ -224,21 +224,15 @@ function switchView(id){
   }
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
   
-  if(id==="view-search" || id === 'view-playlists') {
-      // Solo resetea el scroll en vistas que no deben recordar la posición,
-      // como al iniciar una nueva búsqueda.
-    document.body.scrollTop = 0;
-    document.documentElement.scrollTop = 0;
+  if(id==="view-search") {
+    updateHomeGridVisibility();
   }
   
-  if(id==="view-search") updateHomeGridVisibility();
   heroScrollTick();
 }
+
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
-  // **LA SOLUCIÓN AL SCROLL**
-  // No hacer nada si se hace clic en la pestaña ya activa.
-  // Esto evita que el scroll se resetee innecesariamente.
   if (btn.classList.contains('active')) return;
   switchView(btn.dataset.view);
 });
@@ -260,6 +254,9 @@ overlayInput.addEventListener("keydown", async e=>{
   if(e.key!=="Enter") return;
   const q = overlayInput.value.trim(); if(!q) return;
   closeSearch();
+  // Resetea el scroll SOLO al iniciar una nueva búsqueda
+  document.body.scrollTop = 0; 
+  document.documentElement.scrollTop = 0;
   await startSearch(q);
   switchView("view-search");
 });
@@ -967,10 +964,10 @@ function heroScrollTick(){
   }
   
   const viewTop = activeView.getBoundingClientRect().top + window.scrollY;
-  const y = window.scrollY - viewTop;
+  const y = Math.max(0, window.scrollY - viewTop);
   
-  const DIST = 200; // Distancia reducida para un efecto más rápido
-  const t = Math.max(0, Math.min(1, y / DIST));
+  const DIST = 200;
+  const t = Math.min(1, y / DIST);
   
   document.documentElement.style.setProperty("--hero-t", t);
 }
