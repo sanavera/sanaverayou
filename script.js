@@ -85,7 +85,7 @@ function restorePlayerState(state) {
       startSeconds: state.currentTime || 0,
       suggestedQuality: "auto"
     });
-    ytPlayer.setVolume($("#volumeSeek").value);
+    ytPlayer.setVolume(100); // Volumen al 100% por defecto
     ytPlayer.pauseVideo();
     updateUIOnTrackChange();
     startTimer();
@@ -223,9 +223,13 @@ function switchView(id){
     view.classList.add("active");
   }
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
+  
+  if(id==="view-search" || id === 'view-playlists') {
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+  }
+  
   if(id==="view-search") updateHomeGridVisibility();
-  document.body.scrollTop = 0; // For Safari
-  document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
   heroScrollTick();
 }
 $("#bottomNav").addEventListener("click", e=>{
@@ -690,6 +694,7 @@ $("#btnPrev").onclick = prev;
 
 function seekToFrac(frac){ if(!YT_READY) return; const d = ytPlayer.getDuration()||0; ytPlayer.seekTo(frac*d,true); }
 $("#seek").addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
+$("#miniSeek").addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
 
 function startTimer(){
   stopTimer();
@@ -699,15 +704,23 @@ function startTimer(){
     if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
 
     const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
-    $("#cur").textContent = fmt(cur); $("#dur").textContent = fmt(dur);
+    
+    // Update main player
+    $("#cur").textContent = fmt(cur); 
+    $("#dur").textContent = fmt(dur);
     $("#seek").value = dur? Math.floor((cur/dur)*1000) : 0;
+    
+    // Update mini player
+    $("#miniCur").textContent = fmt(cur); 
+    $("#miniDur").textContent = fmt(dur);
+    $("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0;
     
     savePlayerState();
   }, 500);
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
-/* ========= Controles Adicionales (Shuffle, Repeat, Volume) ========= */
+/* ========= Controles Adicionales (Shuffle, Repeat) ========= */
 function toggleShuffle() {
     isShuffle = !isShuffle;
     $("#btnShuffle").classList.toggle('active', isShuffle);
@@ -743,10 +756,6 @@ function updateControlStates() {
 
 $("#btnShuffle").onclick = toggleShuffle;
 $("#btnRepeat").onclick = cycleRepeat;
-$("#volumeSeek").addEventListener("input", e => {
-    if(YT_READY) ytPlayer.setVolume(e.target.value);
-});
-
 
 /* ========= Cola (Player) ========= */
 function showPlaylistInPlayer(plId){
@@ -943,25 +952,23 @@ io.observe($("#sentinel"));
 /* ========= HERO shrink en scroll ========= */
 function heroScrollTick(){
   const activeView = document.querySelector(".view.active");
-  if(!activeView) return;
+  if (!activeView) return;
 
-  const hero = activeView.querySelector(".fav-hero, .np-hero");
-  if(!hero) { return; }
+  const hero = activeView.querySelector(".fav-hero, .player-header-sticky");
+  if (!hero) {
+    // Si no hay hero, asegurarse de que no haya valor residual.
+    document.documentElement.style.removeProperty('--hero-t');
+    return;
+  }
   
-  // Calcula la posición Y de la vista activa en el documento
   const viewTop = activeView.getBoundingClientRect().top + window.scrollY;
-  // Calcula cuánto se ha scrolleado DENTRO de la vista
   const y = Math.max(0, window.scrollY - viewTop);
   
-  const DIST = 240; // Distancia en píxeles para completar la transición
-  const t = Math.max(0, Math.min(1, y / DIST));
-  hero.style.setProperty("--hero-t", t);
-
-  // También se puede afectar a otros elementos
-  const playerControls = activeView.querySelector('.player-controls');
-  if(playerControls) {
-      playerControls.style.setProperty("--hero-t", t);
-  }
+  const DIST = 240;
+  const t = Math.min(1, y / DIST);
+  
+  // Aplicar la variable a todo el documento para que cualquier elemento pueda usarla
+  document.documentElement.style.setProperty("--hero-t", t);
 }
 window.addEventListener("scroll", heroScrollTick, { passive: true });
 window.addEventListener("resize", heroScrollTick);
