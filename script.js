@@ -77,12 +77,12 @@ const recommendedPlaylists = {
     creator: 'Sebastián Sanavera',
     data: []
   },
-  bachata: {
+/*  bachata: {
     ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'],
     title: 'Corazón de Bachata',
     creator: 'Sebastián Sanavera',
     data: []
-  },
+  }, */
   international: {
     ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'],
     title: 'Clásicos 70/80/90s',
