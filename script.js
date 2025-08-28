@@ -62,7 +62,7 @@ ids: [
 'v2FjIJUQPhU', // Grupo Red - Amor de adolescentes
 'fgTLwYJpbgQ', // Grupo Green - Solitario
 'vHyZrsEuE2o', // Grupo Green - Solo estoy
-'kIfLAc6JhTE', // Tambo Tambo - La Cumbita
+'OU2KT7wlAGw', // Tambo Tambo - La Cumbita
 'aRLPHz0zsUo', // Tambo Tambo - El Campanero
 'SE3oVXcppVc', // Los Charros - que nos entierren juntos
 'P6W-c8y4j5w', // Los Charros - Me bebi tu recuerdo
