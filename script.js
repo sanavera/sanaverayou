@@ -36,7 +36,7 @@ let ytPlayer = null, YT_READY = false, timer = null;
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
     data: []
@@ -47,8 +47,8 @@ const recommendedPlaylists = {
     creator: 'Luis Sanavera',
     data: []
   },
-  cumbia1: {
-    ids: ['u-pAnwA6M-c', 'QPAz_VbTf-A', 'l9u6gAFw6_I', 'c46ut39T3oQ', 'kENT_o-vW7s', 'z4sN05-xIsE', 'x-8f6e-MIcQ', 'yXqira2XjAg', 'uodlOkb-30M', '9d54E-k0_pQ', 'VVupVmfFBqs', 'KRArl6sX8cM', 'gXv_gHTGnj8', 'cJREas23tPE', 'Ykt2edUBEyA', 'O1UhpeyxhbA', 'XKAuHsMuWjA', 'HdWnxBsOW5E', 'gD5UZVSQ3JQ', 'ihrUZRxgef4', 'jsCr8nw0YAY', 'Jk792GK3CzU', '8iUkmnLc1ec', 'mm_SwD5PYvY', 'FA8iL4CtQfc', 'MOXcXy3T3oQ', 'HsIMDKWsljw', 'AIQrqFF58Zw', '6z_IcvS2vRw', 'eIE_qwIiMTE', 'Fq_xTrwBqyY', 'Np--8TJXYIQ', 'AaL0MB3zN04', '0xkqYqi04xM', 'cSMs5am_YPk', 'QiFuCf86P3Q', 'lhNP8jYLHIc', 'BK0ra1tyuqs', 'I714M5hgyjA'],
+  cumbia: {
+    ids: ['u-pAnwA6M-c', 'QPAz_VbTf-A', 'l9u6gAFw6_I', 'c46ut39T3oQ', 'kENT_o-vW7s', 'z4sN05-xIsE', 'x-8f6e-MIcQ', 'yXqira2XjAg', 'uodlOkb-30M', '9d54E-k0_pQ', 'VVupVmfFBqs', 'KRArl6sX8cM', 'gXv_gHTGnj8', 'cJREas23tPE', 'Ykt2edUBEyA', 'O1UhpeyxhbA', 'XKAuHsMuWjA', 'HdWnxBsOW5E', 'gD5UZVSQ3JQ', 'ihrUZRxgef4', 'jsCr8nw0YAY', 'Jk792GK3CzU', '8iUkmnLc1ec', 'mm_SwD5PYvY', 'FA8iL4CtQfc', 'MOXcXy3T3oQ', 'HsIMDKWsljw', 'AIQrqFF58Zw', '6z_IcvS2vRw', 'eIE_qwIiMTE', 'Fq_xTrwBqyY', 'Np--8TJXYIQ', 'AaL0MB3zN04', '0xkqYqi04xM', 'cSMs5am_YPk', 'QiFuCf86P3Q', 'lhNP8jYLHIc', 'BK0ra1tyuqs', 'I714M5hgyjA', 'OQB6K81DnWc', 'D1K-QYVug2w', 'Du1UJyRwmts', 'gQY-5f_w6oU', 'Bu5xo2m_b2U', '7apHMy2zVQc', '23lu6LbRb28', 'YEYGBGwLT-w', 'Xg-PwOpuuQ4', '7iHaFTU6DdE', 's_4aXKrsXSU', 'wzW561dqsC0'],
     title: 'Cumbias del Recuerdo',
     creator: 'Luis Sanavera',
     data: []
@@ -202,38 +202,56 @@ const getRotatedApiKey = () => {
   return k;
 };
 
-async function fetchVideoDetailsByIds(ids, retryCount = 0) {
-  const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-  if (retryCount >= MAX_RETRIES) throw new Error('Todas las API keys han fallado.');
+// *** FUNCIÓN CORREGIDA PARA MANEJAR MÁS DE 50 IDs ***
+async function fetchVideoDetailsByIds(ids) {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return [];
 
-  const uniqueIds = [...new Set(ids)];
-  const url = new URL('https://www.googleapis.com/youtube/v3/videos');
-  const apiKey = getRotatedApiKey();
-  url.searchParams.append('key', apiKey);
-  url.searchParams.append('part', 'snippet');
-  url.searchParams.append('id', uniqueIds.join(','));
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      if (response.status === 403) {
-        console.warn(`API key ${apiKey} 403 → rota`);
-        return fetchVideoDetailsByIds(ids, retryCount + 1);
-      }
-      throw new Error(`API error: ${response.status}`);
+    const CHUNK_SIZE = 50;
+    const chunks = [];
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+        chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE));
     }
-    const data = await response.json();
-    return data.items.map(item => ({
-      id: item.id,
-      title: cleanTitle(item.snippet.title),
-      author: cleanAuthor(item.snippet.channelTitle),
-      thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
-    }));
-  } catch (e) {
-    console.error('YouTube API fetch details failed:', e);
-    return [];
-  }
+
+    const fetchChunk = async (chunk, retryCount = 0) => {
+        const MAX_RETRIES = YOUTUBE_API_KEYS.length;
+        if (retryCount >= MAX_RETRIES) {
+            console.error(`Todas las API keys han fallado para el chunk: ${chunk.join(',')}`);
+            return [];
+        }
+
+        const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+        const apiKey = getRotatedApiKey();
+        url.searchParams.append('key', apiKey);
+        url.searchParams.append('part', 'snippet');
+        url.searchParams.append('id', chunk.join(','));
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                if (response.status === 403) {
+                    console.warn(`API key ${apiKey} 403 → rotando`);
+                    return fetchChunk(chunk, retryCount + 1);
+                }
+                throw new Error(`API error: ${response.status}`);
+            }
+            const data = await response.json();
+            return data.items.map(item => ({
+                id: item.id,
+                title: cleanTitle(item.snippet.title),
+                author: cleanAuthor(item.snippet.channelTitle),
+                thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
+            }));
+        } catch (e) {
+            console.error('YouTube API fetch chunk failed:', e);
+            return fetchChunk(chunk, retryCount + 1); // Reintentar con otra key
+        }
+    };
+    
+    const results = await Promise.all(chunks.map(chunk => fetchChunk(chunk)));
+    return results.flat(); // Unir los resultados de todos los chunks
 }
+
 
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
@@ -1099,7 +1117,7 @@ async function boot(){
   if(container) container.innerHTML = "";
 
   // Renderizar en el orden deseado
-  const renderOrder = ['p1', 'p2', 'cumbia1', 'reggaeton', 'reggae', 'pop', 'rock_int', 'bachata', 'international'];
+  const renderOrder = ['p1', 'p2', 'cumbia', 'reggaeton', 'reggae', 'pop', 'rock_int', 'bachata', 'international'];
   renderOrder.forEach(key => {
     if (recommendedPlaylists[key] && recommendedPlaylists[key].data.length > 0) {
       renderRecommendedPlaylistCard(recommendedPlaylists[key], key);
