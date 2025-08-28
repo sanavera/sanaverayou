@@ -33,6 +33,18 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 
 let ytPlayer = null, YT_READY = false, timer = null;
 
+const recommendedPlaylistIds = [
+  'dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ',
+  'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk',
+  'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc',
+  'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I',
+  '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo',
+  'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80',
+  'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'
+];
+let recommendedPlaylist = [];
+
+
 /* ========= Persistencia de Estado ========= */
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 function getPlaybackState(){
@@ -130,81 +142,6 @@ function initTheme(){
   });
 }
 
-/* ========= Curados estáticos ========= */
-const CURATED_RAW = [
-
-  
-{ "id": "bGmivknZTtM", "title": "RETRO MIX 80S & 90S EN ESPAÑOL #2", "author": "DJ GOBEA CANCUN,MX." },
-  { "id": "ANo7dUx0nM4", "title": "POP DE LOS 80'S EN ESPAÑOL / EXITOS DEL RECUERDO VOL 1", "author": "coyomanidj" },
-  { "id": "iRR3DQBI4wo", "title": "Pop en Español Megamix (1980 a 1984)", "author": "DJ Páez de México" },
-  { "id": "TBTQcdhsfZU", "title": "Pop En Español De Los 80 Y 90 Mix", "author": "bavikon" },
-  { "id": "wkavI9rIInk", "title": "Jenni Rivera - Joyas Prestadas Pop (Álbum Completo)", "author": "Jenni Rivera" },
-  { "id": "f-WFYtcl3qE", "title": "ENGANCHADO CUMBIA SANTAFESINA, VOL. 4", "author": "Garra Records" },
-  { "id": "5v7j-HMzW0Y", "title": "CUMBIA SANTAFESINA GRANDES EXITOS", "author": "Cumbia Santafesina" },
-  { "id": "QhR3-XpTrp4", "title": "UN POCO DE RUIDO Enganchados de CUMBIA SANTAFESINA", "author": "Solo Enganchados" },
-  { "id": "J_0LzitRCTg", "title": "ENGANCHADO CUMBIA SANTAFESINA 🎸 VOL. 1", "author": "DJ CHECA" },
-  { "id": "O0aGMe8b3EU", "title": "Enganchados Cumbiones Santafesinos 7", "author": "Matias Crow" },
-  { "id": "mxIAp4NdnH4", "title": "ROCK PARA EL ASADO - 5 Horas de Rock Argentino", "author": "Pelo Music Group" },
-  { "id": "pUJW8NH_lX8", "title": "Lo Mejor del Rock Argentino (1º Parte)", "author": "HB Enganchados Musicales" },
-  { "id": "U6SdrI6tzxY", "title": "ENGANCHADO ROCK NACIONAL 80 Y 90", "author": "DJMARGA2000" },
-  { "id": "1ATkrsFDhpY", "title": "Rock Nacional Argentino", "author": "DJBazz" },
-  { "id": "zeyUzQhl1HE", "title": "ROCK AND ROLL 50's, 60's EN ESPAÑOL", "author": "EMNA" },
-  { "id": "PwmNExAF1zg", "title": "Soda Stereo - Soda Stereo (1984) (Álbum Completo)", "author": "Studio SC" },
-  { "id": "jzLVaylmbJU", "title": "Soda Stereo - Canción Animal (1990) (Álbum Completo)", "author": "Studio SC" },
-  { "id": "hb21DFZF7Pw", "title": "Soda Stereo - Sueño Stereo (1995) (Álbum Completo)", "author": "Studio SC" },
-  { "id": "3TB0vkRalrQ", "title": "Soda Stereo - Doble Vida (1988) (Álbum Completo)", "author": "Studio SC" },
-  { "id": "wEodOb2lSmo", "title": "Pericos & Friends - Los Pericos - Full Album Original", "author": "Music Brokers" },
-  { "id": "pHJ0PVG_7z0", "title": "Los Pericos - Pura vida [FULL ALBUM, 2008]", "author": "PopArt Discos" },
-  { "id": "S--kaiPI65Y", "title": "Los Pericos clasicos", "author": "Sanjo Music.2" },
-  { "id": "_lufCQKPlC0", "title": "Los Fabulosos Cadillacs - Yo Te Avisé!! - Álbum Completo", "author": "El Skondite" },
-  { "id": "RA1u-fYVZN0", "title": "Charly García-'Clics Modernos' 1983 Álbum Completo", "author": "Sebastián Cienfuegos" },
-  { "id": "X3uLSS34pfQ", "title": "Charly Garcia-'La hija de la lágrima' 1994 Álbum completo", "author": "Sebastián Cienfuegos" },
-  { "id": "AVmemTyiN2g", "title": "La Renga - Detonador De Sueños - Álbum Completo", "author": "La Renga" },
-  { "id": "J7qwDEe8WS8", "title": "La Renga - Alejado de la Red (Álbum Completo)", "author": "La Renga" },
-  { "id": "qxLGfwvHHl4", "title": "La Renga - Truenotierra - Álbum Completo - CD1", "author": "La Renga" },
-  { "id": "A9pSfNeG5BI", "title": "La Renga - Pesados Vestigios - Álbum Completo", "author": "La Renga" },
-  { "id": "G7eMBIQnpE0", "title": "La Renga - Algún Rayo - Álbum Completo", "author": "La Renga" },
-  { "id": "yoPFiIAztEc", "title": "Greatest Hits Calle 13 álbum completo 2023", "author": "Best Popular Music" },
-  { "id": "3TZX1b0RluU", "title": "Mix Calle 13 - Lo Mejor de Calle 13 #2", "author": "Juan Pariona" },
-  { "id": "DXtmAumH3_4", "title": "Divididos. Se me llenó de hojas el bulín.", "author": "DIVIDIDOS" },
-  { "id": "nc1nOmlACno", "title": "Enganchados de DIVIDIDOS (La Aplanadora del Rock)", "author": "Velo Marti" },
-  { "id": "zbQoaFT-u6E", "title": "DIVIDIDOS - Audio y Agua - DVD Completo", "author": "Puro Rock" },
-  { "id": "91H4zt0UeLg", "title": "Patricio Rey y sus Redonditos de Ricota - La Mosca y la Sopa (1991)", "author": "Patricio Rey y sus Redonditos de Ricota" },
-  { "id": "zwDLbNTPvgA", "title": "Patricio Rey y sus Redonditos de Ricota - Gulp (1985)", "author": "Patricio Rey y sus Redonditos de Ricota" },
-  { "id": "C1PDYt9b8AQ", "title": "Patricio Rey y sus Redonditos de Ricota - Un Baion Para el Ojo Idiota (1988)", "author": "Patricio Rey y sus Redonditos de Ricota" },
-  { "id": "rQAm0OWeQZY", "title": "Patricio Rey y sus Redonditos de Ricota - Oktubre (1986)", "author": "Patricio Rey y sus Redonditos de Ricota" },
-  { "id": "8czBUjD1L20", "title": "Patricio Rey y sus Redonditos de Ricota - ¡Bang! ¡Bang!... Estás Liquidado", "author": "Patricio Rey y sus Redonditos de Ricota" },
-  { "id": "e7kuO5edHcg", "title": "SUMO - Llegando los Monos - Álbum Completo", "author": "Sumo" },
-  { "id": "O8HEc1pGV8I", "title": "SUMO - Divididos por la Felicidad - Álbum Completo", "author": "Sumo" },
-  { "id": "kRPjIK6YBOI", "title": "SUMO - After Chabon - Álbum completo", "author": "Sumo" },
-  { "id": "BZJIZKpMzE0", "title": "SUMO ÉXITOS", "author": "Leandro Oscar Maciel" },
-  { "id": "brwcqzmVRHw", "title": "Invisible - Invisible (1974) FULL ALBUM", "author": "Realidades Alternativas" },
-  { "id": "oduoQVYTOfE", "title": "Luis Alberto Spinetta - MTV Unplugged - 1997", "author": "Spinettabootlegs" },
-  { "id": "WnYhvVBDqm4", "title": "Luis Alberto Spinetta - Obras Cumbres (2006). Álbum Completo", "author": "Los Diaz de Juan" },
-  { "id": "iA6JCPP1Ehs", "title": "Fito Páez - El amor después del amor (1992) (Álbum completo)", "author": "Capitán Fugitivo" },
-  { "id": "3cJc-sxMTeE", "title": "Fito Páez - Euforia (1996) (Álbum Completo)", "author": "Capitán Fugitivo" },
-  { "id": "hnIGIEYhOwY", "title": "Fito Paez - Grandes éxitos", "author": "Federico Peñaloza" },
-  { "id": "dSgWyiKptVE", "title": "Fito Páez - Abre (1999) (Álbum completo)", "author": "Capitán Fugitivo" },
-
-];
-function extractVideoId(input){
-  if(!input) return "";
-  const s = String(input);
-  const m = s.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?![0-9A-Za-z_-])/);
-  return m ? m[1] : (s.length===11 ? s : "");
-}
-function mapCurated(raw){
-  return raw
-    .map((r,i)=>{
-      const id = extractVideoId(r.id || r.url || r);
-      if(!id) return null;
-      return { id, title: r.title || `Mix ${i+1}`, author: r.author || "", thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` };
-    })
-    .filter(Boolean);
-}
-let CURATED_VIDEOS = mapCurated(CURATED_RAW);
-let HOME_QUEUE = [];
-
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
   "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
@@ -219,6 +156,39 @@ const getRotatedApiKey = () => {
   currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
   return k;
 };
+
+async function fetchVideoDetailsByIds(ids, retryCount = 0) {
+  const MAX_RETRIES = YOUTUBE_API_KEYS.length;
+  if (retryCount >= MAX_RETRIES) throw new Error('Todas las API keys han fallado.');
+
+  const uniqueIds = [...new Set(ids)]; // Remove duplicates
+  const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+  const apiKey = getRotatedApiKey();
+  url.searchParams.append('key', apiKey);
+  url.searchParams.append('part', 'snippet');
+  url.searchParams.append('id', uniqueIds.join(','));
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      if (response.status === 403) {
+        console.warn(`API key ${apiKey} 403 → rota`);
+        return fetchVideoDetailsByIds(ids, retryCount + 1);
+      }
+      throw new Error(`API error: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.items.map(item => ({
+      id: item.id,
+      title: cleanTitle(item.snippet.title),
+      author: cleanAuthor(item.snippet.channelTitle),
+      thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
+    }));
+  } catch (e) {
+    console.error('YouTube API fetch details failed:', e);
+    return [];
+  }
+}
 
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
@@ -373,29 +343,45 @@ function appendResults(chunk){
 }
 
 /* ========= Home grid ========= */
-function shuffle(arr){ const a = arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function renderHomeGrid(){
-  const grid = $("#homeGrid"); if(!grid) return;
-  grid.innerHTML = "";
-  const source = shuffle(CURATED_VIDEOS);
-  HOME_QUEUE = source;
-  source.forEach((it, i)=>{
-    const card = document.createElement("article");
-    card.className = "home-card";
-    card.style.animationDelay = `${i * 50}ms`;
-    card.innerHTML = `
-      <img loading="lazy" decoding="async" src="${it.thumb}" alt="">
-      <div class="home-meta">
-        <p class="home-title-text">${it.title}</p>
-        <p class="home-subtitle">${it.author||"Mix"}</p>
-      </div>`;
-    card.onclick = ()=>{
-      setQueue(HOME_QUEUE, "curated", i);
-      playCurrent(true);
-    };
-    grid.appendChild(card);
-  });
+function renderRecommendedPlaylistCard() {
+  const grid = $("#homeGrid");
+  if (!grid || !recommendedPlaylist.length) return;
+
+  grid.innerHTML = ""; // Clear previous content
+
+  const covers = recommendedPlaylist.slice(0, 4).map(track => track.thumb);
+  while (covers.length < 4) {
+    covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="); // transparent pixel
+  }
+
+  const card = document.createElement("article");
+  card.className = "recommended-playlist-card";
+  card.innerHTML = `
+    <div class="collage-container">
+      ${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}
+    </div>
+    <div class="recommended-playlist-overlay">
+      <div class="recommended-playlist-meta">
+        <h4 class="recommended-playlist-title">Lista de reproducción recomendada</h4>
+        <div class="creator-line">
+          <svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
+          <span>Creador Luis Sanavera</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  card.onclick = () => {
+    if (!recommendedPlaylist.length) return;
+    setQueue(recommendedPlaylist, 'recommended', 0);
+    renderQueue(recommendedPlaylist, 'Lista de Reproducción Recomendada');
+    switchView('view-player');
+    playCurrent(true);
+  };
+
+  grid.appendChild(card);
 }
+
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
   const shouldShow = (!paging.query && items.length===0);
@@ -551,12 +537,14 @@ function updateHero(track){
   $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "—");
   if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
   $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
-  const plName = (viewingPlaylistId && queueType === 'playlist') ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "") : "";
+  
+  const plName = (queueType === 'playlist' && viewingPlaylistId) ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "")
+             : (queueType === 'recommended') ? 'Lista Recomendada' : "";
   $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName?` • ${plName}`:""}` : (plName || "—"));
 }
 function setQueue(srcArr, type, idx){
   let finalSrc = srcArr;
-  if (isShuffle && type !== 'curated') {
+  if (isShuffle) {
     const currentItem = srcArr[idx];
     finalSrc = shuffle(srcArr.filter(item => item.id !== currentItem.id));
     finalSrc.unshift(currentItem);
@@ -705,7 +693,7 @@ function toggleShuffle() {
       (queueType === 'search') ? items : 
       (queueType === 'favs') ? favs :
       (queueType === 'playlist') ? playlists.find(p=>p.id===viewingPlaylistId)?.tracks || [] : 
-      (queueType === 'curated') ? HOME_QUEUE : [];
+      (queueType === 'recommended') ? recommendedPlaylist : [];
     const originalIndex = currentQueueSource.findIndex(t => t.id === currentTrack.id);
     setQueue(currentQueueSource, queueType, Math.max(0, originalIndex));
   }
@@ -730,6 +718,52 @@ $("#btnShuffle")?.addEventListener("click", toggleShuffle);
 $("#btnRepeat")?.addEventListener("click", cycleRepeat);
 
 /* ========= Cola (Player) ========= */
+function renderQueue(queueItems, title) {
+  const panel = $("#queuePanel");
+  panel && panel.classList.remove("hide");
+  $("#queueTitle") && ($("#queueTitle").textContent = title);
+  const ul = $("#queueList");
+  if (!ul) return;
+  ul.innerHTML = "";
+  viewingPlaylistId = null; // Clear this as it's not a user playlist
+
+  queueItems.forEach((t, i) => {
+    const li = document.createElement("li");
+    li.className = "queue-item";
+    li.dataset.trackId = t.id;
+    li.innerHTML = `
+      <div class="thumb-wrap">
+        <img class="thumb" src="${t.thumb}" alt="">
+        <button class="card-play" title="Play" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+      </div>
+      <div class="meta">
+        <div class="title-line">
+          <span class="title-text">${t.title}</span>
+          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+        <div class="subtitle">${cleanAuthor(t.author) || ""}</div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
+      </div>`;
+    li.onclick = (e) => {
+      if (e.target.closest(".more") || e.target.closest(".card-play")) return;
+      setQueue(queueItems, 'recommended', i);
+      playCurrent(true);
+    };
+    li.querySelector(".card-play").onclick = (e) => {
+      e.stopPropagation();
+      setQueue(queueItems, 'recommended', i);
+      playCurrent(true);
+    };
+    ul.appendChild(li);
+  });
+  refreshIndicators();
+}
+
 function showPlaylistInPlayer(plId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   viewingPlaylistId = plId;
@@ -1030,10 +1064,15 @@ function updateMediaSession(track){
 }
 
 /* ========= Init ========= */
-function boot(){
+async function boot(){
   initTheme();
-  CURATED_VIDEOS = mapCurated(CURATED_RAW);
-  renderHomeGrid();
+  
+  // Fetch recommended playlist data
+  recommendedPlaylist = await fetchVideoDetailsByIds(recommendedPlaylistIds);
+  if (recommendedPlaylist.length > 0) {
+    renderRecommendedPlaylistCard();
+  }
+  
   updateHomeGridVisibility();
 
   loadFavs();
