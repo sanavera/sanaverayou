@@ -40,12 +40,13 @@
     <section id="view-search" class="view active">
       <section id="homeSection" class="home-section">
         <header class="home-head">
-          <h3 class="home-title">Para arrancar 🎧</h3>
-          <p class="home-sub"><marquee>Página en desarrollo..</marquee></p>
+          <h3 class="home-title animated-title">
+            Listas recomendadas
+            <span class="eq-title" aria-hidden="true"><span></span><span></span><span></span></span>
+          </h3>
         </header>
         <div id="homePlaylistsContainer">
-            <section id="homeGrid" class="home-grid"></section>
-            <section id="homeGrid2" class="home-grid"></section>
+            <!-- Las tarjetas de playlist se insertarán aquí dinámicamente -->
         </div>
       </section>
 
@@ -66,14 +67,14 @@
     </section>
 
     <section id="view-playlists" class="view">
-      <header class="section-head">
-        <h3>Playlists</h3>
-        <div class="pl-actions">
-          <button id="btnNewPlaylist" class="pill">Nueva</button>
-        </div>
-      </header>
-      <ul id="plList" class="pl-list"></ul>
-      <div id="plEmpty" class="empty muted hide">Aún no hay playlists. Crea la primera ✨</div>
+        <header class="section-head">
+            <h3>Mis Playlists</h3>
+            <div class="pl-actions">
+              <button id="btnNewPlaylist" class="pill">Nueva</button>
+            </div>
+        </header>
+        <div id="plList" class="pl-grid"></div>
+        <div id="plEmpty" class="empty muted hide">Aún no hay playlists. Crea la primera ✨</div>
     </section>
 
     <section id="view-player" class="view now-playing">
@@ -134,7 +135,7 @@
   <nav id="bottomNav" class="bottom-nav">
     <button data-view="view-search" class="nav-btn active">
       <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
-      <span>Búsqueda</span>
+      <span>Inicio</span>
     </button>
     <button data-view="view-favs" class="nav-btn">
       <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
