@@ -36,13 +36,13 @@ let ytPlayer = null, YT_READY = false, timer = null;
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['fJ9rUzIMcZQ', 'v2AC41dglnM', 'pe5f5gZ_5_0', 'l-822t-9g4A', 'Z8tLh82u_6A', 's61g118c7e4', 'I_2D8Eo15wE', 'k55FYtqtXXU', 'Q0o_h-9VA4s', 'e80qhyovOnA', 'rY0WxgSXdEE', '1w7OgIMMRc4'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Clásicos del Rock',
     creator: 'Luis Sanavera',
     data: []
   },
   p2: {
-    ids: ['Zd_33tq_2I8', 'o7I122z2a-0', 'u75Z81gUi4k', 's-S862p6faU', 'sQp-yh1e-L0', 'sK1JGvj54iI', 'kYoDhgP4o5s', 'J8AN0K58F_4', 'sOD1aFjffbY', 'sT1DdO3SISg', '204yYKe-I-A', 'i1n5A0A4IVQ'],
+    ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
     title: 'Rock para el Asado',
     creator: 'Luis Sanavera',
     data: []
