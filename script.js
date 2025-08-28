@@ -36,7 +36,7 @@ let ytPlayer = null, YT_READY = false, timer = null;
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Clásicos del Rock',
     creator: 'Luis Sanavera',
     data: []
@@ -48,7 +48,7 @@ const recommendedPlaylists = {
     data: []
   },
   reggaeton: {
-    ids: ['kJQP7kiw5Fk', 'q_pBq_h4_dE', '6d_hQ10_X3I', '7zp1TbLFPp8', 'B1g_w_E-b4s', 'k4yG4N52UeM', '2zJ4gT_L44I', 'fA8n3t_aY_0', 'qooQd83k_oE', '6i76n_V_4fk'],
+    ids: ['kJQP7kiw5Fk', 'q_pBq_h4_dE', '6d_hQ10_X3I', '7zp1TbLFPp8', 'B1g_w_E-b4s', 'k4yG4N52UeM', '2zJ4gT_L44I', 'fA8n3t_aY_0', 'qooQd83k_oE', '6i76n_V_4fk', 'm7_e_Xp-h4g', 'mWRsgZuwf_8'],
     title: 'Noche de Reggaetón',
     creator: 'Sebastián Sanavera',
     data: []
@@ -78,7 +78,7 @@ const recommendedPlaylists = {
     data: []
   },
   international: {
-    ids: ['z3wAjAXlYks', '32wbdUe_r5E', 'djV11Xbc914', 'n4RjJKxsamQ', '6-HUgzYPm9g', 's_wzBE_a_dc', 'fJ9rUzIMcZQ', 'H-0a9M-2H84', 'h_D3VFfhvs4', 'rblt2EtFfC4'],
+    ids: ['z3wAjAXlYks', '32wbdUe_r5E', 'djV11Xbc914', 'n4RjJKxsamQ', '6-HUgzYPm9g', 's_wzBE_a_dc', 'fJ9rUzIMcZQ', 'H-0a9M-2H84', 'h_D3VFfhvs4', 'rblt2EtFfC4', 'p47fEXGabaY'],
     title: 'Clásicos 70/80/90s',
     creator: 'Sebastián Sanavera',
     data: []
@@ -910,12 +910,12 @@ document.addEventListener("click", (e)=>{
 
 /* ========= Indicadores ========= */
 function refreshIndicators(){
-  const isPlaying = YT_READY && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING || ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING);
+  const isPlaying = getPlaybackState() === 'playing';
   const curId = currentTrack?.id || "";
 
   $$(".result-item, .fav-item, .queue-item").forEach(el => {
     const isCurrentTrack = el.dataset.trackId === curId;
-    el.classList.toggle("is-playing", isPlaying && isCurrentTrack);
+    el.classList.toggle("is-playing", isCurrentTrack);
     const cardPlay = el.querySelector(".card-play");
     if (cardPlay) cardPlay.classList.toggle("playing", isPlaying && isCurrentTrack);
   });
@@ -1091,7 +1091,7 @@ async function boot(){
   const renderOrder = ['p1', 'p2', 'reggaeton', 'reggae', 'pop', 'rock_int', 'bachata', 'international'];
   renderOrder.forEach(key => {
     if (recommendedPlaylists[key] && recommendedPlaylists[key].data.length > 0) {
-      renderRecommendedPlaylistCard(recommendedPlaylists[key], `rec_${key}`);
+      renderRecommendedPlaylistCard(recommendedPlaylists[key], key);
     }
   });
   
