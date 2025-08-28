@@ -2,7 +2,7 @@
 :root{
   /* superficies y texto */
   --bg:#08090c; --bg-secondary:#0d0e12;
-  --surface:#1a1c24; --surface-hover:#20222b; --surface-elevated:#242731; /* ← fix typo */
+  --surface:#1a1c24; --surface-hover:#20222b; --surface-elevated:#242731;
   --border:#2d3142; --border-subtle:#1e2029;
   --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b;
 
@@ -230,7 +230,6 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
   border: 1px solid rgba(255,255,255,.08);
   margin-bottom: 12px;
 
-  /* Anti-vibración */
   will-change: height, transform, border-radius;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -266,7 +265,6 @@ html[data-theme="light"] .pl-thumb{ border-color:#e5e7eb; }
   border-radius: 22px;
   box-shadow: 0 10px 30px rgba(0,0,0,.2);
 
-  /* Anti-vibración */
   will-change: height, transform, border-radius;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -406,33 +404,31 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   position:absolute!important;width:1px!important;height:1px!important;left:-9999px!important;top:-9999px!important;opacity:0!important;pointer-events:none!important;z-index:-1!important;
 }
 
-/* ====== Home grid ====== */
+/* ====== Home Section ====== */
 .home-section{ margin-bottom: 10px; }
 .home-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 0 0 8px; }
 .home-title{ margin:0; font-size:16px; font-weight:700; }
 .home-sub{ margin:0; font-size:12px; color:var(--text-secondary); }
-.home-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:12px; }
-.home-card{
-  position:relative; border-radius:14px; overflow:hidden;
-  background:var(--surface); border:1px solid var(--border-subtle);
-  cursor:pointer; transition:var(--fast); aspect-ratio:1/1;
-  opacity: 0; transform: translateY(20px) scale(0.98);
-  animation: card-appear .6s cubic-bezier(.4,0,.2,1) forwards;
+
+#homePlaylistsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
+
+.home-grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
 @keyframes card-appear{ to{ opacity: 1; transform: translateY(0) scale(1);} }
-.home-card:hover{ transform:translateY(-2px) scale(1.02); background:var(--surface-hover); border-color:var(--border); }
-.home-card img{ width:100%; height:100%; object-fit:cover; display:block; }
-.home-card::after{ content:""; position:absolute; inset:0;
-  background:linear-gradient(to top, rgba(8,9,12,.85) 0%, rgba(8,9,12,.2) 60%, rgba(8,9,12,0) 100%); }
-.home-card .home-meta{ position:absolute; left:10px; right:10px; bottom:8px; z-index:1; }
-.home-card .home-title-text{ font-weight:700; font-size:13px; margin:0 0 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.home-card .home-subtitle{ font-size:11px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* Responsive */
 @media (max-width:480px){
   :root{--side-pad:16px}
   .nav-btn svg{width:20px;height:20px}
-  .home-grid{ grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .buttons-control { gap: 8px; }
   .np-play { width: 64px; height: 64px; }
 }
@@ -442,13 +438,6 @@ html, body { background-color: var(--bg); }
 
 
 /* ====== Recommended Playlist Card ====== */
-#homeGrid {
-  /* Ensure it can contain the single large card */
-  grid-template-columns: 1fr;
-  max-width: 500px;
-  margin: 0 auto;
-}
-
 .recommended-playlist-card {
   position: relative;
   width: 100%;
