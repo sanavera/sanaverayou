@@ -54,12 +54,12 @@ ids: [
 'D-TrNF5V2jo', // Amor desesperado - Los Tiranos
 'Wcb_gUU5LVA', // El Gran Varon - Grupo Bor
 'bhyjF3t5XJQ', // Ojitos Hechiceros - Grupo Imagen
-'KfnOWI2BzmU', // Dario y su grupo Angora - Secretaria
+'HHOsoZcJ-TY', // Dario y su grupo Angora - Secretaria
 'eVHIQ4oxjwM', // Dario y su grupo Angora - el rosario de mi madre
 '9jbiAeXZKbw', // Amar Azul - Niña
 'dcy_B7oSIf8', // Amar Azul - Tormenta de Nieve
 'UPnTZCTXHvw', // Grupo Red - No podre olvidarme de ti
-'7qOK6X-92aY', // Grupo Red - Amor de adolescentes
+'v2FjIJUQPhU', // Grupo Red - Amor de adolescentes
 'fgTLwYJpbgQ', // Grupo Green - Solitario
 'LKjrq8_7bEo', // Grupo Green - Solo estoy
 'kIfLAc6JhTE', // Tambo Tambo - La Cumbita
@@ -70,8 +70,8 @@ ids: [
 'umLyS0-GXLQ', // Los Lamas - que hermosa noche
 '01p-1kMosCI', // Los del Bohio - del vals una más
 'h8emXFUHH0Y', // Los del Bohio - MR robinson
-'8iUkmnLc1ec', // Gilda - No me arrepiento de este amor
-'eIE_qwIiMTE', // La Nueva Luna - Y ahora te vas
+'098YVg5RmkA', // Gilda - No me arrepiento de este amor
+'7M6WsIKMtKg', // La Nueva Luna - Y ahora te vas
 '2aO4gdfkSc8', // Sombras - La ventanita
 'tJCK6y3gPfU', // Ráfaga - Mentirosa
 '1rwXkK3vWpg', // Los Palmeras - El Bombón Asesino
