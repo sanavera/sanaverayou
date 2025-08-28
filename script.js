@@ -47,17 +47,12 @@ const recommendedPlaylists = {
     creator: 'Luis Sanavera',
     data: []
   },
-
-
-
-
-cumbia: { ids: ['0LwKgKTgI6k','VVupVmfFBqs','KRArl6sX8cM','gXv_gHTGnj8','cJREas23tPE','Ykt2edUBEyA','O1UhpeyxhbA','XKAuHsMuWjA','HdWnxBsOW5E','gD5UZVSQ3JQ','ihrUZRxgef4','jsCr8nw0YAY','Jk792GK3CzU','8iUkmnLc1ec','mm_SwD5PYvY','FA8iL4CtQfc','MOXcXy3fxAQ','HsIMDKWsljw','AIQrqFF58Zw','6z_IcvS2vRw','eIE_qwIiMTE','Fq_xTrwBqyY','Np--8TJXYIQ','AaL0MB3zN04','0xkqYqi04xM','cSMs5am_YPk','QiFuCf86P3Q','lhNP8jYLHIc','BK0ra1tyuqs','I714M5hgyjA','OQB6K81DnWc','D1K-QYVug2w','Du1UJyRwmts','gQY-5f_w6oU','Bu5xo2m_b2U','7apHMy2zVQc','23lu6LbRb28','YEYGBGwLT-w','Xg-PwOpuuQ4','7iHaFTU6DdE','s_4aXKrsXSU','wzW561dqsC0','nkmbdTouBe0','Qk6fdmpupw4','dhCe3XG09wI','MJqtJFiU5M4','aTMZy3AbK2Y','uL61r8Xwhak','P23tp8mc3Cs','SEqpLoEcuq8','KlqR5vBFqR0','CuG6KrMdeYg'], title: 'Cumbias del Recuerdo', creator: 'Luis Sanavera', data: [] },
-
-
-
-
-
-  
+  cumbia: { 
+      ids: ['0LwKgKTgI6k','VVupVmfFBqs','KRArl6sX8cM','gXv_gHTGnj8','cJREas23tPE','Ykt2edUBEyA','O1UhpeyxhbA','XKAuHsMuWjA','HdWnxBsOW5E','gD5UZVSQ3JQ','ihrUZRxgef4','jsCr8nw0YAY','Jk792GK3CzU','8iUkmnLc1ec','mm_SwD5PYvY','FA8iL4CtQfc','MOXcXy3fxAQ','HsIMDKWsljw','AIQrqFF58Zw','6z_IcvS2vRw','eIE_qwIiMTE','Fq_xTrwBqyY','Np--8TJXYIQ','AaL0MB3zN04','0xkqYqi04xM','cSMs5am_YPk','QiFuCf86P3Q','lhNP8jYLHIc','BK0ra1tyuqs','I714M5hgyjA','OQB6K81DnWc','D1K-QYVug2w','Du1UJyRwmts','gQY-5f_w6oU','Bu5xo2m_b2U','7apHMy2zVQc','23lu6LbRb28','YEYGBGwLT-w','Xg-PwOpuuQ4','7iHaFTU6DdE','s_4aXKrsXSU','wzW561dqsC0','nkmbdTouBe0','Qk6fdmpupw4','dhCe3XG09wI','MJqtJFiU5M4','aTMZy3AbK2Y','uL61r8Xwhak','P23tp8mc3Cs','SEqpLoEcuq8','KlqR5vBFqR0','CuG6KrMdeYg'], 
+      title: 'Cumbias del Recuerdo', 
+      creator: 'Luis Sanavera', 
+      data: []
+  },
   reggaeton: {
     ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'],
     title: 'Noche de Reggaetón',
