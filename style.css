@@ -430,11 +430,20 @@ html[data-theme="light"] .sheet-content{ background:#ffffff; border-color:var(--
 .sheet-item.ghost:hover{ border-color:var(--text-secondary); }
 .sheet-item.danger{ background:rgba(127,29,29,.15); border-color:#7f1d1d; color:#fca5a5; }
 html[data-theme="light"] .sheet-item.danger { color: #b91c1c; }
-.sheet-row{ display:flex; gap:8px; margin-top:8px; }
-.sheet-row input{
-  flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border-subtle);
-  background:var(--surface); color:var(--text-primary);
+
+/* Estilos para el nuevo modal de crear playlist */
+.sheet-form { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+.sheet-form input {
+  width:100%; background:var(--surface); color:var(--text-primary);
+  border:1px solid var(--border-subtle); border-radius:10px;
+  padding:12px 14px; outline:none; font-size:15px;
 }
+.sheet-form input:focus { border-color: var(--accent); }
+.sheet-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.sheet-actions .sheet-item { width: auto; margin: 0; }
+.sheet-actions .pill { background: var(--accent); border-color: var(--accent); }
+html[data-theme="light"] .sheet-actions .pill { color: #fff; }
+
 
 /* Botón “Nueva / Crear” */
 .pill{ padding:9px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.15);
@@ -466,10 +475,11 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 }
 
 /* ====== Home Section ====== */
-#homePlaylistsContainer {
+.home-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
+    margin-bottom: 24px;
 }
 @keyframes card-appear{ to{ opacity: 1; transform: translateY(0) scale(1);} }
 
@@ -479,8 +489,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   .nav-btn svg{width:20px;height:20px}
   .buttons-control { gap: 8px; }
   .np-play { width: 64px; height: 64px; }
-  #homePlaylistsContainer {
-    grid-template-columns: repeat(2, 1fr);
+  .home-grid {
     gap: 12px;
   }
 }
@@ -552,8 +561,11 @@ html, body { background-color: var(--bg); }
   color: var(--text-secondary);
 }
 
-.spotify-logo {
+.spotify-logo, .youtube-logo {
   width: 14px;
   height: 14px;
   color: var(--text-secondary);
+}
+.youtube-logo {
+    color: #ff0000;
 }
