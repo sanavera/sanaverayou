@@ -550,7 +550,7 @@ function updateHero(track){
   $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
   
   const plName = (queueType === 'playlist' && viewingPlaylistId) ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "")
-             : (queueType === 'recommended') ? 'Melódicos en ingles'
+             : (queueType === 'recommended') ? 'Melódicos en inglés'
              : (queueType === 'recommended2') ? 'Cumbia estilo Santafesino' : "";
   $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName?` • ${plName}`:""}` : (plName || "—"));
 }
@@ -1055,10 +1055,10 @@ async function boot(){
   recommendedPlaylist2 = p2;
 
   if (recommendedPlaylist.length > 0) {
-    renderRecommendedPlaylistCard(recommendedPlaylist, '#homeGrid', 'recommended', 'Clásicos del Rock');
+    renderRecommendedPlaylistCard(recommendedPlaylist, '#homeGrid', 'recommended', 'Melódicos en inglés');
   }
   if (recommendedPlaylist2.length > 0) {
-    renderRecommendedPlaylistCard(recommendedPlaylist2, '#homeGrid2', 'recommended2', 'Rock para el Asado');
+    renderRecommendedPlaylistCard(recommendedPlaylist2, '#homeGrid2', 'recommended2', 'Cumbia estilo Santafesino');
   }
   
   updateHomeGridVisibility();
