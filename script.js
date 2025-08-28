@@ -54,7 +54,7 @@ const recommendedPlaylists = {
     data: []
   },
   reggae: {
-    ids: ['S5FCdx7Dn0o', 'l3V9zyfaFwA', 't_GxxmKn6oA', 'x59kS2A7U74', 'CVd6i4dF2aM', '8pQdC2IqJ4o', '4QR82f2xGjA', 'XCVaPa1S54c', 'L3oK24FWgJA', 'j6mYt4oJrYg'],
+    ids: ['S5FCdx7Dn0o', 'l3V9zyfaFwA', 'Xc0AeF4jsKM', 'x59kS2A7U74', 'CVd6i4dF2aM', '8pQdC2IqJ4o', '4QR82f2xGjA', 'XCVaPa1S54c', 'L3oK24FWgJA', 'j6mYt4oJrYg'],
     title: 'Vibras de Reggae',
     creator: 'Sebastián Sanavera',
     data: []
