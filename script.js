@@ -47,11 +47,11 @@ const recommendedPlaylists = {
     creator: 'Luis Sanavera',
     data: []
   },
-    cumbia: { 
-      ids: ['XRoDH7UkW_U', 'u-pAnwA6M-c', 'QPAz_VbTf-A', 'l9u6gAFw6_I', 'c46ut39T3oQ', 'kENT_o-vW7s', 'z4sN05-xIsE', 'x-8f6e-MIcQ', 'yXqira2XjAg', 'uodlOkb-30M', '9d54E-k0_pQ', 'VVupVmfFBqs', 'KRArl6sX8cM', 'gXv_gHTGnj8', 'cJREas23tPE', 'Ykt2edUBEyA', 'O1UhpeyxhbA', 'XKAuHsMuWjA', 'HdWnxBsOW5E', 'gD5UZVSQ3JQ', 'ihrUZRxgef4', 'jsCr8nw0YAY', 'Jk792GK3CzU', '8iUkmnLc1ec', 'mm_SwD5PYvY', 'FA8iL4CtQfc', 'MOXcXy3T3oQ', 'HsIMDKWsljw', 'AIQrqFF58Zw', '6z_IcvS2vRw', 'eIE_qwIiMTE', 'Fq_xTrwBqyY', 'Np--8TJXYIQ', 'AaL0MB3zN04', '0xkqYqi04xM', 'cSMs5am_YPk', 'QiFuCf86P3Q', 'lhNP8jYLHIc', 'BK0ra1tyuqs', 'I714M5hgyjA', 'OQB6K81DnWc', 'D1K-QYVug2w', 'Du1UJyRwmts', 'gQY-5f_w6oU', 'Bu5xo2m_b2U', '7apHMy2zVQc', '23lu6LbRb28', 'YEYGBGwLT-w', 'Xg-PwOpuuQ4', '7iHaFTU6DdE', 's_4aXKrsXSU', 'wzW561dqsC0'], 
-      title: 'Cumbias del Recuerdo', 
-      creator: 'Luis Sanavera', 
-      data: []
+  cumbia: {
+    ids: ['u-pAnwA6M-c', 'QPAz_VbTf-A', 'l9u6gAFw6_I', 'c46ut39T3oQ', 'kENT_o-vW7s', 'z4sN05-xIsE', 'x-8f6e-MIcQ', 'yXqira2XjAg', 'uodlOkb-30M', '9d54E-k0_pQ', 'VVupVmfFBqs', 'KRArl6sX8cM', 'gXv_gHTGnj8', 'cJREas23tPE', 'Ykt2edUBEyA', 'O1UhpeyxhbA', 'XKAuHsMuWjA', 'HdWnxBsOW5E', 'gD5UZVSQ3JQ', 'ihrUZRxgef4', 'jsCr8nw0YAY', 'Jk792GK3CzU', '8iUkmnLc1ec', 'mm_SwD5PYvY', 'FA8iL4CtQfc', 'MOXcXy3T3oQ', 'HsIMDKWsljw', 'AIQrqFF58Zw', '6z_IcvS2vRw', 'eIE_qwIiMTE', 'Fq_xTrwBqyY', 'Np--8TJXYIQ', 'AaL0MB3zN04', '0xkqYqi04xM', 'cSMs5am_YPk', 'QiFuCf86P3Q', 'lhNP8jYLHIc', 'BK0ra1tyuqs', 'I714M5hgyjA', 'OQB6K81DnWc', 'D1K-QYVug2w', 'Du1UJyRwmts', 'gQY-5f_w6oU', 'Bu5xo2m_b2U', '7apHMy2zVQc', '23lu6LbRb28', 'YEYGBGwLT-w', 'Xg-PwOpuuQ4', '7iHaFTU6DdE', 's_4aXKrsXSU', 'wzW561dqsC0'],
+    title: 'Cumbias del Recuerdo',
+    creator: 'Luis Sanavera',
+    data: []
   },
   reggaeton: {
     ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'],
@@ -90,9 +90,6 @@ const recommendedPlaylists = {
     data: []
   }
 };
-
-
-
 
 /* ========= Persistencia de Estado ========= */
 const PLAYER_STATE_KEY = "sy_player_state_v2";
@@ -1083,14 +1080,19 @@ function updateMediaSession(track){
 async function boot(){
   initTheme();
   
-  const fetchPromises = Object.keys(recommendedPlaylists).map(key => 
+  const playlistKeys = Object.keys(recommendedPlaylists);
+  const fetchPromises = playlistKeys.map(key =>
     fetchVideoDetailsByIds(recommendedPlaylists[key].ids)
+      .catch(error => {
+        console.error(`Failed to fetch playlist '${key}':`, error);
+        return []; // Return an empty array on failure so Promise.all doesn't reject
+      })
   );
   
   const results = await Promise.all(fetchPromises);
   
-  Object.keys(recommendedPlaylists).forEach((key, index) => {
-    recommendedPlaylists[key].data = results[index];
+  playlistKeys.forEach((key, index) => {
+    recommendedPlaylists[key].data = results[index] || []; // Ensure it's an array
   });
   
   const container = $("#homePlaylistsContainer");
@@ -1101,6 +1103,8 @@ async function boot(){
   renderOrder.forEach(key => {
     if (recommendedPlaylists[key] && recommendedPlaylists[key].data.length > 0) {
       renderRecommendedPlaylistCard(recommendedPlaylists[key], key);
+    } else {
+      console.warn(`Playlist '${key}' not rendered because no video data could be fetched.`);
     }
   });
   
