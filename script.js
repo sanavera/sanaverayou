@@ -33,6 +33,7 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 
 let ytPlayer = null, YT_READY = false, timer = null;
 
+// IDs para la primera lista de reproducción recomendada
 const recommendedPlaylistIds = [
   'dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ',
   'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk',
@@ -43,6 +44,19 @@ const recommendedPlaylistIds = [
   'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'
 ];
 let recommendedPlaylist = [];
+
+// IDs para la segunda lista de reproducción recomendada
+const recommendedPlaylistIds2 = [
+    '0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c',
+    'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ',
+    'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78',
+    'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A',
+    'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4',
+    'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0',
+    'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ',
+    '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'
+];
+let recommendedPlaylist2 = [];
 
 
 /* ========= Persistencia de Estado ========= */
@@ -104,7 +118,6 @@ function restorePlayerState(state) {
     });
     ytPlayer.setVolume(100);
 
-    // Si estaba reproduciendo al refrescar, reanudar
     if (state.wasPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
 
     updateUIOnTrackChange();
@@ -161,7 +174,7 @@ async function fetchVideoDetailsByIds(ids, retryCount = 0) {
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if (retryCount >= MAX_RETRIES) throw new Error('Todas las API keys han fallado.');
 
-  const uniqueIds = [...new Set(ids)]; // Remove duplicates
+  const uniqueIds = [...new Set(ids)];
   const url = new URL('https://www.googleapis.com/youtube/v3/videos');
   const apiKey = getRotatedApiKey();
   url.searchParams.append('key', apiKey);
@@ -201,7 +214,7 @@ function switchView(id){
   if (view) view.classList.add("active");
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
   if(id==="view-search") updateHomeGridVisibility();
-  heroScrollInvalidate(); // recalcular
+  heroScrollInvalidate();
 }
 $("#bottomNav").addEventListener("click", e=>{
   const btn = e.target.closest(".nav-btn"); if(!btn) return;
@@ -220,7 +233,6 @@ overlayInput?.addEventListener("keydown", async e=>{
   if(e.key!=="Enter") return;
   const q = overlayInput.value.trim(); if(!q) return;
   closeSearch();
-  // reset scroll solo al iniciar nueva búsqueda
   document.body.scrollTop = 0; 
   document.documentElement.scrollTop = 0;
   await startSearch(q);
@@ -343,15 +355,15 @@ function appendResults(chunk){
 }
 
 /* ========= Home grid ========= */
-function renderRecommendedPlaylistCard() {
-  const grid = $("#homeGrid");
-  if (!grid || !recommendedPlaylist.length) return;
+function renderRecommendedPlaylistCard(playlistData, targetSelector, queueType, title) {
+  const grid = $(targetSelector);
+  if (!grid || !playlistData.length) return;
 
-  grid.innerHTML = ""; // Clear previous content
+  grid.innerHTML = "";
 
-  const covers = recommendedPlaylist.slice(0, 4).map(track => track.thumb);
+  const covers = playlistData.slice(0, 4).map(track => track.thumb);
   while (covers.length < 4) {
-    covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="); // transparent pixel
+    covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
   }
 
   const card = document.createElement("article");
@@ -362,7 +374,7 @@ function renderRecommendedPlaylistCard() {
     </div>
     <div class="recommended-playlist-overlay">
       <div class="recommended-playlist-meta">
-        <h4 class="recommended-playlist-title">Lista de reproducción recomendada</h4>
+        <h4 class="recommended-playlist-title">${title}</h4>
         <div class="creator-line">
           <svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
           <span>Creador Luis Sanavera</span>
@@ -372,9 +384,8 @@ function renderRecommendedPlaylistCard() {
   `;
 
   card.onclick = () => {
-    if (!recommendedPlaylist.length) return;
-    setQueue(recommendedPlaylist, 'recommended', 0);
-    renderQueue(recommendedPlaylist, 'Lista de Reproducción Recomendada');
+    setQueue(playlistData, queueType, 0);
+    renderQueue(playlistData, title);
     switchView('view-player');
     playCurrent(true);
   };
@@ -527,7 +538,7 @@ function updateUIOnTrackChange() {
   updateMiniNow();
   refreshIndicators();
   updateControlStates();
-  updateMediaSession(currentTrack); // << integra Media Session
+  updateMediaSession(currentTrack);
 }
 function updateHero(track){
   const t = track || currentTrack;
@@ -539,7 +550,8 @@ function updateHero(track){
   $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
   
   const plName = (queueType === 'playlist' && viewingPlaylistId) ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "")
-             : (queueType === 'recommended') ? 'Lista Recomendada' : "";
+             : (queueType === 'recommended') ? 'Clásicos del Rock'
+             : (queueType === 'recommended2') ? 'Rock para el Asado' : "";
   $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName?` • ${plName}`:""}` : (plName || "—"));
 }
 function setQueue(srcArr, type, idx){
@@ -659,16 +671,13 @@ function startTimer(){
     if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
 
     const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
-    // Player principal
     $("#cur") && ($("#cur").textContent = fmt(cur));
     $("#dur") && ($("#dur").textContent = fmt(dur));
     $("#seek") && ($("#seek").value = dur? Math.floor((cur/dur)*1000) : 0);
-    // Mini player
     $("#miniCur") && ($("#miniCur").textContent = fmt(cur));
     $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
     $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
 
-    // Media Session progress
     try{
       if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
         navigator.mediaSession.setPositionState({
@@ -693,7 +702,8 @@ function toggleShuffle() {
       (queueType === 'search') ? items : 
       (queueType === 'favs') ? favs :
       (queueType === 'playlist') ? playlists.find(p=>p.id===viewingPlaylistId)?.tracks || [] : 
-      (queueType === 'recommended') ? recommendedPlaylist : [];
+      (queueType === 'recommended') ? recommendedPlaylist : 
+      (queueType === 'recommended2') ? recommendedPlaylist2 : [];
     const originalIndex = currentQueueSource.findIndex(t => t.id === currentTrack.id);
     setQueue(currentQueueSource, queueType, Math.max(0, originalIndex));
   }
@@ -725,7 +735,9 @@ function renderQueue(queueItems, title) {
   const ul = $("#queueList");
   if (!ul) return;
   ul.innerHTML = "";
-  viewingPlaylistId = null; // Clear this as it's not a user playlist
+  
+  const isUserPlaylist = queueType === 'playlist';
+  if(!isUserPlaylist) viewingPlaylistId = null;
 
   queueItems.forEach((t, i) => {
     const li = document.createElement("li");
@@ -751,13 +763,13 @@ function renderQueue(queueItems, title) {
       </div>`;
     li.onclick = (e) => {
       if (e.target.closest(".more") || e.target.closest(".card-play")) return;
-      setQueue(queueItems, 'recommended', i);
-      playCurrent(true);
+      if(isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
+      else { setQueue(queueItems, queueType, i); playCurrent(true); }
     };
     li.querySelector(".card-play").onclick = (e) => {
       e.stopPropagation();
-      setQueue(queueItems, 'recommended', i);
-      playCurrent(true);
+      if(isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
+      else { setQueue(queueItems, queueType, i); playCurrent(true); }
     };
     ul.appendChild(li);
   });
@@ -767,35 +779,8 @@ function renderQueue(queueItems, title) {
 function showPlaylistInPlayer(plId){
   const pl = playlists.find(p=>p.id===plId); if(!pl) return;
   viewingPlaylistId = plId;
-  const panel = $("#queuePanel"); panel && panel.classList.remove("hide");
-  $("#queueTitle") && ($("#queueTitle").textContent = pl.name);
-  const ul = $("#queueList"); if(!ul) return;
-  ul.innerHTML="";
-  pl.tracks.forEach((t,i)=>{
-    const li = document.createElement("li"); li.className="queue-item"; li.dataset.trackId=t.id;
-    li.innerHTML = `
-      <div class="thumb-wrap">
-        <img class="thumb" src="${t.thumb}" alt="">
-        <button class="card-play" title="Play" aria-label="Play">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
-      </div>
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${t.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${cleanAuthor(t.author)||""}</div>
-      </div>
-      <div class="actions">
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
-      </div>`;
-    li.onclick = (e)=>{ if(e.target.closest(".more") || e.target.closest(".card-play")) return; playFromPlaylist(pl.id, i, true); };
-    li.querySelector(".card-play").onclick = (e)=>{ e.stopPropagation(); playFromPlaylist(pl.id, i, true); };
-    ul.appendChild(li);
-  });
-  refreshIndicators();
+  queueType = 'playlist';
+  renderQueue(pl.tracks, pl.name);
 }
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
@@ -938,7 +923,6 @@ window.onYouTubeIframeAPIReady = function(){
       onStateChange:(e)=>{
         const st = e.data;
         if(st===YT.PlayerState.ENDED){ next(); }
-        // Media Session playbackState
         try{
           if('mediaSession' in navigator){
             navigator.mediaSession.playbackState = (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? 'playing'
@@ -960,17 +944,15 @@ if (sentinel){
   io.observe(sentinel);
 }
 
-/* ========= HERO shrink con rAF (anti-vibración) ========= */
+/* ========= HERO shrink con rAF ========= */
 let rafPending = false;
 let lastScrollY = 0;
 let targetT = 0, currentT = 0;
 const EPS = 0.001;
-const DIST = 200; // rango de colapso
+const DIST = 200;
 
 function applyHeroT(t){
-  // Snap a milésimas para evitar flicker por fracciones
   const tSnap = Math.round(t*1000)/1000;
-  // Escribir SOLO en los heroes visibles (menos reflow)
   const active = document.querySelector(".view.active");
   if(!active) return;
   const favHero = active.querySelector("#favHero, .fav-hero");
@@ -988,13 +970,11 @@ function heroScrollTickRaf(){
   const y = Math.max(0, lastScrollY - viewTop);
   targetT = Math.min(1, y / DIST);
 
-  // LERP suave para evitar “tambaleo”
   currentT += (targetT - currentT) * 0.25;
   if (Math.abs(targetT - currentT) < EPS) currentT = targetT;
 
   applyHeroT(currentT);
 
-  // seguir hasta llegar al target (cuando el usuario dejó de scrollear)
   if (Math.abs(targetT - currentT) >= EPS) {
     requestAnimationFrame(heroScrollTickRaf);
     rafPending = true;
@@ -1010,7 +990,7 @@ function heroScrollInvalidate(){
 window.addEventListener("scroll", heroScrollInvalidate, { passive:true });
 window.addEventListener("resize", heroScrollInvalidate, { passive:true });
 
-/* ========= Media Session API (Android notif con prev/next) ========= */
+/* ========= Media Session API ========= */
 let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if (!('mediaSession' in navigator) || !track) return;
@@ -1056,7 +1036,6 @@ function updateMediaSession(track){
     }catch(e){ /* algunos navegadores no permiten todos los handlers */ }
   }
 
-  // Estado de reproducción para la notificación
   try{
     const st = getPlaybackState();
     navigator.mediaSession.playbackState = (st==='playing'?'playing':(st==='paused'?'paused':'none'));
@@ -1067,10 +1046,19 @@ function updateMediaSession(track){
 async function boot(){
   initTheme();
   
-  // Fetch recommended playlist data
-  recommendedPlaylist = await fetchVideoDetailsByIds(recommendedPlaylistIds);
+  const [p1, p2] = await Promise.all([
+    fetchVideoDetailsByIds(recommendedPlaylistIds),
+    fetchVideoDetailsByIds(recommendedPlaylistIds2)
+  ]);
+  
+  recommendedPlaylist = p1;
+  recommendedPlaylist2 = p2;
+
   if (recommendedPlaylist.length > 0) {
-    renderRecommendedPlaylistCard();
+    renderRecommendedPlaylistCard(recommendedPlaylist, '#homeGrid', 'recommended', 'Clásicos del Rock');
+  }
+  if (recommendedPlaylist2.length > 0) {
+    renderRecommendedPlaylistCard(recommendedPlaylist2, '#homeGrid2', 'recommended2', 'Rock para el Asado');
   }
   
   updateHomeGridVisibility();
@@ -1085,12 +1073,10 @@ async function boot(){
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
 
-  // estado inicial hero
   heroScrollInvalidate();
 
   document.title = "SanaveraYou Pro";
 }
 boot();
 
-// Guardar estado al cerrar la página
 window.addEventListener('beforeunload', savePlayerState);
