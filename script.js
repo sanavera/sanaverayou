@@ -61,7 +61,7 @@ ids: [
 'UPnTZCTXHvw', // Grupo Red - No podre olvidarme de ti
 'v2FjIJUQPhU', // Grupo Red - Amor de adolescentes
 'fgTLwYJpbgQ', // Grupo Green - Solitario
-'LKjrq8_7bEo', // Grupo Green - Solo estoy
+'vHyZrsEuE2o', // Grupo Green - Solo estoy
 'kIfLAc6JhTE', // Tambo Tambo - La Cumbita
 'aRLPHz0zsUo', // Tambo Tambo - El Campanero
 'SE3oVXcppVc', // Los Charros - que nos entierren juntos
@@ -78,9 +78,9 @@ ids: [
 'rXuhQxo_Ebc', // Leo Mattioli - Llorarás más de diez veces
 'gfPmhcIIi90', // Rodrigo - Lo mejor del amor
 'biIRifuGPa4', // Antonio Rios - Nunca me faltes
-'jKgCg4cAVcw', // Damas Gratis - Se te ve la tanga
-'qt1mtX0CBPc', // Pibes Chorros - Duraznito
-'MUUrW7xJSw4', // Yerba Brava - La Cumbia de los Trapos
+'ym3vG_UgLEA', // Damas Gratis - Se te ve la tanga
+'sgIUGLFZ2sE', // Pibes Chorros - Duraznito
+'3bkfEGlZNqQ', // Yerba Brava - La Cumbia de los Trapos
 'Gzo5UY3D7lE', // Los cadiz - Si un amor se va
 'CdGxWUu2lwU', // Los Chakales - Vete de mi lado
 'NrbmqV7ah_c', // Malagata - Noche de luna
