@@ -439,3 +439,86 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 
 /* Color base exacto del documento */
 html, body { background-color: var(--bg); }
+
+
+/* ====== Recommended Playlist Card ====== */
+#homeGrid {
+  /* Ensure it can contain the single large card */
+  grid-template-columns: 1fr;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.recommended-playlist-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  border: 1px solid var(--border-subtle);
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+  animation: card-appear .6s cubic-bezier(.4,0,.2,1) forwards;
+}
+
+.recommended-playlist-card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.collage-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  height: 100%;
+  background-color: var(--surface);
+}
+
+.collage-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.recommended-playlist-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+  background: linear-gradient(to top, rgba(8,9,12,0.95) 0%, rgba(8,9,12,0.5) 50%, transparent 100%);
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.recommended-playlist-meta {
+  z-index: 1;
+}
+
+.recommended-playlist-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+
+.creator-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.spotify-logo {
+  width: 16px;
+  height: 16px;
+  color: #f8fafc; /* Make it white-ish */
+}
