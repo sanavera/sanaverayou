@@ -550,8 +550,8 @@ function updateHero(track){
   $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
   
   const plName = (queueType === 'playlist' && viewingPlaylistId) ? (playlists.find(p=>p.id===viewingPlaylistId)?.name || "")
-             : (queueType === 'recommended') ? 'Clásicos del Rock'
-             : (queueType === 'recommended2') ? 'Rock para el Asado' : "";
+             : (queueType === 'recommended') ? 'Melódicos en ingles'
+             : (queueType === 'recommended2') ? 'Cumbia estilo Santafesino' : "";
   $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName?` • ${plName}`:""}` : (plName || "—"));
 }
 function setQueue(srcArr, type, idx){
