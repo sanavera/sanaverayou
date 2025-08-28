@@ -56,7 +56,7 @@ ids: [
 'bhyjF3t5XJQ', // Ojitos Hechiceros - Grupo Imagen
 'KfnOWI2BzmU', // Dario y su grupo Angora - Secretaria
 'eVHIQ4oxjwM', // Dario y su grupo Angora - el rosario de mi madre
-'6dGe4dEr0qk', // Amar Azul - Niña
+'9jbiAeXZKbw', // Amar Azul - Niña
 'dcy_B7oSIf8', // Amar Azul - Tormenta de Nieve
 'UPnTZCTXHvw', // Grupo Red - No podre olvidarme de ti
 '7qOK6X-92aY', // Grupo Red - Amor de adolescentes
@@ -72,33 +72,33 @@ ids: [
 'h8emXFUHH0Y', // Los del Bohio - MR robinson
 '8iUkmnLc1ec', // Gilda - No me arrepiento de este amor
 'eIE_qwIiMTE', // La Nueva Luna - Y ahora te vas
-'Ykt2edUBEyA', // Sombras - La ventanita
-'ihrUZRxgef4', // Ráfaga - Mentirosa
-'oaG4zPqp6iQ', // Los Palmeras - El Bombón Asesino
-'XZA3A37ILVo', // Leo Mattioli - Llorarás más de diez veces
+'2aO4gdfkSc8', // Sombras - La ventanita
+'tJCK6y3gPfU', // Ráfaga - Mentirosa
+'1rwXkK3vWpg', // Los Palmeras - El Bombón Asesino
+'rXuhQxo_Ebc', // Leo Mattioli - Llorarás más de diez veces
 'gfPmhcIIi90', // Rodrigo - Lo mejor del amor
-'Du1UJyRwmts', // Antonio Rios - Nunca me faltes
+'biIRifuGPa4', // Antonio Rios - Nunca me faltes
 'jKgCg4cAVcw', // Damas Gratis - Se te ve la tanga
 'qt1mtX0CBPc', // Pibes Chorros - Duraznito
 'MUUrW7xJSw4', // Yerba Brava - La Cumbia de los Trapos
 'Gzo5UY3D7lE', // Los cadiz - Si un amor se va
-'qk2TvqtQ8Oc', // Los Chakales - Vete de mi lado
+'CdGxWUu2lwU', // Los Chakales - Vete de mi lado
 'NrbmqV7ah_c', // Malagata - Noche de luna
 'PfnSKD5hgYk', // Siete Lunas - Prende el fuego
 'NqxCPeG0R7Q', // Los Dinos - Ingrata
 'gOt1JFkEauU', // Grupo Trinidad - Ya no es una nenita
 'vhSIFloIMxI', // Los del Fuego - Jurabas tu
-'dF58Q7uy5OM', // Commanche - Tonta
+'dWOEGMhOm9k', // Commanche - Tonta
 'UGFBEUBEpss', // Volcan - Esa malvada
-'uLcU-rLzjrc', // Gladys La Bomba Tucumana - La pollera amarilla
+'2wGDGtm8dwY', // Gladys La Bomba Tucumana - La pollera amarilla
 'IfMujYwHOOE', // Karicia - Quinceañera
 '9X35iRX27B8', // Los Avilas - te amo en silencio
-'kAap4MCq6WY', // Los Mirlos - La danza de los mirlos
+'PsLVh10nF2w', // Los Mirlos - La danza de los mirlos
 'SYQ6svFb8_0', // Los mirlos - por dinero por amor
 '9UQSYNvA6NE', // Siete lunas - Loco corazón
 'z-MrnGLyj28', // Grupo Lagrimas - Tu perfume
 'xH_7932NfYU', // Grupo imagen - Pio pio
-'Mxc5j7SrjUE'  // Amar azul - cuentame
+'PTqvL19p87c'  // Amar azul - cuentame
 ],
 title: 'Cumbias del Recuerdo',
 creator: 'Luis Sanavera',
