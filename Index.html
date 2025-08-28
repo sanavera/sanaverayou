@@ -45,8 +45,11 @@
             <span class="eq-title" aria-hidden="true"><span></span><span></span><span></span></span>
           </h3>
         </header>
-        <div id="homePlaylistsContainer">
+        <div id="homePlaylistsContainer" class="home-grid">
             <!-- Las tarjetas de playlist se insertarán aquí dinámicamente -->
+        </div>
+        <div id="userPlaylistsContainer" class="home-grid">
+             <!-- Las playlists de usuarios se insertarán aquí -->
         </div>
       </section>
 
@@ -156,16 +159,48 @@
     <div class="sheet-content">
       <div class="sheet-title">Agregar a playlist</div>
       <div id="plChoices" class="sheet-list"></div>
-      <div class="sheet-row">
-        <input id="plNewName" placeholder="Nombre nueva playlist" />
-        <button id="plCreate" class="pill">Crear</button>
-      </div>
       <button id="plCancel" class="sheet-item ghost">Cancelar</button>
     </div>
   </div>
 
+  <!-- Nuevo Modal para Crear Playlist -->
+  <div id="createPlaylistSheet" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-title">Crear nueva playlist</div>
+      <div class="sheet-form">
+        <input id="newPlName" placeholder="Nombre de la playlist" autocomplete="off" />
+        <input id="newPlCreator" placeholder="Tu nombre (creador)" autocomplete="off" />
+      </div>
+      <div class="sheet-actions">
+        <button id="createPlCancel" class="sheet-item ghost">Cancelar</button>
+        <button id="createPlConfirm" class="sheet-item pill">Crear</button>
+      </div>
+    </div>
+  </div>
+
+
   <div id="yt-holder"><div id="player"></div></div>
 
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, query, orderBy, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+    window.firebase = {
+      initializeApp,
+      getFirestore,
+      collection,
+      onSnapshot,
+      addDoc,
+      doc,
+      updateDoc,
+      serverTimestamp,
+      query,
+      orderBy,
+      where,
+      getDocs,
+      deleteDoc
+    };
+  </script>
   <script src="script.js"></script>
 </body>
 </html>
