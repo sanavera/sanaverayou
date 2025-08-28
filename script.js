@@ -104,10 +104,7 @@ title: 'Cumbias del Recuerdo',
 creator: 'Luis Sanavera',
 data: []
 },
-    title: 'Cumbias del Recuerdo',
-    creator: 'Luis Sanavera',
-    data: []
-  },
+    
   reggaeton: {
     ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'],
     title: 'Noche de Reggaetón',
