@@ -48,7 +48,58 @@ const recommendedPlaylists = {
     data: []
   },
   cumbia: {
-    ids: ['u-pAnwA6M-c', 'QPAz_VbTf-A', 'l9u6gAFw6_I', 'c46ut39T3oQ', 'kENT_o-vW7s', 'z4sN05-xIsE', 'x-8f6e-MIcQ', 'yXqira2XjAg', 'uodlOkb-30M', '9d54E-k0_pQ', 'VVupVmfFBqs', 'KRArl6sX8cM', 'gXv_gHTGnj8', 'cJREas23tPE', 'Ykt2edUBEyA', 'O1UhpeyxhbA', 'XKAuHsMuWjA', 'HdWnxBsOW5E', 'gD5UZVSQ3JQ', 'ihrUZRxgef4', 'jsCr8nw0YAY', 'Jk792GK3CzU', '8iUkmnLc1ec', 'mm_SwD5PYvY', 'FA8iL4CtQfc', 'MOXcXy3T3oQ', 'HsIMDKWsljw', 'AIQrqFF58Zw', '6z_IcvS2vRw', 'eIE_qwIiMTE', 'Fq_xTrwBqyY', 'Np--8TJXYIQ', 'AaL0MB3zN04', '0xkqYqi04xM', 'cSMs5am_YPk', 'QiFuCf86P3Q', 'lhNP8jYLHIc', 'BK0ra1tyuqs', 'I714M5hgyjA', 'OQB6K81DnWc', 'D1K-QYVug2w', 'Du1UJyRwmts', 'gQY-5f_w6oU', 'Bu5xo2m_b2U', '7apHMy2zVQc', '23lu6LbRb28', 'YEYGBGwLT-w', 'Xg-PwOpuuQ4', '7iHaFTU6DdE', 's_4aXKrsXSU', 'wzW561dqsC0'],
+    ids: [
+        's-S862p6faU', // Nacarita - Los Diferentes (Cover)
+        'yXqira2XjAg', // Cuando era jovencito - Grupo Nobel
+        'XKAuHsMuWjA', // Amor desesperado - Los Tiranos
+        'l9u6gAFw6_I', // El Gran Varon - Grupo Bor
+        'HdWnxBsOW5E', // Ojitos Hechiceros - Grupo Imagen
+        'jsCr8nw0YAY', // Dario y su grupo Angora - Vuelve
+        'Jk792GK3CzU', // Dario y su grupo Angora - Amores como el nuestro
+        'mm_SwD5PYvY', // Amar Azul - Niña
+        'FA8iL4CtQfc', // Amar Azul - Tormenta de Nieve
+        'MOXcXy3T3oQ', // Grupo Red - No podre olvidarme de ti
+        'HsIMDKWsljw', // Grupo Red - Amor de adolescentes
+        'AIQrqFF58Zw', // Green - Te amo en silencio
+        '6z_IcvS2vRw', // Green - El embrujo
+        'eIE_qwIiMTE', // Tambo Tambo - La Cumbita
+        'Fq_xTrwBqyY', // Tambo Tambo - El Campanero
+        'Np--8TJXYIQ', // Los Charros - Amores como el nuestro
+        'AaL0MB3zN04', // Los Charros - Como te voy a olvidar
+        '0xkqYqi04xM', // Los Lamas - Amor de millonario
+        'cSMs5am_YPk', // Los Lamas - La coloreada
+        'QiFuCf86P3Q', // Los del Bohio - Que quieres tu de mi
+        'lhNP8jYLHIc', // Los del Bohio - Nunca me faltes
+        'BK0ra1tyuqs', // Gilda - No me arrepiento de este amor
+        'I714M5hgyjA', // La Nueva Luna - Y ahora te vas
+        'OQB6K81DnWc', // Sombras - La ventanita
+        'D1K-QYVug2w', // Ráfaga - Mentirosa
+        'Du1UJyRwmts', // Los Palmeras - El Bombón Asesino
+        'gQY-5f_w6oU', // Leo Mattioli - Llorarás más de diez veces
+        'Bu5xo2m_b2U', // Rodrigo - Lo mejor del amor
+        '7apHMy2zVQc', // Antonio Rios - Nunca me faltes
+        '23lu6LbRb28', // Damas Gratis - Se te ve la tanga
+        'YEYGBGwLT-w', // Pibes Chorros - Duraznito
+        'Xg-PwOpuuQ4', // Yerba Brava - La Cumbia de los Trapos
+        '7iHaFTU6DdE', // Los Leales - Si te vas
+        's_4aXKrsXSU', // Los Chakales - Vete de mi lado
+        'wzW561dqsC0', // Malagata - Noche de luna
+        'nkmbdTouBe0', // Siete Lunas - Enganchados
+        'Qk6fdmpupw4', // Los Dinos - Rios de babilonia
+        'dhCe3XG09wI', // Grupo Trinidad - La Cerveza
+        'MJqtJFiU5M4', // Los del Fuego - Jurabas tu
+        'aTMZy3AbK2Y', // Commanche - Tonta
+        'uL61r8Xwhak', // Volcan - Esa malvada
+        'P23tp8mc3Cs', // Gladys La Bomba Tucumana - La pollera amarilla
+        'SEqpLoEcuq8', // Karicia - Quinceañera
+        'KlqR5vBFqR0', // Los Avilas - Para que quiero un corazon
+        'CuG6KrMdeYg', // Los Mirlos - La danza de los mirlos
+        'VVupVmfFBqs', // Grupo Nectar - El arbolito
+        'KRArl6sX8cM', // Agua Marina - Paloma ajena
+        'gXv_gHTGnj8', // Armonia 10 - El cervecero
+        'cJREas23tPE', // Corazon Serrano - Vete
+        'Ykt2edUBEyA'  // Papillon - Cuerpo de sirena
+    ],
     title: 'Cumbias del Recuerdo',
     creator: 'Luis Sanavera',
     data: []
@@ -202,7 +253,6 @@ const getRotatedApiKey = () => {
   return k;
 };
 
-// *** FUNCIÓN CORREGIDA PARA MANEJAR MÁS DE 50 IDs ***
 async function fetchVideoDetailsByIds(ids) {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return [];
@@ -244,12 +294,12 @@ async function fetchVideoDetailsByIds(ids) {
             }));
         } catch (e) {
             console.error('YouTube API fetch chunk failed:', e);
-            return fetchChunk(chunk, retryCount + 1); // Reintentar con otra key
+            return fetchChunk(chunk, retryCount + 1);
         }
     };
     
     const results = await Promise.all(chunks.map(chunk => fetchChunk(chunk)));
-    return results.flat(); // Unir los resultados de todos los chunks
+    return results.flat();
 }
 
 
@@ -413,6 +463,11 @@ function renderRecommendedPlaylistCard(playlist, queueType) {
   while (covers.length < 4) {
     covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
   }
+  
+  const isLuis = playlist.creator === 'Luis Sanavera';
+  const logoSvg = isLuis 
+    ? `<svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>`
+    : `<svg class="youtube-logo" viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg>`;
 
   const card = document.createElement("article");
   card.className = "recommended-playlist-card";
@@ -423,7 +478,7 @@ function renderRecommendedPlaylistCard(playlist, queueType) {
     <div class="recommended-playlist-meta">
       <h4 class="recommended-playlist-title">${playlist.title}</h4>
       <div class="creator-line">
-        <svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
+        ${logoSvg}
         <span>Creador ${playlist.creator}</span>
       </div>
     </div>
