@@ -48,58 +48,62 @@ const recommendedPlaylists = {
     data: []
   },
   cumbia: {
-    ids: [
-        'UHWCB7D8XoI', // Nacarita - Los Diferentes (Cover)
-        'yXqira2XjAg', // Cuando era jovencito - Grupo Nobel
-        'XKAuHsMuWjA', // Amor desesperado - Los Tiranos
-        'l9u6gAFw6_I', // El Gran Varon - Grupo Bor
-        'HdWnxBsOW5E', // Ojitos Hechiceros - Grupo Imagen
-        'jsCr8nw0YAY', // Dario y su grupo Angora - Vuelve
-        'Jk792GK3CzU', // Dario y su grupo Angora - Amores como el nuestro
-        'mm_SwD5PYvY', // Amar Azul - Niña
-        'FA8iL4CtQfc', // Amar Azul - Tormenta de Nieve
-        'MOXcXy3T3oQ', // Grupo Red - No podre olvidarme de ti
-        'HsIMDKWsljw', // Grupo Red - Amor de adolescentes
-        'AIQrqFF58Zw', // Green - Te amo en silencio
-        '6z_IcvS2vRw', // Green - El embrujo
-        'eIE_qwIiMTE', // Tambo Tambo - La Cumbita
-        'Fq_xTrwBqyY', // Tambo Tambo - El Campanero
-        'Np--8TJXYIQ', // Los Charros - Amores como el nuestro
-        'AaL0MB3zN04', // Los Charros - Como te voy a olvidar
-        '0xkqYqi04xM', // Los Lamas - Amor de millonario
-        'cSMs5am_YPk', // Los Lamas - La coloreada
-        'QiFuCf86P3Q', // Los del Bohio - Que quieres tu de mi
-        'lhNP8jYLHIc', // Los del Bohio - Nunca me faltes
-        'BK0ra1tyuqs', // Gilda - No me arrepiento de este amor
-        'I714M5hgyjA', // La Nueva Luna - Y ahora te vas
-        'OQB6K81DnWc', // Sombras - La ventanita
-        'D1K-QYVug2w', // Ráfaga - Mentirosa
-        'Du1UJyRwmts', // Los Palmeras - El Bombón Asesino
-        'gQY-5f_w6oU', // Leo Mattioli - Llorarás más de diez veces
-        'Bu5xo2m_b2U', // Rodrigo - Lo mejor del amor
-        '7apHMy2zVQc', // Antonio Rios - Nunca me faltes
-        '23lu6LbRb28', // Damas Gratis - Se te ve la tanga
-        'YEYGBGwLT-w', // Pibes Chorros - Duraznito
-        'Xg-PwOpuuQ4', // Yerba Brava - La Cumbia de los Trapos
-        '7iHaFTU6DdE', // Los Leales - Si te vas
-        's_4aXKrsXSU', // Los Chakales - Vete de mi lado
-        'wzW561dqsC0', // Malagata - Noche de luna
-        'nkmbdTouBe0', // Siete Lunas - Enganchados
-        'Qk6fdmpupw4', // Los Dinos - Rios de babilonia
-        'dhCe3XG09wI', // Grupo Trinidad - La Cerveza
-        'MJqtJFiU5M4', // Los del Fuego - Jurabas tu
-        'aTMZy3AbK2Y', // Commanche - Tonta
-        'uL61r8Xwhak', // Volcan - Esa malvada
-        'P23tp8mc3Cs', // Gladys La Bomba Tucumana - La pollera amarilla
-        'SEqpLoEcuq8', // Karicia - Quinceañera
-        'KlqR5vBFqR0', // Los Avilas - Para que quiero un corazon
-        'CuG6KrMdeYg', // Los Mirlos - La danza de los mirlos
-        'VVupVmfFBqs', // Grupo Nectar - El arbolito
-        'KRArl6sX8cM', // Agua Marina - Paloma ajena
-        'gXv_gHTGnj8', // Armonia 10 - El cervecero
-        'cJREas23tPE', // Corazon Serrano - Vete
-        'Ykt2edUBEyA'  // Papillon - Cuerpo de sirena
-    ],
+ids: [
+'UHWCB7D8XoI', // Nacarita - Los Diferentes (Cover)
+'OXunU0CJXtc', // Cuando era jovencito - Grupo Nobel
+'D-TrNF5V2jo', // Amor desesperado - Los Tiranos
+'Wcb_gUU5LVA', // El Gran Varon - Grupo Bor
+'bhyjF3t5XJQ', // Ojitos Hechiceros - Grupo Imagen
+'KfnOWI2BzmU', // Dario y su grupo Angora - Secretaria
+'eVHIQ4oxjwM', // Dario y su grupo Angora - el rosario de mi madre
+'6dGe4dEr0qk', // Amar Azul - Niña
+'dcy_B7oSIf8', // Amar Azul - Tormenta de Nieve
+'UPnTZCTXHvw', // Grupo Red - No podre olvidarme de ti
+'7qOK6X-92aY', // Grupo Red - Amor de adolescentes
+'fgTLwYJpbgQ', // Grupo Green - Solitario
+'LKjrq8_7bEo', // Grupo Green - Solo estoy
+'kIfLAc6JhTE', // Tambo Tambo - La Cumbita
+'aRLPHz0zsUo', // Tambo Tambo - El Campanero
+'SE3oVXcppVc', // Los Charros - que nos entierren juntos
+'P6W-c8y4j5w', // Los Charros - Me bebi tu recuerdo
+'yBco-h1QPPA', // Los Lamas - Siempre soñando contigo
+'umLyS0-GXLQ', // Los Lamas - que hermosa noche
+'01p-1kMosCI', // Los del Bohio - del vals una más
+'h8emXFUHH0Y', // Los del Bohio - MR robinson
+'8iUkmnLc1ec', // Gilda - No me arrepiento de este amor
+'eIE_qwIiMTE', // La Nueva Luna - Y ahora te vas
+'Ykt2edUBEyA', // Sombras - La ventanita
+'ihrUZRxgef4', // Ráfaga - Mentirosa
+'oaG4zPqp6iQ', // Los Palmeras - El Bombón Asesino
+'XZA3A37ILVo', // Leo Mattioli - Llorarás más de diez veces
+'gfPmhcIIi90', // Rodrigo - Lo mejor del amor
+'Du1UJyRwmts', // Antonio Rios - Nunca me faltes
+'jKgCg4cAVcw', // Damas Gratis - Se te ve la tanga
+'qt1mtX0CBPc', // Pibes Chorros - Duraznito
+'MUUrW7xJSw4', // Yerba Brava - La Cumbia de los Trapos
+'Gzo5UY3D7lE', // Los cadiz - Si un amor se va
+'qk2TvqtQ8Oc', // Los Chakales - Vete de mi lado
+'NrbmqV7ah_c', // Malagata - Noche de luna
+'PfnSKD5hgYk', // Siete Lunas - Prende el fuego
+'NqxCPeG0R7Q', // Los Dinos - Ingrata
+'gOt1JFkEauU', // Grupo Trinidad - Ya no es una nenita
+'vhSIFloIMxI', // Los del Fuego - Jurabas tu
+'dF58Q7uy5OM', // Commanche - Tonta
+'UGFBEUBEpss', // Volcan - Esa malvada
+'uLcU-rLzjrc', // Gladys La Bomba Tucumana - La pollera amarilla
+'IfMujYwHOOE', // Karicia - Quinceañera
+'9X35iRX27B8', // Los Avilas - te amo en silencio
+'kAap4MCq6WY', // Los Mirlos - La danza de los mirlos
+'SYQ6svFb8_0', // Los mirlos - por dinero por amor
+'9UQSYNvA6NE', // Siete lunas - Loco corazón
+'z-MrnGLyj28', // Grupo Lagrimas - Tu perfume
+'xH_7932NfYU', // Grupo imagen - Pio pio
+'Mxc5j7SrjUE'  // Amar azul - cuentame
+],
+title: 'Cumbias del Recuerdo',
+creator: 'Luis Sanavera',
+data: []
+},
     title: 'Cumbias del Recuerdo',
     creator: 'Luis Sanavera',
     data: []
