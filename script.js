@@ -36,7 +36,7 @@ let ytPlayer = null, YT_READY = false, timer = null;
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqRAIA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Clásicos del Rock',
     creator: 'Luis Sanavera',
     data: []
@@ -48,42 +48,45 @@ const recommendedPlaylists = {
     data: []
   },
   reggaeton: {
-    ids: ['kJQP7kiw5Fk', 'nu2HB-0ciX0', 'wnJ6LuUFpMo', 'C6MOKXm8xjg', 'aJOTlE1K90k', '1d6horQ5l-8', 'hT1D5dMN3oE', 'y5TrWXSKjO4', 'hXd5p6jUoDE', 'fPoX9Tp07s4', 'Oa_9sU7RAIA', '6Gq2tqaF6O4'],
+    ids: ['6DHDIDgn2oA', 'HhxQnTELitk', 'GD4gfNKNN9I', 'UONnRMuuDps', 'DI4uMaxcvn8', 'KoSp5IWrpJw', 'ZlpCEEuGTMk', 'e_cfyudmdiQ', 'kJQP7kiw5Fk', 'h6qbOjac8qo', 'gRrq1RNqTjM', 't7gsVuW8AtY'],
     title: 'Noche de Reggaetón',
     creator: 'Sebastián Sanavera',
     data: []
   },
   reggae: {
-    ids: ['S5FCdx7Dn0o', '4oVf-d_DwK8', 'kOFu6g3OK2y', 'l3V9zyraRA', 'Xc0AeF4jsKM', 'x59kS2A7U74', 'CVd6i4dF2aM', '8pQdC2IqRA', '4QR82f2xGjA', 'XCVaPa1S54c', 'L3oK24FWgJA', 'j6mYt4oJrYg'],
+    ids: ['be67OhUSULg', 'q05liMm3LI4', 'HgHoLyKifCw', 'PA32XOdGA0w', 'q6fgVVlPl08', 'qt0HOpKGp6w', 'BzUNOgxflgU', 'p8HoEvDh70Y', 'eNIfTuUaglA', '2C0mGEfQnt4', 'BvsDoH8r6BI', '0tTuDl8HlZs'],
     title: 'Vibras de Reggae',
     creator: 'Sebastián Sanavera',
     data: []
   },
   pop: {
-    ids: ['OPf0YbXqDm0', 'fKopy74weus', 'hLQl3WQQoQ0', 'kffacxfA7G4', 'C-u5WLJ9Yk4', '0-q1KafFCLU', 'RgKAFK5djSk', '4NRXx6U8ABQ', 'pBk4NYhWNMM', 'nf-l-sS1h5g', 'iy4mXZN1Zzk', 'YQHsXMglC9A'],
+    ids: ['2HCThr-qbPw', '0M1UCYRZAtM', 'gPoiv0sZ4s4', 'E0Y8OEo_zOc', 'OPf0YbXqDm0', 'rj5dxoMY-dE', 'djV11Xbc914', 'cF1Na4AIecM', '2Vv-BfVoq4g', 'sOo3mdYPFPU', 'PMivT7MJ41M', 'TWZKw_MgUPI'],
     title: 'Éxitos Pop',
     creator: 'Sebastián Sanavera',
     data: []
   },
   rock_int: {
-    ids: ['fJ9rUzIMcZQ', '1w7OgIMMRc4', 'rY0WxgSXdEE', 'E-E8dI-Xm2k', 'I_2D8Eo15wE', 's61g118c7e4', 'v2AC41dglnM', 'G3uaQDpqNk8', 'e80qhyovOnA', 'zRIbf6JqkNc', 'OMaycNcPsHI', 'u9Dg-g7t2l4'],
+    ids: ['O5290Sf8zhA', 'DgPMP-kgnAY', 'Io-9rQrgw70', 'wcbi2qFxmVA', 'AOq-UiY6yGg', 'Nt27aBceerI', 'UTrypt8GwJ0', 'NV9Wc0bxeVo', 'MsRzUfV8KXY', 'IxVytU0XV8s', 'KQ6zr6kCPj8', 'HokwE8CoefY'],
     title: 'Himnos del Rock',
     creator: 'Sebastián Sanavera',
     data: []
   },
   bachata: {
-    ids: ['Kaayb5_S_cs', 'BfecT4j-1-s', '4YyEd_yT45M', 'u3ePPA02e_E', '8iCwtxJ8h7I', 'Crq_fRv4Gvs', '8qpcZdZWeL8', 't_y4FpLNL4E', 'tH2F5m1o_w8', '90j0zJmIJJc', 'w2DBsMfn9yA', 'B1g_w_E-b4s'],
+    ids: ['TiM_TFpT_DE', 'dsLjyLn859g', 'nGdWPjqVBLg', 'PuaTXMUHiBk', '2T6YMokSM68', 'FL-IDhDpV4Y', 'KmayR29pKbQ', 'PPgQ4nDLh0s', '8o2n8eCFgtc', 'D6Ju9CyOB-I', '8WrgA6mUiIY', '6D_MelM9wdE'],
     title: 'Corazón de Bachata',
     creator: 'Sebastián Sanavera',
     data: []
   },
   international: {
-    ids: ['z3wAjAXRAks', '32wbdUe_r5E', 'djV11Xbc914', 'p47fEXGabaY', '6-HUgzYPm9g', 's_wzBE_a_dc', 'H-0a9M-2H84', 'h_D3VFfhvs4', 'rblt2EtFfC4', 'n4RjJKxsamQ', '6d3NlINL_30', 'zRIbf6JqkNc'],
+    ids: ['LazLHZ00Ms8', '0iDNkdAeA6M', 'NV9Wc0bxeVo', 'dzhhGVjE2MU', 'nkfoxyqMZLQ', '3orLSmKYMCo', 'PcJyKflsEIA', 'ZrEnyrc7Pj8', 'krMwB2Mw7DQ', 'FF3_7SlsLOU', 'QnVJU1lau54', '671fHOUgZQY'],
     title: 'Clásicos 70/80/90s',
     creator: 'Sebastián Sanavera',
     data: []
   }
 };
+
+
+
 /* ========= Persistencia de Estado ========= */
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 function getPlaybackState(){
