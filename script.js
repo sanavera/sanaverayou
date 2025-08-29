@@ -40,13 +40,15 @@ const recommendedPlaylists = {
     ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   p2: {
     ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
     title: 'Cumbia estilo Santafesino',
     creator: 'Luis Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   cumbia: {
     ids: [
@@ -54,43 +56,50 @@ const recommendedPlaylists = {
     ],
     title: 'Cumbias del Recuerdo',
     creator: 'Luis Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   reggaeton: {
     ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'],
     title: 'Noche de Reggaetón',
     creator: 'Sebastián Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   reggae: {
     ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', '1ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'],
     title: 'Vibras de Reggae',
     creator: 'Sebastián Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   pop: {
     ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'],
     title: 'Éxitos Pop',
     creator: 'Sebastián Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   rock_int: {
     ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'],
     title: 'Himnos del Rock',
     creator: 'Sebastián Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   bachata: {
     ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'],
     title: 'Corazón de Bachata',
     creator: 'Sebastián Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   },
   international: {
     ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'],
     title: 'Clásicos 70/80/90s',
     creator: 'Sebastián Sanavera',
-    data: []
+    data: [],
+    isRecommended: true
   }
 };
 
@@ -407,86 +416,64 @@ function appendResults(chunk){
 }
 
 /* ========= Home grid ========= */
-function renderRecommendedPlaylistCard(playlist, queueType) {
-  const container = $("#homePlaylistsContainer");
-  if (!container || !playlist.data.length) return;
-
-  const covers = playlist.data.slice(0, 4).map(track => track.thumb);
-  while (covers.length < 4) {
-    covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-  }
-  
-  const isLuis = playlist.creator === 'Luis Sanavera';
-  const logoSvg = isLuis 
-    ? `<svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>`
-    : `<svg class="youtube-logo" viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg>`;
-
-  const card = document.createElement("article");
-  card.className = "recommended-playlist-card";
-  card.innerHTML = `
-    <div class="collage-container">
-      ${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}
-    </div>
-    <div class="recommended-playlist-meta">
-      <h4 class="recommended-playlist-title">${playlist.title}</h4>
-      <div class="creator-line">
-        ${logoSvg}
-        <span>Creador ${playlist.creator}</span>
-      </div>
-    </div>
-  `;
-
-  card.onclick = () => {
-    setQueue(playlist.data, queueType, 0);
-    renderQueue(playlist.data, playlist.title);
-    switchView('view-player');
-    playCurrent(true);
-  };
-
-  container.appendChild(card);
-}
-
-function renderCommunityPlaylistCard(playlist) {
-    const container = $("#userPlaylistsContainer");
+function renderPlaylistCard(playlist) {
+    const container = $("#allPlaylistsContainer");
     if (!container) return;
 
-    const covers = playlist.tracks.slice(0, 4).map(track => track.thumb);
+    const tracks = playlist.isRecommended ? playlist.data : playlist.tracks;
+    if (!tracks || tracks.length === 0) return;
+
+    // Usar las últimas 4 canciones agregadas
+    const covers = tracks.slice(0, 4).map(track => track.thumb);
     while (covers.length < 4) {
         covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     }
-    
-    const logosSvg = `
-        <svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
-        <svg class="youtube-logo" viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg>
-    `;
+
+    let logoSvg;
+    if (playlist.isRecommended) {
+        const isLuis = playlist.creator === 'Luis Sanavera';
+        logoSvg = isLuis 
+            ? `<svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>`
+            : `<svg class="youtube-logo" viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg>`;
+    } else {
+        logoSvg = `
+            <svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
+            <svg class="youtube-logo" viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg>
+        `;
+    }
 
     const card = document.createElement("article");
-    card.className = "recommended-playlist-card";
-    card.dataset.id = playlist.id;
+    card.className = "playlist-card";
+    card.dataset.id = playlist.id || playlist.title;
 
     card.innerHTML = `
         <div class="collage-container">
             ${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}
         </div>
-        <div class="recommended-playlist-meta">
-            <h4 class="recommended-playlist-title">${playlist.name}</h4>
+        <div class="playlist-meta">
+            <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
             <div class="creator-line">
-                ${logosSvg}
+                ${logoSvg}
                 <span>Creador: ${playlist.creator}</span>
             </div>
         </div>
     `;
 
     card.onclick = () => {
-        setQueue(playlist.tracks, 'playlist', 0);
-        viewingPlaylistId = playlist.id;
-        renderQueue(playlist.tracks, playlist.name);
+        const queueTracks = playlist.isRecommended ? playlist.data : playlist.tracks;
+        const queueId = playlist.isRecommended ? null : playlist.id;
+        const queueTitle = playlist.isRecommended ? playlist.title : playlist.name;
+        
+        setQueue(queueTracks, playlist.isRecommended ? 'recommended' : 'playlist', 0);
+        viewingPlaylistId = queueId;
+        renderQueue(queueTracks, queueTitle);
         switchView('view-player');
         playCurrent(true);
     };
     
     container.appendChild(card);
 }
+
 
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
@@ -1275,9 +1262,22 @@ async function boot(){
       communityPlaylists = playlists;
       renderPlaylists();
       
-      const userContainer = $("#userPlaylistsContainer");
-      if(userContainer) userContainer.innerHTML = "";
-      communityPlaylists.filter(p => p.tracks && p.tracks.length > 0).forEach(p => renderCommunityPlaylistCard(p));
+      const allPlaylists = [
+        ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0),
+        ...communityPlaylists.filter(p => p.tracks && p.tracks.length > 0)
+      ];
+      
+      allPlaylists.sort((a, b) => {
+        const dateA = a.updatedAt?.toDate() || 0;
+        const dateB = b.updatedAt?.toDate() || 0;
+        if (a.isRecommended) return 1; // Siempre al final si no tienen fecha
+        if (b.isRecommended) return -1;
+        return dateB - dateA;
+      });
+
+      const container = $("#allPlaylistsContainer");
+      if(container) container.innerHTML = "";
+      allPlaylists.forEach(p => renderPlaylistCard(p));
   });
 
   const playlistKeys = Object.keys(recommendedPlaylists);
@@ -1293,18 +1293,6 @@ async function boot(){
   
   playlistKeys.forEach((key, index) => {
     recommendedPlaylists[key].data = results[index] || [];
-  });
-  
-  const container = $("#homePlaylistsContainer");
-  if(container) container.innerHTML = "";
-
-  const renderOrder = ['p1', 'p2', 'cumbia', 'reggaeton', 'reggae', 'pop', 'rock_int', 'bachata', 'international'];
-  renderOrder.forEach(key => {
-    if (recommendedPlaylists[key] && recommendedPlaylists[key].data.length > 0) {
-      renderRecommendedPlaylistCard(recommendedPlaylists[key], key);
-    } else {
-      console.warn(`Playlist '${key}' not rendered because no video data could be fetched.`);
-    }
   });
   
   updateHomeGridVisibility();
