@@ -313,8 +313,14 @@ const YOUTUBE_API_KEYS = [
   "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
   "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE",
   "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM",
-  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0"
+  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0",
+  "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI",
+  "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs",
+  "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ",
+  "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc",
+  "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
 ];
+
 let currentApiKeyIndex = 0;
 const getRotatedApiKey = () => {
   const k = YOUTUBE_API_KEYS[currentApiKeyIndex];
