@@ -1251,7 +1251,8 @@ document.addEventListener("click", (e)=>{
   if(queueItem && viewingPlaylistId){
     const trackId = queueItem.dataset.trackId;
     const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
-    if (!pl || !isMyPlaylist(pl.id)) return; // Solo el creador puede editar
+    // Permitir editar solo si es *mi* playlist
+    if (!pl || !isMyPlaylist(pl.id)) return; 
 
     const it = pl.tracks.find(t=>t.id===trackId);
     if(!it) return;
@@ -1271,6 +1272,7 @@ document.addEventListener("click", (e)=>{
     });
     return;
   } else if (queueItem) {
+      // Aplica a colas que no son mis playlists (búsqueda, favs, recomendadas)
       const trackId = queueItem.dataset.trackId;
       const it = queue.find(t => t.id === trackId);
       if (!it) return;
@@ -1550,9 +1552,10 @@ function renderAllHomePlaylists() {
     
     allPlaylists.sort((a, b) => {
       // updatedAt solo existe en playlists de la comunidad
+      // a las recomendadas se les da una fecha muy antigua para que queden abajo de las nuevas.
       const dateA = a.updatedAt?.toDate() || new Date(0); 
       const dateB = b.updatedAt?.toDate() || new Date(0);
-      return dateB - a;
+      return dateB - dateA; // Ordena de más reciente a más antiguo
     });
 
     const container = $("#allPlaylistsContainer");
