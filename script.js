@@ -313,7 +313,12 @@ const YOUTUBE_API_KEYS = [
   "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
   "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE",
   "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM",
-  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0"
+  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0",
+  "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI",
+  "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs",
+  "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ",
+  "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc",
+  "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
 ];
 let currentApiKeyIndex = 0;
 const getRotatedApiKey = () => {
@@ -1626,6 +1631,41 @@ async function boot(){
     communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderPlaylists();
     renderAllHomePlaylists();
+  
+    // **BUG FIX:** If a playlist being viewed is updated (e.g., a song is removed),
+    // re-render the queue to prevent desynchronization.
+    if (viewingPlaylistId && queueType === 'playlist') {
+      const updatedPlaylist = communityPlaylists.find(p => p.id === viewingPlaylistId);
+      if (updatedPlaylist) {
+        const currentTrackId = currentTrack ? currentTrack.id : null;
+        renderQueue(updatedPlaylist.tracks, updatedPlaylist.name);
+        setQueue(updatedPlaylist.tracks, 'playlist', qIdx);
+        
+        const newIdx = updatedPlaylist.tracks.findIndex(t => t.id === currentTrackId);
+        
+        if (newIdx !== -1) {
+          qIdx = newIdx;
+        } else {
+          qIdx = Math.min(qIdx, updatedPlaylist.tracks.length - 1);
+          if (updatedPlaylist.tracks.length === 0) {
+            currentTrack = null;
+            ytPlayer.stopVideo();
+          } else {
+            currentTrack = queue[qIdx];
+          }
+          updateUIOnTrackChange();
+        }
+      } else {
+        // The playlist being viewed was deleted.
+        hideQueuePanel();
+        if (queueType === 'playlist') {
+            currentTrack = null;
+            queue = null;
+            ytPlayer.stopVideo();
+            updateUIOnTrackChange();
+        }
+      }
+    }
   });
 
   const playlistKeys = Object.keys(recommendedPlaylists);
