@@ -1257,11 +1257,11 @@ async function boot(){
     messagingSenderId: "275513302327",
     appId: "1:275513302327:web:3b26052bf02e657d450eb2"
   };
-
+  
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
   const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
   
-  window.firebase = { ...window.firebase, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
+  window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
 
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
