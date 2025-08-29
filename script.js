@@ -27,6 +27,7 @@ let queueType = null;
 let qIdx = -1;
 let currentTrack = null;
 let viewingPlaylistId = null;
+let currentQueueTitle = "";
 
 let isShuffle = false;
 let repeatMode = 'none'; // 'none', 'one', 'all'
@@ -335,7 +336,13 @@ $("#bottomNav").addEventListener("click", e=>{
 /* ========= Búsqueda (overlay) ========= */
 const searchOverlay = $("#searchOverlay");
 const overlayInput  = $("#overlaySearchInput");
-function openSearch(){ searchOverlay.classList.add("show"); overlayInput.value=""; setTimeout(()=> overlayInput.focus(), 0); }
+function openSearch(){ 
+    searchOverlay.classList.add("show"); 
+    setTimeout(()=> {
+        overlayInput.focus(); 
+        overlayInput.select();
+    }, 50); 
+}
 function closeSearch(){ searchOverlay.classList.remove("show"); }
 $("#searchFab")?.addEventListener("click", openSearch);
 searchOverlay?.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); });
@@ -358,7 +365,7 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   url.searchParams.append('key', apiKey);
   url.searchParams.append('q', query);
   url.searchParams.append('part', 'snippet');
-  url.searchParams.append('type', 'video');
+  url.searchParams.append('type', 'video,playlist');
   url.searchParams.append('videoCategoryId', '10');
   url.searchParams.append('maxResults', limit);
   if(pageToken) url.searchParams.append('pageToken', pageToken);
@@ -372,12 +379,26 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
       throw new Error(`API error: ${response.status}`);
     }
     const data = await response.json();
-    const resultItems = data.items.map(item=>({
-      id: item.id.videoId,
-      title: cleanTitle(item.snippet.title),
-      author: cleanAuthor(item.snippet.channelTitle),
-      thumb: item.snippet.thumbnails?.high?.url || ""
-    }));
+    const resultItems = data.items.map(item => {
+        if (item.id.kind === 'youtube#video') {
+            return {
+                type: 'video',
+                id: item.id.videoId,
+                title: cleanTitle(item.snippet.title),
+                author: cleanAuthor(item.snippet.channelTitle),
+                thumb: item.snippet.thumbnails?.high?.url || ""
+            };
+        } else if (item.id.kind === 'youtube#playlist') {
+            return {
+                type: 'playlist',
+                id: item.id.playlistId,
+                title: cleanTitle(item.snippet.title),
+                author: cleanAuthor(item.snippet.channelTitle),
+                thumb: item.snippet.thumbnails?.high?.url || ""
+            };
+        }
+        return null;
+    }).filter(Boolean);
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
   }catch(e){
     console.error('YouTube API search failed:', e);
@@ -427,41 +448,116 @@ async function loadNextPage(){
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
-    const item = document.createElement("article");
-    item.className = "result-item";
-    item.dataset.trackId = it.id;
-    item.innerHTML = `
-      <div class="thumb-wrap">
-        <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
-        <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
-      </div>
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
-      </div>
-      <div class="actions">
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
-      </div>`;
-    item.addEventListener("click", e=>{
-      if(e.target.closest(".more") || e.target.closest(".card-play")) return;
-      const pos = items.findIndex(x=>x.id===it.id);
-      playFromSearch(pos>=0?pos:0, true);
-    });
-    item.querySelector(".card-play").onclick = (e)=>{
-      e.stopPropagation();
-      const pos = items.findIndex(x=>x.id===it.id);
-      if (currentTrack?.id === it.id) { togglePlay(); }
-      else { playFromSearch(pos >= 0 ? pos : 0, true); }
-    };
-    root.appendChild(item);
+    if (it.type === 'video') {
+        const item = document.createElement("article");
+        item.className = "result-item";
+        item.dataset.trackId = it.id;
+        item.innerHTML = `
+          <div class="thumb-wrap">
+            <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
+            <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
+              <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+            </button>
+          </div>
+          <div class="meta">
+            <div class="title-line">
+              <span class="title-text">${it.title}</span>
+              <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+            </div>
+            <div class="subtitle">${cleanAuthor(it.author)||""}</div>
+          </div>
+          <div class="actions">
+            <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
+          </div>`;
+        item.addEventListener("click", e=>{
+          if(e.target.closest(".more") || e.target.closest(".card-play")) return;
+          const pos = items.findIndex(x=>x.id===it.id);
+          playFromSearch(pos>=0?pos:0, true);
+        });
+        item.querySelector(".card-play").onclick = (e)=>{
+          e.stopPropagation();
+          const pos = items.findIndex(x=>x.id===it.id);
+          if (currentTrack?.id === it.id) { togglePlay(); }
+          else { playFromSearch(pos >= 0 ? pos : 0, true); }
+        };
+        root.appendChild(item);
+    } else if (it.type === 'playlist') {
+        const item = document.createElement("article");
+        item.className = "result-item playlist-result-item";
+        item.dataset.playlistId = it.id;
+        item.innerHTML = `
+          <div class="thumb-wrap">
+            <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
+            <div class="playlist-indicator">LISTA</div>
+          </div>
+          <div class="meta">
+            <div class="title-line">
+              <span class="title-text">${it.title}</span>
+            </div>
+            <div class="subtitle">${cleanAuthor(it.author) || ""}</div>
+          </div>`;
+        item.addEventListener("click", () => {
+          handlePlaylistResultClick(it.id, it.title);
+        });
+        root.appendChild(item);
+    }
   }
   refreshIndicators();
+}
+
+async function fetchPlaylistItems(playlistId, retryCount = 0) {
+    const MAX_RETRIES = YOUTUBE_API_KEYS.length;
+    if (retryCount >= MAX_RETRIES) {
+        console.error(`Todas las API keys han fallado para la playlist ${playlistId}`);
+        return [];
+    }
+
+    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    const apiKey = getRotatedApiKey();
+    url.searchParams.append('key', apiKey);
+    url.searchParams.append('part', 'snippet');
+    url.searchParams.append('playlistId', playlistId);
+    url.searchParams.append('maxResults', 50);
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 403) {
+                console.warn(`API key 403 para playlistItems, rotando...`);
+                return fetchPlaylistItems(playlistId, retryCount + 1);
+            }
+            throw new Error(`API error: ${response.status}`);
+        }
+        const data = await response.json();
+        return data.items.map(item => ({
+            id: item.snippet.resourceId.videoId,
+            title: cleanTitle(item.snippet.title),
+            author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle),
+            thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
+        })).filter(track => track.id);
+    } catch (e) {
+        console.error('Fallo al buscar items de la playlist:', e);
+        return fetchPlaylistItems(playlistId, retryCount + 1);
+    }
+}
+
+async function handlePlaylistResultClick(playlistId, playlistTitle) {
+  try {
+    const tracks = await fetchPlaylistItems(playlistId);
+    if (tracks.length > 0) {
+        setQueue(tracks, 'youtube_playlist', 0);
+        viewingPlaylistId = null;
+        renderQueue(tracks, playlistTitle);
+        switchView('view-player');
+        playCurrent(true);
+    } else {
+        alert("Esta lista de reproducción está vacía o es privada.");
+    }
+  } catch (e) {
+    console.error("No se pudo cargar la playlist:", e);
+    alert("No se pudo cargar la lista de reproducción.");
+  }
 }
 
 /* ========= Home grid ========= */
@@ -807,8 +903,8 @@ function updateHero(track){
   if (queueType === 'playlist' && viewingPlaylistId) {
     const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
     plName = pl ? pl.name : "";
-  } else if (queueType && recommendedPlaylists[queueType]) {
-    plName = recommendedPlaylists[queueType].title;
+  } else if (['recommended', 'youtube_playlist'].includes(queueType)) {
+    plName = currentQueueTitle;
   }
   
   $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—"));
@@ -991,6 +1087,7 @@ $("#btnRepeat")?.addEventListener("click", cycleRepeat);
 /* ========= Cola (Player) ========= */
 function renderQueue(queueItems, title) {
   const panel = $("#queuePanel");
+  currentQueueTitle = title;
   panel && panel.classList.remove("hide");
   $("#queueTitle") && ($("#queueTitle").textContent = title);
   const ul = $("#queueList");
