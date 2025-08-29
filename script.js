@@ -37,7 +37,7 @@ let db; // Instancia de Firestore
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
     data: [],
@@ -50,7 +50,7 @@ const recommendedPlaylists = {
     data: [],
     isRecommended: true
   },
-   cumbia: {
+  cumbia: {
 ids: [
 'UHWCB7D8XoI', // Nacarita - Los Diferentes (Cover)
 'OXunU0CJXtc', // Cuando era jovencito - Grupo Nobel
@@ -472,7 +472,6 @@ function renderPlaylistCard(playlist) {
     const tracks = playlist.isRecommended ? playlist.data : playlist.tracks;
     if (!tracks || tracks.length === 0) return;
 
-    // Usar las últimas 4 canciones agregadas
     const covers = tracks.slice(0, 4).map(track => track.thumb);
     while (covers.length < 4) {
         covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
@@ -608,6 +607,17 @@ function isMyPlaylist(id) {
     return getMyPlaylistIds().includes(id);
 }
 
+async function handlePrivacyToggle(playlistId, isPublic) {
+    const { doc, updateDoc } = window.firebase;
+    const plRef = doc(db, "playlists", playlistId);
+    try {
+        await updateDoc(plRef, { isPublic });
+    } catch (e) {
+        console.error("Error al actualizar la privacidad:", e);
+        // Opcional: revertir el switch si falla
+    }
+}
+
 function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
     if (!grid) return;
@@ -626,6 +636,7 @@ function renderPlaylists() {
         card.className="pl-item";
         card.dataset.plId = pl.id;
         const cover = pl.tracks[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
+        
         card.innerHTML = `
             <img class="pl-thumb-bg" src="${cover}" alt="">
             <div class="pl-overlay">
@@ -633,11 +644,22 @@ function renderPlaylists() {
                     <div class="pl-title">${pl.name}</div>
                     <div class="pl-subtitle">${pl.tracks.length} temas</div>
                 </div>
+                <div class="pl-privacy-toggle">
+                    <label class="switch">
+                        <input type="checkbox" ${pl.isPublic ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                    <span>Pública</span>
+                </div>
             </div>
             <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
         
+        card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => {
+            handlePrivacyToggle(pl.id, e.target.checked);
+        });
+        
         card.addEventListener("click", (e) => {
-            if (e.target.closest(".more")) return;
+            if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return;
             showPlaylistInPlayer(pl.id);
             switchView("view-player");
         });
@@ -670,7 +692,8 @@ $("#createPlConfirm").onclick = async () => {
             name,
             creator,
             tracks: [],
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
+            isPublic: true // Por defecto pública
         });
         addMyPlaylistId(docRef.id);
         $("#newPlName").value = "";
@@ -747,7 +770,8 @@ async function openPlaylistSheet(track){
             name,
             creator,
             tracks: [track],
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
+            isPublic: true // Por defecto pública
         });
         addMyPlaylistId(docRef.id);
         $("#plNewNameFromSong").value = "";
@@ -912,15 +936,18 @@ function startTimer(){
     $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
     $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
 
+    // Actualizar el estado de la Media Session para la notificación
     try{
       if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
         navigator.mediaSession.setPositionState({
           duration: dur || 0,
-          playbackRate: 1.0,
+          playbackRate: ytPlayer.getPlaybackRate(),
           position: cur || 0
         });
       }
-    }catch{}
+    }catch(e) {
+      // No hacer nada si falla, es una mejora progresiva
+    }
 
     savePlayerState();
   }, 500);
@@ -1250,29 +1277,30 @@ function updateMediaSession(track){
 
   if (!mediaSessionHandlersSet){
     mediaSessionHandlersSet = true;
-    const safe = (fn)=>()=>{ try{ fn(); }catch{} };
+    const safe = (fn)=>()=>{ try{ fn(); }catch(e){ console.error("Media Session action failed:", e); } };
 
     try{
       navigator.mediaSession.setActionHandler('play',  safe(()=> togglePlay()));
       navigator.mediaSession.setActionHandler('pause', safe(()=> togglePlay()));
       navigator.mediaSession.setActionHandler('previoustrack', safe(()=> prev()));
       navigator.mediaSession.setActionHandler('nexttrack',     safe(()=> next()));
-      navigator.mediaSession.setActionHandler('seekbackward',  safe(()=>{
-        if(!YT_READY) return; ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-10), true);
+      navigator.mediaSession.setActionHandler('seekbackward',  safe((details)=>{
+        const seekOffset = details.seekOffset || 10;
+        if(!YT_READY) return; ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0) - seekOffset), true);
       }));
-      navigator.mediaSession.setActionHandler('seekforward',   safe(()=>{
-        if(!YT_READY) return; ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+10, true);
+      navigator.mediaSession.setActionHandler('seekforward',   safe((details)=>{
+        const seekOffset = details.seekOffset || 10;
+        if(!YT_READY) return; ytPlayer.seekTo((ytPlayer.getCurrentTime()||0) + seekOffset, true);
       }));
       navigator.mediaSession.setActionHandler('seekto', (details)=>{
-        try{
+        safe(()=>{
           if(!YT_READY || !details || typeof details.seekTime!=='number') return;
           ytPlayer.seekTo(details.seekTime, true);
-        }catch{}
+        })();
       });
-      navigator.mediaSession.setActionHandler('stop', safe(()=>{
-        ytPlayer.stopVideo();
-      }));
-    }catch(e){ /* algunos navegadores no permiten todos los handlers */ }
+    }catch(e){ 
+        console.warn("Could not set all media session action handlers:", e);
+    }
   }
 
   try{
@@ -1302,40 +1330,15 @@ async function boot(){
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
 
-  const q = query(collection(db, "playlists"), orderBy("updatedAt", "desc"));
-  onSnapshot(q, (querySnapshot) => {
-      const playlists = [];
-      querySnapshot.forEach((doc) => {
-          playlists.push({ id: doc.id, ...doc.data() });
-      });
-      communityPlaylists = playlists;
-      renderPlaylists();
-      
-      const allPlaylists = [
-        ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0),
-        ...communityPlaylists.filter(p => p.tracks && p.tracks.length > 0)
-      ];
-      
-      allPlaylists.sort((a, b) => {
-        const dateA = a.updatedAt?.toDate() || 0;
-        const dateB = b.updatedAt?.toDate() || 0;
-        if (a.isRecommended) return 1; // Siempre al final si no tienen fecha
-        if (b.isRecommended) return -1;
-        return dateB - dateA;
-      });
-
-      const container = $("#allPlaylistsContainer");
-      if(container) container.innerHTML = "";
-      allPlaylists.forEach(p => renderPlaylistCard(p));
+  onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
+    communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderPlaylists();
+    renderAllHomePlaylists();
   });
 
   const playlistKeys = Object.keys(recommendedPlaylists);
   const fetchPromises = playlistKeys.map(key =>
     fetchVideoDetailsByIds(recommendedPlaylists[key].ids)
-      .catch(error => {
-        console.error(`Failed to fetch playlist '${key}':`, error);
-        return [];
-      })
   );
   
   const results = await Promise.all(fetchPromises);
@@ -1344,6 +1347,7 @@ async function boot(){
     recommendedPlaylists[key].data = results[index] || [];
   });
   
+  renderAllHomePlaylists();
   updateHomeGridVisibility();
 
   loadFavs();
@@ -1358,6 +1362,27 @@ async function boot(){
 
   document.title = "SanaveraYou Pro";
 }
+
+function renderAllHomePlaylists() {
+    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && p.tracks && p.tracks.length > 0);
+    
+    const allPlaylists = [
+      ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0),
+      ...publicCommunityPlaylists
+    ];
+    
+    allPlaylists.sort((a, b) => {
+      // updatedAt solo existe en playlists de la comunidad
+      const dateA = a.updatedAt?.toDate() || new Date(0); 
+      const dateB = b.updatedAt?.toDate() || new Date(0);
+      return dateB - dateA;
+    });
+
+    const container = $("#allPlaylistsContainer");
+    if(container) container.innerHTML = "";
+    allPlaylists.forEach(p => renderPlaylistCard(p));
+}
+
 boot();
 
 window.addEventListener('beforeunload', savePlayerState);
