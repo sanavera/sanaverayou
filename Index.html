@@ -159,6 +159,10 @@
     <div class="sheet-content">
       <div class="sheet-title">Agregar a playlist</div>
       <div id="plChoices" class="sheet-list"></div>
+      <div class="sheet-row">
+        <input id="plNewNameFromSong" placeholder="Nombre nueva playlist" />
+        <button id="plCreateFromSong" class="pill">Crear</button>
+      </div>
       <button id="plCancel" class="sheet-item ghost">Cancelar</button>
     </div>
   </div>
@@ -182,25 +186,9 @@
   <div id="yt-holder"><div id="player"></div></div>
 
   <!-- Firebase SDKs -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, query, orderBy, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
-    window.firebase = {
-      initializeApp,
-      getFirestore,
-      collection,
-      onSnapshot,
-      addDoc,
-      doc,
-      updateDoc,
-      serverTimestamp,
-      query,
-      orderBy,
-      where,
-      getDocs,
-      deleteDoc
-    };
-  </script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js" type="module"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js" type="module"></script>
+  
   <script src="script.js"></script>
 </body>
 </html>
