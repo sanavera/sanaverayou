@@ -38,7 +38,7 @@ let db; // Instancia de Firestore
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
     title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
     data: [],
@@ -1085,22 +1085,38 @@ $("#btnRepeat")?.addEventListener("click", cycleRepeat);
 
 /* ========= Cola (Player) ========= */
 function renderQueue(queueItems, title) {
-  const panel = $("#queuePanel");
-  currentQueueTitle = title;
-  panel && panel.classList.remove("hide");
-  $("#queueTitle") && ($("#queueTitle").textContent = title);
-  const ul = $("#queueList");
-  if (!ul) return;
-  ul.innerHTML = "";
-  
-  const isUserPlaylist = queueType === 'playlist';
-  if(!isUserPlaylist) viewingPlaylistId = null;
+    const panel = $("#queuePanel");
+    currentQueueTitle = title;
+    panel && panel.classList.remove("hide");
 
-  queueItems.forEach((t, i) => {
-    const li = document.createElement("li");
-    li.className = "queue-item";
-    li.dataset.trackId = t.id;
-    li.innerHTML = `
+    const header = panel.querySelector(".section-head");
+    if (header) {
+        header.querySelector('#btnSavePlaylist')?.remove();
+        const titleEl = header.querySelector('#queueTitle');
+        if (titleEl) titleEl.textContent = title;
+
+        if (queueType === 'youtube_playlist') {
+            const saveBtn = document.createElement('button');
+            saveBtn.id = 'btnSavePlaylist';
+            saveBtn.className = 'pill';
+            saveBtn.textContent = 'Guardar Lista';
+            saveBtn.onclick = saveCurrentQueueAsPlaylist;
+            header.appendChild(saveBtn);
+        }
+    }
+
+    const ul = $("#queueList");
+    if (!ul) return;
+    ul.innerHTML = "";
+
+    const isUserPlaylist = queueType === 'playlist';
+    if (!isUserPlaylist) viewingPlaylistId = null;
+
+    queueItems.forEach((t, i) => {
+        const li = document.createElement("li");
+        li.className = "queue-item";
+        li.dataset.trackId = t.id;
+        li.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" src="${t.thumb}" alt="">
         <button class="card-play" title="Play" aria-label="Play">
@@ -1118,20 +1134,63 @@ function renderQueue(queueItems, title) {
       <div class="actions">
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
-    li.onclick = (e) => {
-      if (e.target.closest(".more") || e.target.closest(".card-play")) return;
-      if(isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
-      else { setQueue(queueItems, queueType, i); playCurrent(true); }
-    };
-    li.querySelector(".card-play").onclick = (e) => {
-      e.stopPropagation();
-      if(isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
-      else { setQueue(queueItems, queueType, i); playCurrent(true); }
-    };
-    ul.appendChild(li);
-  });
-  refreshIndicators();
+        li.onclick = (e) => {
+            if (e.target.closest(".more") || e.target.closest(".card-play")) return;
+            if (isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
+            else { setQueue(queueItems, queueType, i); playCurrent(true); }
+        };
+        li.querySelector(".card-play").onclick = (e) => {
+            e.stopPropagation();
+            if (isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
+            else { setQueue(queueItems, queueType, i); playCurrent(true); }
+        };
+        ul.appendChild(li);
+    });
+    refreshIndicators();
 }
+
+async function saveCurrentQueueAsPlaylist() {
+    if (!queue || queue.length === 0 || queueType !== 'youtube_playlist') {
+        alert("No hay una lista de reproducción válida para guardar.");
+        return;
+    }
+
+    let creator = localStorage.getItem('sy_creator_name');
+    if (!creator) {
+        creator = prompt("Para guardar, ingresá tu nombre de creador:")?.trim();
+        if (!creator) return; 
+        localStorage.setItem('sy_creator_name', creator);
+    }
+
+    const btn = $('#btnSavePlaylist');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Guardando...';
+    }
+
+    try {
+        const { collection, addDoc, serverTimestamp } = window.firebase;
+        const docRef = await addDoc(collection(db, "playlists"), {
+            name: currentQueueTitle,
+            creator,
+            tracks: queue,
+            updatedAt: serverTimestamp(),
+            isPublic: true 
+        });
+        addMyPlaylistId(docRef.id);
+        if (btn) {
+            btn.textContent = 'Guardada ✔';
+        }
+    } catch (e) {
+        console.error("Error guardando la playlist: ", e);
+        alert("Hubo un error al guardar la playlist.");
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Guardar Lista';
+        }
+    }
+}
+
 
 function showPlaylistInPlayer(plId){
   const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
@@ -1200,14 +1259,36 @@ document.addEventListener("click", (e)=>{
       title: it.title,
       actions: [
         { id:"removeFromPl", label:"Eliminar de esta playlist", danger:true },
+        { id:"fav", label: isFav(it.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
+        { id:"pl",  label:"Agregar a otra playlist" },
         { id:"cancel", label:"Cancelar", ghost:true }
       ],
       onAction: (act)=>{
         if(act==="removeFromPl") removeFromPlaylist(viewingPlaylistId, trackId);
+        if(act==="fav") toggleFav(it);
+        if(act==="pl") openPlaylistSheet(it);
       }
     });
     return;
+  } else if (queueItem) {
+      const trackId = queueItem.dataset.trackId;
+      const it = queue.find(t => t.id === trackId);
+      if (!it) return;
+      openActionSheet({
+          title: it.title,
+          actions: [
+              { id: "fav", label: isFav(it.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
+              { id: "pl", label: "Agregar a playlist" },
+              { id: "cancel", label: "Cancelar", ghost: true }
+          ],
+          onAction: (act) => {
+              if (act === "fav") toggleFav(it);
+              if (act === "pl") openPlaylistSheet(it);
+          }
+      });
+      return;
   }
+
 
   if(plItem){
     const plId = plItem.dataset.plId;
@@ -1471,7 +1552,7 @@ function renderAllHomePlaylists() {
       // updatedAt solo existe en playlists de la comunidad
       const dateA = a.updatedAt?.toDate() || new Date(0); 
       const dateB = b.updatedAt?.toDate() || new Date(0);
-      return dateB - dateA;
+      return dateB - a;
     });
 
     const container = $("#allPlaylistsContainer");
