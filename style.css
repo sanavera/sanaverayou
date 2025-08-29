@@ -666,3 +666,20 @@ html, body { background-color: var(--bg); }
   z-index: 2;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* ====== Spotify Loading Indicator ====== */
+.loading-indicator {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  animation: fadeIn .5s ease-out;
+}
+.loading-indicator h3 {
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  font-size: 1.2em;
+}
+.loading-indicator p {
+  margin: 0;
+  font-size: 0.9em;
+}
