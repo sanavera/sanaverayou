@@ -21,7 +21,6 @@ const dotsSvg = () => `
 /* ========= Estado ========= */
 let items = [];
 let favs  = [];
-let userPlaylists = []; // Playlists del usuario actual (localStorage)
 let communityPlaylists = []; // Playlists de la comunidad (Firebase)
 let queue = null;
 let queueType = null;
@@ -473,13 +472,13 @@ function renderCommunityPlaylistCard(playlist) {
     `;
 
     card.onclick = () => {
-        setQueue(playlist.tracks, 'community', 0);
+        setQueue(playlist.tracks, 'playlist', 0);
+        viewingPlaylistId = playlist.id;
         renderQueue(playlist.tracks, playlist.name);
         switchView('view-player');
         playCurrent(true);
     };
     
-    // Insertar al principio para que la más nueva esté arriba
     if (container.firstChild) {
         container.insertBefore(card, container.firstChild);
     } else {
@@ -586,7 +585,7 @@ function renderPlaylists() {
 
     myPlaylists.forEach(pl => {
         const card = document.createElement("article");
-        card.className = "pl-item";
+        card.className="pl-item";
         card.dataset.plId = pl.id;
         const cover = pl.tracks[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
         card.innerHTML = `
@@ -628,14 +627,15 @@ $("#createPlConfirm").onclick = async () => {
     }
     
     try {
-        const docRef = await window.firebase.addDoc(window.firebase.collection(db, "playlists"), {
+        const { getFirestore, collection, addDoc, serverTimestamp } = window.firebase;
+        const docRef = await addDoc(collection(db, "playlists"), {
             name,
             creator,
             tracks: [],
-            updatedAt: window.firebase.serverTimestamp()
+            updatedAt: serverTimestamp()
         });
         addMyPlaylistId(docRef.id);
-        renderPlaylists();
+        // renderPlaylists se llamará automáticamente por el listener
         $("#newPlName").value = "";
         $("#newPlCreator").value = "";
         $("#createPlaylistSheet").classList.remove("show");
@@ -678,15 +678,16 @@ async function openPlaylistSheet(track){
     btn.className="sheet-item";
     btn.textContent = pl.name;
     btn.onclick = async ()=>{
-      const plRef = window.firebase.doc(db, "playlists", pl.id);
+      const { doc, updateDoc, serverTimestamp } = window.firebase;
+      const plRef = doc(db, "playlists", pl.id);
       const updatedTracks = [...pl.tracks];
       if (!updatedTracks.some(t => t.id === track.id)) {
           updatedTracks.unshift(track);
       }
       try {
-        await window.firebase.updateDoc(plRef, {
+        await updateDoc(plRef, {
             tracks: updatedTracks,
-            updatedAt: window.firebase.serverTimestamp()
+            updatedAt: serverTimestamp()
         });
         sheet.classList.remove("show");
       } catch(e) {
@@ -696,6 +697,30 @@ async function openPlaylistSheet(track){
     };
     list.appendChild(btn);
   });
+  
+  $("#plCreateFromSong").onclick = async () => {
+    const name = $("#plNewNameFromSong").value.trim();
+    if (!name) return;
+    const creator = prompt("Tu nombre (creador):")?.trim();
+    if (!creator) return;
+
+    try {
+        const { collection, addDoc, serverTimestamp } = window.firebase;
+        const docRef = await addDoc(collection(db, "playlists"), {
+            name,
+            creator,
+            tracks: [track],
+            updatedAt: serverTimestamp()
+        });
+        addMyPlaylistId(docRef.id);
+        $("#plNewNameFromSong").value = "";
+        sheet.classList.remove("show");
+    } catch (e) {
+        console.error("Error creando playlist desde canción: ", e);
+        alert("Hubo un error al crear la playlist.");
+    }
+  };
+
   $("#plCancel").onclick = ()=> sheet.classList.remove("show");
   sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
 }
@@ -773,13 +798,14 @@ $("#miniPlay")?.addEventListener("click", togglePlay);
 
 async function removeFromPlaylist(plId, trackId){
   const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
-  const plRef = window.firebase.doc(db, "playlists", plId);
+  const { doc, updateDoc, serverTimestamp } = window.firebase;
+  const plRef = doc(db, "playlists", plId);
   const updatedTracks = pl.tracks.filter(t => t.id !== trackId);
 
   try {
-    await window.firebase.updateDoc(plRef, {
+    await updateDoc(plRef, {
         tracks: updatedTracks,
-        updatedAt: window.firebase.serverTimestamp()
+        updatedAt: serverTimestamp()
     });
     // La actualización local se hará a través del listener de onSnapshot
   } catch (e) {
@@ -1043,9 +1069,9 @@ document.addEventListener("click", (e)=>{
         if(id==="delete"){
           if(confirm(`¿Seguro que quieres eliminar la playlist "${P.name}"?`)){
             try {
-                await window.firebase.deleteDoc(window.firebase.doc(db, "playlists", P.id));
+                const { doc, deleteDoc } = window.firebase;
+                await deleteDoc(doc(db, "playlists", P.id));
                 removeMyPlaylistId(P.id);
-                // La UI se actualiza sola por el listener
             } catch (e) {
                 console.error("Error eliminando playlist: ", e);
                 alert("No se pudo eliminar la playlist.");
@@ -1231,11 +1257,14 @@ async function boot(){
     messagingSenderId: "275513302327",
     appId: "1:275513302327:web:3b26052bf02e657d450eb2"
   };
-  const app = window.firebase.initializeApp(firebaseConfig);
-  db = window.firebase.getFirestore(app);
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
+  const { getFirestore, collection, onSnapshot, query, orderBy } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
 
-  const q = window.firebase.query(window.firebase.collection(db, "playlists"), window.firebase.orderBy("updatedAt", "desc"));
-  window.firebase.onSnapshot(q, (querySnapshot) => {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+
+  const q = query(collection(db, "playlists"), orderBy("updatedAt", "desc"));
+  onSnapshot(q, (querySnapshot) => {
       const playlists = [];
       querySnapshot.forEach((doc) => {
           playlists.push({ id: doc.id, ...doc.data() });
@@ -1243,10 +1272,9 @@ async function boot(){
       communityPlaylists = playlists;
       renderPlaylists(); // Actualiza la pestaña "Mis Playlists"
       
-      // Actualiza el inicio
       const userContainer = $("#userPlaylistsContainer");
       if(userContainer) userContainer.innerHTML = "";
-      communityPlaylists.filter(p => p.tracks.length > 0).forEach(p => renderCommunityPlaylistCard(p));
+      communityPlaylists.filter(p => p.tracks && p.tracks.length > 0).forEach(p => renderCommunityPlaylistCard(p));
   });
 
   const playlistKeys = Object.keys(recommendedPlaylists);
