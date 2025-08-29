@@ -501,10 +501,10 @@ html, body { background-color: var(--bg); }
 
 
 /* ====== Recommended Playlist Card ====== */
-.recommended-playlist-card {
+.playlist-card {
   position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1.2; /* Taller card */
+  aspect-ratio: 1 / 1.25;
   border-radius: var(--radius);
   overflow: hidden;
   cursor: pointer;
@@ -518,7 +518,7 @@ html, body { background-color: var(--bg); }
   flex-direction: column;
 }
 
-.recommended-playlist-card:hover {
+.playlist-card:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
@@ -529,6 +529,7 @@ html, body { background-color: var(--bg); }
   grid-template-rows: 1fr 1fr;
   flex-grow: 1;
   background-color: var(--surface);
+  min-height: 0;
 }
 
 .collage-container img {
@@ -538,13 +539,14 @@ html, body { background-color: var(--bg); }
   display: block;
 }
 
-.recommended-playlist-meta {
+.playlist-meta {
   padding: 12px;
   background: var(--surface-elevated);
   z-index: 1;
+  margin-top: auto; /* Alinea al fondo */
 }
 
-.recommended-playlist-title {
+.playlist-title {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 4px;
@@ -567,6 +569,7 @@ html, body { background-color: var(--bg); }
   width: 14px;
   height: 14px;
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 .youtube-logo {
     color: #ff0000;
