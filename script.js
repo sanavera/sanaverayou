@@ -35,6 +35,12 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 let ytPlayer = null, YT_READY = false, timer = null;
 let db; // Instancia de Firestore
 
+// --- Credenciales y Estado de Spotify ---
+const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
+const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
+let spotifyToken = { value: null, expires: 0 };
+
+
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
@@ -249,6 +255,58 @@ function initTheme(){
   });
 }
 
+/* ========= API Spotify ========= */
+async function getSpotifyToken() {
+    if (spotifyToken.value && Date.now() < spotifyToken.expires) {
+        return spotifyToken.value;
+    }
+
+    try {
+        const response = await fetch("https://accounts.spotify.com/api/token", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET)
+            },
+            body: 'grant_type=client_credentials'
+        });
+        if (!response.ok) throw new Error('Falló la autenticación con Spotify');
+        const data = await response.json();
+        spotifyToken = {
+            value: data.access_token,
+            expires: Date.now() + (data.expires_in * 1000) - 60000 // Margen de 1 minuto
+        };
+        return spotifyToken.value;
+    } catch (e) {
+        console.error("Error obteniendo token de Spotify:", e);
+        return null;
+    }
+}
+
+async function fetchSpotifyPlaylist(playlistId) {
+    const token = await getSpotifyToken();
+    if (!token) return null;
+
+    try {
+        const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('No se pudo obtener la playlist de Spotify');
+        const data = await response.json();
+        
+        return {
+            name: data.name,
+            tracks: data.tracks.items.map(item => ({
+                track: item.track.name,
+                artist: item.track.artists.map(a => a.name).join(', ')
+            }))
+        };
+    } catch (e) {
+        console.error("Error al buscar playlist en Spotify:", e);
+        return null;
+    }
+}
+
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
   "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
@@ -347,14 +405,61 @@ function closeSearch(){ searchOverlay.classList.remove("show"); }
 $("#searchFab")?.addEventListener("click", openSearch);
 searchOverlay?.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); });
 overlayInput?.addEventListener("keydown", async e=>{
-  if(e.key!=="Enter") return;
-  const q = overlayInput.value.trim(); if(!q) return;
-  closeSearch();
-  document.body.scrollTop = 0; 
-  document.documentElement.scrollTop = 0;
-  await startSearch(q);
-  switchView("view-search");
+    if (e.key !== "Enter") return;
+    const q = overlayInput.value.trim();
+    if (!q) return;
+
+    closeSearch();
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+    
+    const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
+    const match = q.match(spotifyPlaylistRegex);
+
+    if (match && match[1]) {
+        await handleSpotifyImport(match[1]);
+    } else {
+        await startSearch(q);
+    }
+    switchView("view-search");
 });
+
+/* ========= Importador de Spotify ========= */
+async function handleSpotifyImport(playlistId) {
+    const resultsContainer = $("#results");
+    resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Importando desde Spotify...</h3><p>Esto puede tardar unos segundos.</p></div>`;
+    updateHomeGridVisibility();
+
+    try {
+        const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
+        if (!spotifyPlaylist) throw new Error("No se pudo obtener la playlist.");
+
+        const youtubeTracks = [];
+        for (const track of spotifyPlaylist.tracks) {
+            const searchQuery = `${track.artist} - ${track.track}`;
+            const searchResult = await youtubeSearch(searchQuery, '', 1);
+            if (searchResult.items[0] && searchResult.items[0].type === 'video') {
+                youtubeTracks.push(searchResult.items[0]);
+            }
+        }
+        
+        if (youtubeTracks.length > 0) {
+            setQueue(youtubeTracks, 'youtube_playlist', 0);
+            viewingPlaylistId = null;
+            renderQueue(youtubeTracks, spotifyPlaylist.name);
+            switchView('view-player');
+            playCurrent(true);
+            resultsContainer.innerHTML = ""; // Limpiar el mensaje de carga
+        } else {
+            throw new Error("No se encontraron canciones en YouTube.");
+        }
+
+    } catch (error) {
+        console.error("Error al importar desde Spotify:", error);
+        resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Error al importar</h3><p>${error.message}</p></div>`;
+    }
+}
+
 
 /* ========= Motor de búsqueda ========= */
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
@@ -620,7 +725,7 @@ function renderPlaylistCard(playlist) {
 
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
-  const shouldShow = (!paging.query && items.length===0);
+  const shouldShow = (!paging.query && items.length===0 && !$(".loading-indicator"));
   home.classList.toggle("hide", !shouldShow);
 }
 
@@ -928,7 +1033,7 @@ function playCurrent(autoplay=false){
   startTimer();
   updateUIOnTrackChange();
 }
-function playFromSearch(i, autoplay=false){ setQueue(items, "search", i); viewingPlaylistId = null; playCurrent(autoplay); }
+function playFromSearch(i, autoplay=false){ setQueue(items.filter(it => it.type === 'video'), "search", i); viewingPlaylistId = null; playCurrent(autoplay); }
 function playFromFav(track, autoplay=false){
   const i = favs.findIndex(f=>f.id===track.id);
   setQueue(favs, "favs", Math.max(i,0)); viewingPlaylistId = null; playCurrent(autoplay);
