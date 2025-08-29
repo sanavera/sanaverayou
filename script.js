@@ -313,14 +313,8 @@ const YOUTUBE_API_KEYS = [
   "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
   "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE",
   "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM",
-  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0",
-  "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI",
-  "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs",
-  "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ",
-  "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc",
-  "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
+  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0"
 ];
-
 let currentApiKeyIndex = 0;
 const getRotatedApiKey = () => {
   const k = YOUTUBE_API_KEYS[currentApiKeyIndex];
@@ -421,13 +415,14 @@ overlayInput?.addEventListener("keydown", async e=>{
     
     const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
     const match = q.match(spotifyPlaylistRegex);
+    
+    switchView("view-search"); // Siempre cambiar a la vista de búsqueda
 
     if (match && match[1]) {
         await handleSpotifyImport(match[1]);
     } else {
         await startSearch(q);
     }
-    switchView("view-search");
 });
 
 /* ========= Importador de Spotify ========= */
@@ -450,12 +445,12 @@ async function handleSpotifyImport(playlistId) {
         }
         
         if (youtubeTracks.length > 0) {
+            resultsContainer.innerHTML = ""; // Limpiar el mensaje de carga
             setQueue(youtubeTracks, 'youtube_playlist', 0);
             viewingPlaylistId = null;
             renderQueue(youtubeTracks, spotifyPlaylist.name);
-            switchView('view-player');
+            switchView('view-player'); // Cambiar a la vista del reproductor
             playCurrent(true);
-            resultsContainer.innerHTML = ""; // Limpiar el mensaje de carga
         } else {
             throw new Error("No se encontraron canciones en YouTube.");
         }
@@ -582,14 +577,12 @@ function appendResults(chunk){
           </div>`;
         item.addEventListener("click", e=>{
           if(e.target.closest(".more") || e.target.closest(".card-play")) return;
-          const pos = items.findIndex(x=>x.id===it.id);
-          playFromSearch(pos>=0?pos:0, true);
+          playFromSearch(it.id, true);
         });
         item.querySelector(".card-play").onclick = (e)=>{
           e.stopPropagation();
-          const pos = items.findIndex(x=>x.id===it.id);
           if (currentTrack?.id === it.id) { togglePlay(); }
-          else { playFromSearch(pos >= 0 ? pos : 0, true); }
+          else { playFromSearch(it.id, true); }
         };
         root.appendChild(item);
     } else if (it.type === 'playlist') {
@@ -1039,7 +1032,16 @@ function playCurrent(autoplay=false){
   startTimer();
   updateUIOnTrackChange();
 }
-function playFromSearch(i, autoplay=false){ setQueue(items.filter(it => it.type === 'video'), "search", i); viewingPlaylistId = null; playCurrent(autoplay); }
+function playFromSearch(trackId, autoplay=false) {
+    const videoItems = items.filter(it => it.type === 'video');
+    const videoIndex = videoItems.findIndex(v => v.id === trackId);
+
+    if (videoIndex > -1) {
+        setQueue(videoItems, "search", videoIndex);
+        viewingPlaylistId = null;
+        playCurrent(autoplay);
+    }
+}
 function playFromFav(track, autoplay=false){
   const i = favs.findIndex(f=>f.id===track.id);
   setQueue(favs, "favs", Math.max(i,0)); viewingPlaylistId = null; playCurrent(autoplay);
