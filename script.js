@@ -454,6 +454,11 @@ function renderCommunityPlaylistCard(playlist) {
     while (covers.length < 4) {
         covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     }
+    
+    const logosSvg = `
+        <svg class="spotify-logo" viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
+        <svg class="youtube-logo" viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg>
+    `;
 
     const card = document.createElement("article");
     card.className = "recommended-playlist-card";
@@ -466,7 +471,8 @@ function renderCommunityPlaylistCard(playlist) {
         <div class="recommended-playlist-meta">
             <h4 class="recommended-playlist-title">${playlist.name}</h4>
             <div class="creator-line">
-                <span>Por: ${playlist.creator}</span>
+                ${logosSvg}
+                <span>Creador: ${playlist.creator}</span>
             </div>
         </div>
     `;
@@ -479,11 +485,7 @@ function renderCommunityPlaylistCard(playlist) {
         playCurrent(true);
     };
     
-    if (container.firstChild) {
-        container.insertBefore(card, container.firstChild);
-    } else {
-        container.appendChild(card);
-    }
+    container.appendChild(card);
 }
 
 function updateHomeGridVisibility(){
@@ -635,7 +637,6 @@ $("#createPlConfirm").onclick = async () => {
             updatedAt: serverTimestamp()
         });
         addMyPlaylistId(docRef.id);
-        // renderPlaylists se llamará automáticamente por el listener
         $("#newPlName").value = "";
         $("#newPlCreator").value = "";
         $("#createPlaylistSheet").classList.remove("show");
@@ -807,7 +808,6 @@ async function removeFromPlaylist(plId, trackId){
         tracks: updatedTracks,
         updatedAt: serverTimestamp()
     });
-    // La actualización local se hará a través del listener de onSnapshot
   } catch (e) {
       console.error("Error quitando canción: ", e);
       alert("No se pudo quitar la canción.");
@@ -1257,8 +1257,11 @@ async function boot(){
     messagingSenderId: "275513302327",
     appId: "1:275513302327:web:3b26052bf02e657d450eb2"
   };
+
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
-  const { getFirestore, collection, onSnapshot, query, orderBy } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  
+  window.firebase = { ...window.firebase, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
 
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
@@ -1270,7 +1273,7 @@ async function boot(){
           playlists.push({ id: doc.id, ...doc.data() });
       });
       communityPlaylists = playlists;
-      renderPlaylists(); // Actualiza la pestaña "Mis Playlists"
+      renderPlaylists();
       
       const userContainer = $("#userPlaylistsContainer");
       if(userContainer) userContainer.innerHTML = "";
