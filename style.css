@@ -2,7 +2,7 @@
 :root{
   /* superficies y texto */
   --bg:#08090c; --bg-secondary:#0d0e12;
-  --surface:#1a1c24; --surface-hover:#20222b; --surface-elevated:#242731;
+  --surface:#1a1c24; --surface-hover:#2022b; --surface-elevated:#242731;
   --border:#2d3142; --border-subtle:#1e2029;
   --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b;
 
@@ -433,16 +433,18 @@ html[data-theme="light"] .sheet-item.danger { color: #b91c1c; }
 
 /* Estilos para el nuevo modal de crear playlist */
 .sheet-form { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
-.sheet-form input {
+.sheet-form input, .sheet-row input {
   width:100%; background:var(--surface); color:var(--text-primary);
   border:1px solid var(--border-subtle); border-radius:10px;
   padding:12px 14px; outline:none; font-size:15px;
 }
-.sheet-form input:focus { border-color: var(--accent); }
+.sheet-form input:focus, .sheet-row input:focus { border-color: var(--accent); }
 .sheet-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .sheet-actions .sheet-item { width: auto; margin: 0; }
 .sheet-actions .pill { background: var(--accent); border-color: var(--accent); }
 html[data-theme="light"] .sheet-actions .pill { color: #fff; }
+.sheet-row { display: flex; gap: 8px; margin-top: 8px; }
+.sheet-row input { flex: 1; }
 
 
 /* Botón “Nueva / Crear” */
