@@ -416,6 +416,9 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
     padding: 0;
     margin: 10px 0 16px;
     padding-top: 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 .home-head {
     margin-bottom: 12px;
@@ -427,6 +430,13 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
     font-weight: 700;
     display: flex;
     align-items: center;
+}
+
+#btnSavePlaylist:disabled {
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Mini-player unido a la barra inferior */
