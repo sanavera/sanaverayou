@@ -291,7 +291,7 @@ async function getSpotifyToken() {
     }
 }
 
-async function searchSpotify(query, limit = 20) {
+async function searchSpotify(query, limit = 10) {
     const token = await getSpotifyToken();
     if (!token) return { tracks: [], playlists: [] };
 
@@ -553,12 +553,21 @@ async function startSearch(query){
     paging.pageToken = ytResult.nextPageToken;
     paging.hasMore = !!ytResult.nextPageToken;
 
-    const combined = [
+    let combined = [
         ...spResult.playlists,
         ...ytResult.items.filter(it => it.type === 'youtube_playlist'),
         ...spResult.tracks,
         ...ytResult.items.filter(it => it.type === 'youtube_video')
     ];
+
+    // **NOVEDAD: Ordenar para poner listas primero**
+    combined.sort((a, b) => {
+        const aIsPlaylist = a.type.includes('playlist');
+        const bIsPlaylist = b.type.includes('playlist');
+        if (aIsPlaylist && !bIsPlaylist) return -1;
+        if (!aIsPlaylist && bIsPlaylist) return 1;
+        return 0;
+    });
 
     if (resultsEl) resultsEl.innerHTML = "";
     
@@ -619,13 +628,13 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    if (it.source === 'spotify') {
-        logo = spotifyLogoSvg();
-    } else { 
-        logo = youtubeLogoSvg();
+    // **NOVEDAD: Asignación aleatoria de logo**
+    logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeLogoSvg();
+
+    // La lógica para playlists y trackId se mantiene
+    if (it.source !== 'spotify') {
         item.dataset.trackId = it.id;
     }
-
     if (it.type.includes('playlist')) {
         item.classList.add("playlist-result-item");
         indicator = '<div class="playlist-indicator">LISTA</div>';
@@ -666,17 +675,23 @@ function appendResults(chunk){
   refreshIndicators();
 }
 
-async function handleResultClick(e, it, forcePlay = false) {
-    if (e.target.closest('.more') || (e.target.closest('.card-play') && !forcePlay)) return;
 
-    if (it.type === 'youtube_video') {
-        playFromSearch(it.id, true);
-    } else if (it.type === 'youtube_playlist') {
-        handlePlaylistResultClick(it.id, it.title);
-    } else if (it.type === 'spotify_track') {
-        playSpotifyTrack(it);
-    } else if (it.type === 'spotify_playlist') {
-        handleSpotifyImport(it.id);
+async function handleResultClick(event, item, forcePlay = false) {
+    if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return;
+
+    switch (item.type) {
+        case 'youtube_video':
+            playFromSearch(item.id, true);
+            break;
+        case 'youtube_playlist':
+            handlePlaylistResultClick(item.id, item.title);
+            break;
+        case 'spotify_track':
+            playSpotifyTrack(item);
+            break;
+        case 'spotify_playlist':
+            handleSpotifyImport(item.id);
+            break;
     }
 }
 
@@ -684,13 +699,14 @@ async function playSpotifyTrack(track) {
     const resultsContainer = $("#results");
     const originalContent = resultsContainer.innerHTML;
     resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube...</h3><p>${track.author} - ${track.title}</p></div>`;
+    updateHomeGridVisibility();
     const ytEquivalent = await findYoutubeEquivalent(track);
     
-    // Restaurar los resultados de la búsqueda antes de cambiar de vista
     resultsContainer.innerHTML = originalContent; 
     
     if (ytEquivalent) {
         setQueue([ytEquivalent], "search", 0);
+        viewingPlaylistId = null;
         playCurrent(true);
         switchView('view-player');
     } else {
@@ -698,41 +714,54 @@ async function playSpotifyTrack(track) {
     }
 }
 
+async function handleSpotifyImport(playlistId) {
+    const resultsContainer = $("#results");
+    resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Importando desde Spotify...</h3><p>Esto puede tardar unos segundos.</p></div>`;
+    updateHomeGridVisibility();
+    try {
+        const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
+        if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) throw new Error("No se pudo obtener la playlist o está vacía.");
+        const youtubeQueue = (await Promise.all(spotifyPlaylist.tracks.map(findYoutubeEquivalent))).filter(Boolean);
+        if (youtubeQueue.length > 0) {
+            resultsContainer.innerHTML = "";
+            setQueue(youtubeQueue, 'youtube_playlist', 0);
+            viewingPlaylistId = null;
+            renderQueue(youtubeQueue, spotifyPlaylist.name);
+            switchView('view-player');
+            playCurrent(true);
+        } else { throw new Error("No se encontraron equivalentes en YouTube para las canciones de la lista."); }
+    } catch (error) {
+        console.error("Error al importar desde Spotify:", error);
+        resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Error al importar</h3><p>${error.message}</p></div>`;
+    }
+}
+
+async function findYoutubeEquivalent(track) {
+    if (!track || !track.title) return null;
+    const searchQuery = `${track.author} - ${track.title}`;
+    const searchResult = await youtubeSearch(searchQuery, '', 1);
+    const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
+    return ytTrack ? { ...ytTrack, originalId: track.id, thumb: ytTrack.thumb || track.thumb } : null;
+}
 
 async function fetchPlaylistItems(playlistId, retryCount = 0) {
     const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-    if (retryCount >= MAX_RETRIES) {
-        console.error(`Todas las API keys han fallado para la playlist ${playlistId}`);
-        return [];
-    }
-
+    if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para la playlist ${playlistId}`); return []; }
     const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
     const apiKey = getRotatedApiKey();
     url.searchParams.append('key', apiKey);
     url.searchParams.append('part', 'snippet');
     url.searchParams.append('playlistId', playlistId);
     url.searchParams.append('maxResults', 50);
-
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            if (response.status === 403) {
-                console.warn(`API key 403 para playlistItems, rotando...`);
-                return fetchPlaylistItems(playlistId, retryCount + 1);
-            }
+            if (response.status === 403) { return fetchPlaylistItems(playlistId, retryCount + 1); }
             throw new Error(`API error: ${response.status}`);
         }
         const data = await response.json();
-        return data.items.map(item => ({
-            id: item.snippet.resourceId.videoId,
-            title: cleanTitle(item.snippet.title),
-            author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle),
-            thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
-        })).filter(track => track.id);
-    } catch (e) {
-        console.error('Fallo al buscar items de la playlist:', e);
-        return fetchPlaylistItems(playlistId, retryCount + 1);
-    }
+        return data.items.map(item => ({ id: item.snippet.resourceId.videoId, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })).filter(track => track.id);
+    } catch (e) { console.error('Fallo al buscar items de la playlist:', e); return fetchPlaylistItems(playlistId, retryCount + 1); }
 }
 
 async function handlePlaylistResultClick(playlistId, playlistTitle) {
@@ -757,46 +786,30 @@ async function handlePlaylistResultClick(playlistId, playlistTitle) {
 function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
-
     const tracks = playlist.isRecommended ? playlist.data : playlist.tracks;
     if (!tracks || tracks.length === 0) return;
-
     const covers = tracks.slice(0, 4).map(track => track.thumb).filter(Boolean);
-    while (covers.length < 4) {
-        covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-    }
-    
+    while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     const logo = playlist.isRecommended ? youtubeLogoSvg() : spotifyLogoSvg();
-
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
-
     card.innerHTML = `
-        <div class="collage-container">
-            ${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}
-        </div>
+        <div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
         <div class="playlist-meta">
             <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
-            <div class="creator-line">
-                ${logo}
-                <span>Creador: ${playlist.creator}</span>
-            </div>
-        </div>
-    `;
-
+            <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
+        </div>`;
     card.onclick = () => {
         const queueTracks = playlist.isRecommended ? playlist.data : playlist.tracks;
         const queueId = playlist.isRecommended ? null : playlist.id;
         const queueTitle = playlist.isRecommended ? playlist.title : playlist.name;
-        
         setQueue(queueTracks, playlist.isRecommended ? 'recommended' : 'playlist', 0);
         viewingPlaylistId = queueId;
         renderQueue(queueTracks, queueTitle);
         switchView('view-player');
         playCurrent(true);
     };
-    
     container.appendChild(card);
 }
 
@@ -1402,7 +1415,7 @@ let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if(!('mediaSession' in navigator)||!track)return;
   try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){}
-  if(!mediaSessionHandlersSet){mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; try{navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)})); navigator.mediaSession.setActionHandler('seekforward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true)})); navigator.mediaSession.setActionHandler('seekto',d=>{s(()=>{if(!YT_READY||!d||typeof d.seekTime!=='number')return;ytPlayer.seekTo(d.seekTime,true)})()});}catch(e){}}
+  if(!mediaSessionHandlersSet){mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; try{navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)})); navigator.mediaSession.setActionHandler('seekforward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o),true)})); navigator.mediaSession.setActionHandler('seekto',d=>{s(()=>{if(!YT_READY||!d||typeof d.seekTime!=='number')return;ytPlayer.seekTo(d.seekTime,true)})()});}catch(e){}}
   try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch{}
 }
 /* ===== Android bridge (AIDE WebView) ===== */
