@@ -560,7 +560,7 @@ async function startSearch(query){
         ...ytResult.items.filter(it => it.type === 'youtube_video')
     ];
 
-    // **NOVEDAD: Ordenar para poner listas primero**
+    // AJUSTE: Ordenar para poner listas primero
     combined.sort((a, b) => {
         const aIsPlaylist = a.type.includes('playlist');
         const bIsPlaylist = b.type.includes('playlist');
@@ -624,16 +624,12 @@ function appendResults(chunk){
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.itemId = it.id;
-    item.dataset.trackId = it.id; // Asignar trackId también para consistencia
+    item.dataset.trackId = it.id;
 
     let indicator = '';
-    let logo = '';
-
-    if (it.source === 'spotify') {
-      logo = spotifyLogoSvg();
-    } else {
-      logo = youtubeLogoSvg();
-    }
+    
+    // AJUSTE: Lógica de íconos corregida para mostrar según la fuente (YouTube/Spotify)
+    const logo = it.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg();
 
     if (it.type.includes('playlist')) {
         item.classList.add("playlist-result-item");
@@ -878,6 +874,63 @@ function removeMyPlaylistId(id) { let ids=getMyPlaylistIds(); ids=ids.filter(pid
 function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); }
 async function handlePrivacyToggle(playlistId, isPublic) { try { const {doc,updateDoc}=window.firebase; await updateDoc(doc(db,"playlists",playlistId),{isPublic}); } catch(e){console.error("Error al actualizar privacidad:",e);} }
 
+// AJUSTE: Añadida función para menú de opciones de playlist
+async function openPlaylistOptionsMenu(pl) {
+  openActionSheet({
+    title: pl.name,
+    actions: [
+      { id: "rename", label: "Renombrar" },
+      { id: "delete", label: "Eliminar playlist", danger: true },
+      { id: "cancel", label: "Cancelar", ghost: true }
+    ],
+    onAction: async (act) => {
+      const { doc, updateDoc, deleteDoc, serverTimestamp } = window.firebase;
+      const plRef = doc(db, "playlists", pl.id);
+
+      if (act === "rename") {
+        const newName = prompt("Nuevo nombre para la playlist:", pl.name);
+        if (newName === null || newName.trim() === "") return; // User cancelled or entered empty name
+
+        const newCreator = prompt("Nuevo nombre de creador (máx 20 caracteres):", pl.creator);
+        if (newCreator === null || newCreator.trim() === "") return;
+
+        try {
+          await updateDoc(plRef, {
+            name: newName.trim().substring(0, 50), // Límite de caracteres
+            creator: newCreator.trim().substring(0, 20), // Límite de caracteres
+            updatedAt: serverTimestamp()
+          });
+        } catch (e) {
+          console.error("Error al renombrar playlist:", e);
+          alert("No se pudo renombrar la playlist.");
+        }
+      }
+      if (act === "delete") {
+        // Usamos un modal custom en vez de confirm()
+        openActionSheet({
+            title: `¿Eliminar "${pl.name}"?`,
+            actions: [
+                {id: "confirm_delete", label: "Sí, eliminar", danger: true},
+                {id: "cancel", label: "Cancelar", ghost: true}
+            ],
+            onAction: async (confirmAct) => {
+                if(confirmAct === 'confirm_delete') {
+                    try {
+                        await deleteDoc(plRef);
+                        removeMyPlaylistId(pl.id);
+                      } catch (e) {
+                        console.error("Error al eliminar playlist:", e);
+                        alert("No se pudo eliminar la playlist.");
+                      }
+                }
+            }
+        });
+      }
+    }
+  });
+}
+
+// AJUSTE: renderPlaylists ahora muestra creador y añade menú de opciones
 function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
     if (!grid) return;
@@ -902,6 +955,7 @@ function renderPlaylists() {
             <div class="pl-overlay">
                 <div class="pl-meta">
                     <div class="pl-title">${pl.name}</div>
+                    <div class="pl-creator">por ${pl.creator || 'Anónimo'}</div>
                     <div class="pl-subtitle">${pl.tracks.length} temas</div>
                 </div>
                 <div class="pl-privacy-toggle">
@@ -913,6 +967,11 @@ function renderPlaylists() {
                 </div>
             </div>
             <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
+
+        card.querySelector(".more").addEventListener("click", (e) => {
+            e.stopPropagation();
+            openPlaylistOptionsMenu(pl);
+        });
 
         card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => {
             handlePrivacyToggle(pl.id, e.target.checked);
@@ -929,13 +988,14 @@ function renderPlaylists() {
     });
 }
 
+
 $("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
 $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
 $("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
 $("#createPlConfirm").onclick = async () => {
     const name = $("#newPlName").value.trim();
     const creator = $("#newPlCreator").value.trim();
-    if (!name || !creator) { alert("Por favor, completa ambos campos."); return; }
+    if (!name || !creator) { alert("Por favor, completa nombre de playlist y creador."); return; }
     try {
         const { getFirestore, collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [], updatedAt: serverTimestamp(), isPublic: true });
@@ -1209,7 +1269,7 @@ function renderQueue(queueItems, title) {
         const titleEl = header.querySelector('#queueTitle');
         if (titleEl) titleEl.textContent = title;
 
-        if (queueType === 'youtube_playlist' || queueType === 'spotify_playlist') {
+        if ((queueType === 'youtube_playlist' || queueType === 'spotify_playlist') && queue?.length > 0) {
             saveBtn = document.createElement('button');
             saveBtn.id = 'btnSavePlaylist';
             saveBtn.className = 'pill';
@@ -1315,7 +1375,8 @@ document.addEventListener("click", async (e) => {
         const sourceTrack = items.find(x => x.id === itemId);
         if (!sourceTrack) return;
 
-        // Si es de spotify, buscar equivalente en YT antes de mostrar opciones
+        if (sourceTrack.type.includes('playlist')) return;
+
         if (sourceTrack.type === 'spotify_track') {
             const ytEquivalent = await findYoutubeEquivalent(sourceTrack);
             if (!ytEquivalent) {
@@ -1326,7 +1387,6 @@ document.addEventListener("click", async (e) => {
         } else {
             track = sourceTrack;
         }
-        if (track.type.includes('playlist')) return; // No mostrar menú para playlists en resultados
     } else if (itemEl.classList.contains("fav-item")) {
         track = favs.find(f => f.id === trackId);
     } else if (itemEl.classList.contains("queue-item")) {
@@ -1336,20 +1396,17 @@ document.addEventListener("click", async (e) => {
 
     if (!track) return;
 
-    // --- Construir el menú de acciones dinámicamente ---
     const actions = [
         { id: "fav", label: isFav(track.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
         { id: "pl", label: "Agregar a playlist" }
     ];
 
-    // Lógica para mostrar la opción de eliminar
     if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
         actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
     }
 
     actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
-    // --- Abrir el menú (sheet) ---
     openActionSheet({
         title: track.title,
         actions: actions,
