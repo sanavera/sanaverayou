@@ -435,8 +435,14 @@ async function fetchVideoDetailsByIds(ids) {
 }
 
 
-let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 let searchAbort = null;
+let paging = {
+    query: "",
+    ytPageToken: null,
+    loading: false,
+    hasMore: true
+};
+
 
 /* ========= Nav ========= */
 function switchView(id){
@@ -588,16 +594,18 @@ async function youtubeSearch(query, pageToken = '', limit = 20, retryCount = 0){
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
   }catch(e){
     console.error('Fallo en búsqueda de YouTube:', e);
-    return { items: [], hasMore:false };
+    return { items: [], hasMore:false, nextPageToken: null };
   }
 }
 
-/* ========= Búsqueda Mixta (CORREGIDA) ========= */
+/* ========= Búsqueda Mixta con Scroll Infinito ========= */
 async function startSearch(query) {
     if (searchAbort) searchAbort.abort();
     searchAbort = new AbortController();
-    paging = { query, pageToken: "", loading: false, hasMore: true };
+    
+    paging = { query, ytPageToken: null, loading: true, hasMore: true };
     items = [];
+    
     const resultsEl = $("#results");
     if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube y Spotify...</h3></div>`;
     updateHomeGridVisibility();
@@ -609,8 +617,10 @@ async function startSearch(query) {
         ]);
 
         if (searchAbort.signal.aborted) return;
+        
+        paging.ytPageToken = ytResult.nextPageToken;
+        paging.hasMore = !!ytResult.nextPageToken;
 
-        // Lógica de mezcla simple y efectiva
         const combinedResults = [
             ...spResult.playlists,
             ...ytResult.items.filter(i => i.type === 'youtube_playlist'),
@@ -625,26 +635,43 @@ async function startSearch(query) {
             return;
         }
 
-        const finalResults = dedupeById(combinedResults);
+        items = dedupeById(combinedResults);
+        appendResults(items);
         
-        appendResults(finalResults);
-        items = finalResults;
-        paging.hasMore = false; 
-
     } catch (e) {
-        console.error('Falló la búsqueda mixta:', e);
+        console.error('Falló la búsqueda inicial:', e);
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Ocurrió un error al buscar.</p></div>`;
+    } finally {
+        paging.loading = false;
+    }
+}
+
+
+async function loadNextPage() {
+    if (paging.loading || !paging.hasMore) return;
+    paging.loading = true;
+
+    try {
+        const result = await youtubeSearch(paging.query, paging.ytPageToken, 20);
+        if (result.items.length > 0) {
+            const newItems = dedupeById(result.items);
+            appendResults(newItems);
+            items = items.concat(newItems);
+        }
+        paging.ytPageToken = result.nextPageToken;
+        paging.hasMore = result.hasMore;
+    } catch (e) {
+        console.error("Error cargando más resultados:", e);
+        paging.hasMore = false;
+    } finally {
+        paging.loading = false;
     }
 }
 
 
 function dedupeById(arr){
-  const seen = new Set();
+  const seen = new Set(items.map(i => i.id)); // Pre-poblar con los items existentes
   return arr.filter(it=>{ if(!it?.id || seen.has(it.id)) return false; seen.add(it.id); return true; });
-}
-
-async function loadNextPage(){
-  return;
 }
 
 /* ========= Render resultados (CORREGIDO) ========= */
@@ -658,16 +685,17 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    // AHORA SÍ: La decisión del logo se basa en la propiedad `source`
     if (it.source === 'spotify') {
         logo = spotifyLogoSvg();
         if (it.type === 'spotify_playlist') {
             item.classList.add("playlist-result-item", "spotify-playlist-result-item");
             indicator = '<div class="playlist-indicator">LISTA</div>';
         }
-    } else { // Si no es spotify, es youtube
+    } else { 
         logo = youtubeLogoSvg();
-        item.dataset.trackId = it.id; // Asignamos trackId para la lógica de reproducción
+        if (it.type === 'youtube_video') {
+           item.dataset.trackId = it.id;
+        }
         if (it.type === 'youtube_playlist') {
             item.classList.add("playlist-result-item");
             indicator = '<div class="playlist-indicator">LISTA</div>';
@@ -736,19 +764,24 @@ async function handleResultClick(event, item, forcePlay = false) {
 }
 
 async function playSpotifyTrack(track) {
+    switchView('view-search'); // Mantener al usuario en la vista de búsqueda
     const resultsContainer = $("#results");
     resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube...</h3><p>${track.author} - ${track.title}</p></div>`;
     updateHomeGridVisibility();
 
     const ytEquivalent = await findYoutubeEquivalent(track);
+    
+    // Restaurar los resultados de búsqueda originales
+    resultsContainer.innerHTML = "";
+    appendResults(items);
+    
     if (ytEquivalent) {
-        resultsContainer.innerHTML = ""; 
         setQueue([ytEquivalent], "search", 0);
         viewingPlaylistId = null;
         playCurrent(true);
         switchView('view-player');
     } else {
-        resultsContainer.innerHTML = `<div class="loading-indicator"><h3>No se encontró</h3><p>No se pudo encontrar un video para esta canción.</p></div>`;
+        alert("No se pudo encontrar un video para esta canción.");
     }
 }
 
@@ -1350,7 +1383,7 @@ document.addEventListener("click", async (e) => {
 
         let trackForActions = { ...it };
 
-        if (it.type.includes('playlist')) return; // No actions for playlists yet
+        if (it.type.includes('playlist')) return;
 
         if (it.source === 'spotify' && it.type === 'spotify_track') {
             const ytEquivalent = await findYoutubeEquivalent(it);
@@ -1385,10 +1418,8 @@ function refreshIndicators(){
 
   $$(".result-item, .fav-item, .queue-item").forEach(el => {
     let trackId = el.dataset.trackId;
-    if (!trackId) {
-        // For spotify results, the initial ID is from spotify. We check against originalId
-        const itemId = el.dataset.itemId;
-        if (currentTrack?.originalId === itemId) {
+    if (!trackId && currentTrack?.originalId) {
+        if (el.dataset.itemId === currentTrack.originalId) {
             trackId = currentTrack.id;
         }
     }
@@ -1401,6 +1432,7 @@ function refreshIndicators(){
   $("#npPlay")?.classList.toggle("playing", isPlaying);
   $("#miniPlay")?.classList.toggle("playing", isPlaying);
 }
+
 
 
 /* ========= Reproducción en segundo plano ========= */
