@@ -104,7 +104,7 @@ ids: [
 'IfMujYwHOOE', // Karicia - Quinceañera
 '9X35iRX27B8', // Los Avilas - te amo en silencio
 'PsLVh10nF2w', // Los Mirlos - La danza de los mirlos
-'SYQ6svFb8_0', // Los mirlos - por dinero por amor
+'SYQSYNvA6NE', // Los mirlos - por dinero por amor
 '9UQSYNvA6NE', // Siete lunas - Loco corazón
 'z-MrnGLyj28', // Grupo Lagrimas - Tu perfume
 'xH_7932NfYU', // Grupo imagen - Pio pio
@@ -991,15 +991,27 @@ async function openPlaylistSheet(track){
 }
 
 /* ========= YouTube / reproducción ========= */
-function updateUIOnTrackChange() {
-  updateHero(currentTrack);
-  updateMiniNow();
+function updateUIOnTrackChange(isStateChangeOnly = false) {
+  if (!isStateChangeOnly) {
+    updateHero(currentTrack);
+    updateMiniNow();
+  }
   refreshIndicators();
   updateControlStates();
   updateMediaSession(currentTrack);
-  // ==================== PUENTE A ANDROID ====================
-  updateAndroidNotification(); 
-  // ==========================================================
+
+  if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotification) {
+      if (currentTrack) {
+          AndroidBridge.updateNotification(
+              currentTrack.title,
+              cleanAuthor(currentTrack.author),
+              currentTrack.thumb,
+              getPlaybackState() === 'playing'
+          );
+      } else {
+          AndroidBridge.stopNotification();
+      }
+  }
 }
 function updateHero(track){
   const t = track || currentTrack;
@@ -1122,9 +1134,7 @@ function next(){
     ytPlayer.stopVideo(); 
     currentTrack = null; 
     updateUIOnTrackChange(); 
-    // ==================== PUENTE A ANDROID ====================
-    try { AndroidBridge.removeNotification(); } catch(e) {}
-    // ==========================================================
+    if (typeof AndroidBridge !== "undefined") AndroidBridge.stopNotification();
   }
 }
 function prev(){
@@ -1159,7 +1169,6 @@ function startTimer(){
     $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
     $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
 
-    // Actualizar el estado de la Media Session para la notificación
     try{
       if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
         navigator.mediaSession.setPositionState({
@@ -1168,9 +1177,7 @@ function startTimer(){
           position: cur || 0
         });
       }
-    }catch(e) {
-      // No hacer nada si falla, es una mejora progresiva
-    }
+    }catch(e) {}
 
     savePlayerState();
   }, 500);
@@ -1467,10 +1474,6 @@ function refreshIndicators(){
 
   $("#npPlay")?.classList.toggle("playing", isPlaying);
   $("#miniPlay")?.classList.toggle("playing", isPlaying);
-  
-  // ==================== PUENTE A ANDROID ====================
-  updateAndroidNotification();
-  // ==========================================================
 }
 
 /* ========= Reproducción en segundo plano ========= */
@@ -1482,51 +1485,6 @@ document.addEventListener("visibilitychange", ()=>{
     ytPlayer.playVideo();
   }
 });
-
-// ======================================================================
-// ========= PUENTE DE COMUNICACIÓN CON ANDROID (NUEVO) =========
-// ======================================================================
-function updateAndroidNotification() {
-    // Solo intentamos comunicarnos si el objeto AndroidBridge existe
-    if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotification) {
-        try {
-            if (currentTrack) {
-                const isPlaying = getPlaybackState() === 'playing';
-                AndroidBridge.updateNotification(
-                    currentTrack.title,
-                    cleanAuthor(currentTrack.author),
-                    currentTrack.thumb,
-                    isPlaying
-                );
-            } else {
-                AndroidBridge.removeNotification();
-            }
-        } catch (e) {
-            console.error("Error al llamar a AndroidBridge:", e);
-        }
-    }
-}
-
-// Esta función será llamada desde el código Java de Android
-function controlFromAndroid(action) {
-    if (!ytPlayer) return;
-    
-    switch(action) {
-        case 'action_play':
-            ytPlayer.playVideo();
-            break;
-        case 'action_pause':
-            ytPlayer.pauseVideo();
-            break;
-        case 'action_next':
-            next();
-            break;
-        case 'action_prev':
-            prev();
-            break;
-    }
-}
-
 
 /* ========= YouTube API ========= */
 function loadYTApi(){
@@ -1545,19 +1503,35 @@ window.onYouTubeIframeAPIReady = function(){
       onStateChange:(e)=>{
         const st = e.data;
         if(st===YT.PlayerState.ENDED){ next(); }
-        // La MediaSession API nativa del navegador la dejamos por si acaso,
-        // pero nuestra prioridad es la notificación nativa de Android.
-        try{
-          if('mediaSession' in navigator){
-            navigator.mediaSession.playbackState = (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? 'playing'
-              : (st===YT.PlayerState.PAUSED ? 'paused' : 'none');
-          }
-        }catch{}
-        refreshIndicators();
+        // Se llama con un flag para solo actualizar indicadores de play/pause
+        // y no toda la UI, que sería innecesario.
+        updateUIOnTrackChange(true);
       }
     }
   });
 };
+
+
+// =======================================================
+//  NUEVA FUNCIÓN para recibir comandos desde Android
+// =======================================================
+function handleNativeControl(action) {
+    if (!ytPlayer) return;
+
+    switch(action) {
+        case 'action_play':
+        case 'action_pause':
+            togglePlay();
+            break;
+        case 'action_next':
+            next();
+            break;
+        case 'action_prev':
+            prev();
+            break;
+    }
+}
+
 
 /* ========= Infinite scroll ========= */
 const sentinel = $("#sentinel");
@@ -1614,10 +1588,16 @@ function heroScrollInvalidate(){
 window.addEventListener("scroll", heroScrollInvalidate, { passive:true });
 window.addEventListener("resize", heroScrollInvalidate, { passive:true });
 
-/* ========= Media Session API (Navegador) ========= */
+/* ========= Media Session API ========= */
 let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
-  if (!('mediaSession' in navigator) || !track) return;
+  if (!('mediaSession' in navigator)) return;
+  
+  if(!track){
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = "none";
+    return;
+  }
 
   try{
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -1693,8 +1673,6 @@ async function boot(){
     renderPlaylists();
     renderAllHomePlaylists();
   
-    // **BUG FIX:** If a playlist being viewed is updated (e.g., a song is removed),
-    // re-render the queue to prevent desynchronization.
     if (viewingPlaylistId && queueType === 'playlist') {
       const updatedPlaylist = communityPlaylists.find(p => p.id === viewingPlaylistId);
       if (updatedPlaylist) {
@@ -1717,7 +1695,6 @@ async function boot(){
           updateUIOnTrackChange();
         }
       } else {
-        // The playlist being viewed was deleted.
         hideQueuePanel();
         if (queueType === 'playlist') {
             currentTrack = null;
