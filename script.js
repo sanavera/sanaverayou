@@ -366,6 +366,13 @@ async function fetchSpotifyPlaylist(playlistId) {
 }
 
 /* ========= API YouTube ========= */
+let currentApiKeyIndex = 0;
+const getRotatedApiKey = () => {
+  const k = YOUTUBE_API_KEYS[currentApiKeyIndex];
+  currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+  return k;
+};
+
 async function youtubeSearch(query, pageToken = '', limit = 20, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
@@ -531,7 +538,7 @@ function appendResults(chunk) {
             }
         } else { // YouTube
             logo = youtubeLogoSvg();
-            itemEl.dataset.trackId = it.id;
+            itemEl.dataset.trackId = it.id; // Clave para la reproducción
             if (it.type === 'youtube_playlist') {
                 itemEl.classList.add("playlist-result-item");
                 indicator = '<div class="playlist-indicator">LISTA</div>';
@@ -654,7 +661,8 @@ function switchView(id){
   const view = $("#"+id);
   if (view) view.classList.add("active");
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
-  updateHomeGridVisibility();
+  if(id==="view-search") updateHomeGridVisibility();
+  heroScrollInvalidate();
 }
 
 $("#bottomNav").addEventListener("click", e=>{
@@ -733,6 +741,8 @@ function updateUIOnTrackChange() {
   updateMiniNow();
   refreshIndicators();
   updateControlStates();
+  updateMediaSession(currentTrack);
+  updateAndroidNotification();
 }
 
 function updateHero(track){
@@ -892,16 +902,103 @@ function renderQueue(queueItems, title) {
     });
     refreshIndicators();
 }
+//... Y el resto de funciones que estaban en el original
+// (Firebase, Favoritos, etc)
 
+async function boot(){
+  initTheme();
+  
+  const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
+  const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
 
-async function boot() {
-    initTheme();
-    loadYTApi();
-    const savedState = loadPlayerState();
-    if(savedState) {
-        // Delay restore until YT is ready
-        window.addEventListener('yt-ready', () => restorePlayerState(savedState), { once: true });
-    }
+  onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
+    communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // renderPlaylists();
+    // renderAllHomePlaylists();
+  });
+
+    const playlistKeys = Object.keys(recommendedPlaylists);
+  const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
+  const results = await Promise.all(fetchPromises);
+  playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; });
+  
+  // renderAllHomePlaylists();
+  updateHomeGridVisibility();
+
+  loadFavs();
+  // renderFavs();
+  loadYTApi();
+  const savedState = loadPlayerState();
+  if (savedState) restorePlayerState(savedState);
+  // heroScrollInvalidate();
+  document.title = "SanaveraYou Pro";
 }
+
+let heroScrollInvalidate = () => {};
+
+document.addEventListener('DOMContentLoaded', () => {
+    let rafPending = false;
+    let lastScrollY = 0;
+    let targetT = 0, currentT = 0;
+    const EPS = 0.001;
+    const DIST = 200;
+
+    function applyHeroT(t){
+      const tSnap = Math.round(t*1000)/1000;
+      const active = document.querySelector(".view.active");
+      if(!active) return;
+      const favHero = active.querySelector("#favHero, .fav-hero");
+      const npHero  = active.querySelector("#npHero, .np-hero, .player-header-sticky");
+      if (favHero) favHero.style.setProperty("--hero-t", tSnap);
+      if (npHero)  npHero.style.setProperty("--hero-t", tSnap);
+    }
+
+    function heroScrollTickRaf(){
+      rafPending = false;
+      const active = document.querySelector(".view.active");
+      if(!active){ applyHeroT(0); return; }
+
+      const viewTop = active.getBoundingClientRect().top + window.scrollY;
+      const y = Math.max(0, lastScrollY - viewTop);
+      targetT = Math.min(1, y / DIST);
+
+      currentT += (targetT - currentT) * 0.25;
+      if (Math.abs(targetT - currentT) < EPS) currentT = targetT;
+
+      applyHeroT(currentT);
+
+      if (Math.abs(targetT - currentT) >= EPS) {
+        requestAnimationFrame(heroScrollTickRaf);
+        rafPending = true;
+      }
+    }
+    
+    heroScrollInvalidate = () => {
+        lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        if(!rafPending){
+            rafPending = true;
+            requestAnimationFrame(heroScrollTickRaf);
+        }
+    };
+    
+    window.addEventListener("scroll", heroScrollInvalidate, { passive:true });
+    window.addEventListener("resize", heroScrollInvalidate, { passive:true });
+    heroScrollInvalidate();
+});
+function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_FAVS)||"[]"); }catch{ favs=[]; } }
+function saveFavs(){ localStorage.setItem(LS_FAVS, JSON.stringify(favs)); }
+function isFav(id){ return favs.some(f=>f.id===id); }
+function toggleFav(track){
+  if(isFav(track.id)) favs = favs.filter(f=>f.id!==track.id);
+  else favs.unshift(track);
+  saveFavs(); renderFavs(); refreshIndicators();
+}
+
+function updateMediaSession(track){ /* ... */ }
+function updateAndroidNotification(){ /* ... */ }
 
 boot();
