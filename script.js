@@ -51,300 +51,6 @@ const recommendedPlaylists = {
   international: { ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'], title: 'Clásicos 70/80/90s', creator: 'Sebastián Sanavera', data: [], isRecommended: true }
 };
 
-const PLAYER_STATE_KEY = "sy_player_state_v2";
-function getPlaybackState(){
-  if(!YT_READY || !ytPlayer) return "none";
-  const st = ytPlayer.getPlayerState();
-  return (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? "playing"
-       : (st===YT.PlayerState.PAUSED) ? "paused"
-       : "none";
-}
-function savePlayerState() {
-  if (!currentTrack || !ytPlayer) return;
-  const state = {
-    queue, queueType, qIdx,
-    currentTime: ytPlayer.getCurrentTime() || 0,
-    isShuffle, repeatMode,
-    wasPlaying: getPlaybackState()==="playing",
-    timestamp: Date.now()
-  };
-  try { localStorage.setItem(PLAYER_STATE_KEY, JSON.stringify(state)); } 
-  catch (e) { console.error("Error al guardar estado del reproductor:", e); }
-}
-function loadPlayerState() {
-  const savedState = localStorage.getItem(PLAYER_STATE_KEY);
-  if (!savedState) return null;
-  try {
-    const state = JSON.parse(savedState);
-    if (Date.now() - (state.timestamp || 0) > 2 * 60 * 60 * 1000) {
-      localStorage.removeItem(PLAYER_STATE_KEY); return null;
-    }
-    return state;
-  } catch (e) { console.error("Error al cargar estado del reproductor:", e); return null; }
-}
-function restorePlayerState(state) {
-  if (!state || !state.queue || state.qIdx < 0) return;
-  const restore = () => {
-    queue = state.queue;
-    queueType = state.queueType;
-    qIdx = state.qIdx;
-    currentTrack = queue[qIdx];
-    isShuffle = !!state.isShuffle;
-    repeatMode = state.repeatMode || 'none';
-
-    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: state.currentTime || 0 });
-    ytPlayer.setVolume(100);
-    if (state.wasPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
-    updateUIOnTrackChange();
-    startTimer();
-  };
-  if (YT_READY) restore(); else window.addEventListener('yt-ready', restore, { once: true });
-}
-
-function updateUIOnTrackChange(isStateChangeOnly = false) {
-  if (!isStateChangeOnly) {
-    updateHero(currentTrack);
-    updateMiniNow();
-  }
-  refreshIndicators();
-  updateControlStates();
-  updateMediaSession(currentTrack);
-
-  if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotification) {
-      if (currentTrack) {
-          AndroidBridge.updateNotification(
-              currentTrack.title,
-              cleanAuthor(currentTrack.author),
-              currentTrack.thumb,
-              getPlaybackState() === 'playing'
-          );
-      } else {
-          AndroidBridge.stopNotification();
-      }
-  }
-}
-
-function startTimer(){
-  stopTimer();
-  timer = setInterval(()=>{
-    if(!YT_READY || !currentTrack) return;
-    const state = ytPlayer.getPlayerState();
-    if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
-
-    const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
-    $("#cur") && ($("#cur").textContent = fmt(cur));
-    $("#dur") && ($("#dur").textContent = fmt(dur));
-    $("#seek") && ($("#seek").value = dur? Math.floor((cur/dur)*1000) : 0);
-    $("#miniCur") && ($("#miniCur").textContent = fmt(cur));
-    $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
-    $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
-
-    // ¡NUEVO! Enviamos el progreso a Android
-    if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotificationProgress) {
-        AndroidBridge.updateNotificationProgress(Math.round(cur), Math.round(dur));
-    }
-
-    savePlayerState();
-  }, 1000); // Lo hacemos cada 1 segundo
-}
-function stopTimer(){ clearInterval(timer); timer=null; }
-
-window.onYouTubeIframeAPIReady = function(){
-  ytPlayer = new YT.Player("player",{
-    width:300, height:150, videoId:"",
-    playerVars:{autoplay:0, controls:0, rel:0, playsinline:1},
-    events:{
-      onReady:()=>{
-        YT_READY=true;
-        window.dispatchEvent(new Event('yt-ready'));
-      },
-      onStateChange:(e)=>{
-        const st = e.data;
-        if(st===YT.PlayerState.ENDED){ next(); }
-        updateUIOnTrackChange(true);
-      }
-    }
-  });
-};
-
-function handleNativeControl(action) {
-    if (!ytPlayer) return;
-    switch(action) {
-        case 'action_play':
-        case 'action_pause':
-            togglePlay();
-            break;
-        case 'action_next':
-            next();
-            break;
-        case 'action_prev':
-            prev();
-            break;
-    }
-}
-// El resto del script.js (sin cambios)
-// ... (pegar el resto del archivo que ya tenés)
-/* ========= Utils ========= */
-const $  = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
-const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
-const cleanTitle = t => (t||"")
-  .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"")
-  .replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"")
-  .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
-  .replace(/\s{2,}/g," ").trim();
-const cleanAuthor = a => (a||"")
-  .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, "")
-  .replace(/VEVO/gi, "")
-  .replace(/\s{2,}/g, " ")
-  .replace(/\s*-\s*$/, "")
-  .trim();
-const dotsSvg = () => `
-  <svg class="icon-dots" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-    <path fill="currentColor" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/>
-  </svg>`;
-
-/* ========= Estado ========= */
-let items = [];
-let favs  = [];
-let communityPlaylists = []; // Playlists de la comunidad (Firebase)
-let queue = null;
-let queueType = null;
-let qIdx = -1;
-let currentTrack = null;
-let viewingPlaylistId = null;
-let currentQueueTitle = "";
-
-let isShuffle = false;
-let repeatMode = 'none'; // 'none', 'one', 'all'
-
-let ytPlayer = null, YT_READY = false, timer = null;
-let db; // Instancia de Firestore
-
-// --- Credenciales y Estado de Spotify ---
-const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
-const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
-let spotifyToken = { value: null, expires: 0 };
-
-
-// --- Listas de reproducción recomendadas ---
-const recommendedPlaylists = {
-  p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
-    title: 'Melódicos en Inglés',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  p2: {
-    ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
-    title: 'Cumbia estilo Santafesino',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  cumbia: {
-ids: [
-'UHWCB7D8XoI', // Nacarita - Los Diferentes (Cover)
-'OXunU0CJXtc', // Cuando era jovencito - Grupo Nobel
-'D-TrNF5V2jo', // Amor desesperado - Los Tiranos
-'Wcb_gUU5LVA', // El Gran Varon - Grupo Bor
-'bhyjF3t5XJQ', // Ojitos Hechiceros - Grupo Imagen
-'HHOsoZcJ-TY', // Dario y su grupo Angora - Secretaria
-'eVHIQ4oxjwM', // Dario y su grupo Angora - el rosario de mi madre
-'9jbiAeXZKbw', // Amar Azul - Niña
-'dcy_B7oSIf8', // Amar Azul - Tormenta de Nieve
-'UPnTZCTXHvw', // Grupo Red - No podre olvidarme de ti
-'v2FjIJUQPhU', // Grupo Red - Amor de adolescentes
-'fgTLwYJpbgQ', // Grupo Green - Solitario
-'vHyZrsEuE2o', // Grupo Green - Solo estoy
-'OU2KT7wlAGw', // Tambo Tambo - La Cumbita
-'aRLPHz0zsUo', // Tambo Tambo - El Campanero
-'SE3oVXcppVc', // Los Charros - que nos entierren juntos
-'P6W-c8y4j5w', // Los Charros - Me bebi tu recuerdo
-'yBco-h1QPPA', // Los Lamas - Siempre soñando contigo
-'umLyS0-GXLQ', // Los Lamas - que hermosa noche
-'01p-1kMosCI', // Los del Bohio - del vals una más
-'h8emXFUHH0Y', // Los del Bohio - MR robinson
-'098YVg5RmkA', // Gilda - No me arrepiento de este amor
-'7M6WsIKMtKg', // La Nueva Luna - Y ahora te vas
-'2aO4gdfkSc8', // Sombras - La ventanita
-'tJCK6y3gPfU', // Ráfaga - Mentirosa
-'1rwXkK3vWpg', // Los Palmeras - El Bombón Asesino
-'rXuhQxo_Ebc', // Leo Mattioli - Llorarás más de diez veces
-'gfPmhcIIi90', // Rodrigo - Lo mejor del amor
-'biIRifuGPa4', // Antonio Rios - Nunca me faltes
-'ym3vG_UgLEA', // Damas Gratis - Se te ve la tanga
-'sgIUGLFZ2sE', // Pibes Chorros - Duraznito
-'3bkfEGlZNqQ', // Yerba Brava - La Cumbia de los Trapos
-'Gzo5UY3D7lE', // Los cadiz - Si un amor se va
-'CdGxWUu2lwU', // Los Chakales - Vete de mi lado
-'NrbmqV7ah_c', // Malagata - Noche de luna
-'PfnSKD5hgYk', // Siete Lunas - Prende el fuego
-'NqxCPeG0R7Q', // Los Dinos - Ingrata
-'gOt1JFkEauU', // Grupo Trinidad - Ya no es una nenita
-'vhSIFloIMxI', // Los del Fuego - Jurabas tu
-'dWOEGMhOm9k', // Commanche - Tonta
-'UGFBEUBEpss', // Volcan - Esa malvada
-'2wGDGtm8dwY', // Gladys La Bomba Tucumana - La pollera amarilla
-'IfMujYwHOOE', // Karicia - Quinceañera
-'9X35iRX27B8', // Los Avilas - te amo en silencio
-'PsLVh10nF2w', // Los Mirlos - La danza de los mirlos
-'SYQSYNvA6NE', // Los mirlos - por dinero por amor
-'9UQSYNvA6NE', // Siete lunas - Loco corazón
-'z-MrnGLyj28', // Grupo Lagrimas - Tu perfume
-'xH_7932NfYU', // Grupo imagen - Pio pio
-'PTqvL19p87c'  // Amar azul - cuentame
-],
-    title: 'Cumbias del Recuerdo',
-    creator: 'Luis Sanavera',
-    data: [], 
-    isRecommended: true 
-},
-  reggaeton: {
-    ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'],
-    title: 'Noche de Reggaetón',
-    creator: 'Sebastián Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  reggae: {
-    ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', '1ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'],
-    title: 'Vibras de Reggae',
-    creator: 'Sebastián Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  pop: {
-    ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'],
-    title: 'Éxitos Pop',
-    creator: 'Sebastián Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  rock_int: {
-    ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'],
-    title: 'Himnos del Rock',
-    creator: 'Sebastián Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  bachata: {
-    ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'],
-    title: 'Corazón de Bachata',
-    creator: 'Sebastián Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  international: {
-    ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'],
-    title: 'Clásicos 70/80/90s',
-    creator: 'Sebastián Sanavera',
-    data: [],
-    isRecommended: true
-  }
-};
-
 /* ========= Persistencia de Estado ========= */
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 function getPlaybackState(){
@@ -460,7 +166,7 @@ async function getSpotifyToken() {
         const data = await response.json();
         spotifyToken = {
             value: data.access_token,
-            expires: Date.now() + (data.expires_in * 1000) - 60000 // Margen de 1 minuto
+            expires: Date.now() + (data.expires_in * 1000) - 60000 
         };
         return spotifyToken.value;
     } catch (e) {
@@ -607,7 +313,7 @@ overlayInput?.addEventListener("keydown", async e=>{
     const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
     const match = q.match(spotifyPlaylistRegex);
     
-    switchView("view-search"); // Siempre cambiar a la vista de búsqueda
+    switchView("view-search"); 
 
     if (match && match[1]) {
         await handleSpotifyImport(match[1]);
@@ -636,11 +342,11 @@ async function handleSpotifyImport(playlistId) {
         }
         
         if (youtubeTracks.length > 0) {
-            resultsContainer.innerHTML = ""; // Limpiar el mensaje de carga
+            resultsContainer.innerHTML = ""; 
             setQueue(youtubeTracks, 'youtube_playlist', 0);
             viewingPlaylistId = null;
             renderQueue(youtubeTracks, spotifyPlaylist.name);
-            switchView('view-player'); // Cambiar a la vista del reproductor
+            switchView('view-player');
             playCurrent(true);
         } else {
             throw new Error("No se encontraron canciones en YouTube.");
@@ -1004,7 +710,6 @@ async function handlePrivacyToggle(playlistId, isPublic) {
         await updateDoc(plRef, { isPublic });
     } catch (e) {
         console.error("Error al actualizar la privacidad:", e);
-        // Opcional: revertir el switch si falla
     }
 }
 
@@ -1083,7 +788,7 @@ $("#createPlConfirm").onclick = async () => {
             creator,
             tracks: [],
             updatedAt: serverTimestamp(),
-            isPublic: true // Por defecto pública
+            isPublic: true
         });
         addMyPlaylistId(docRef.id);
         $("#newPlName").value = "";
@@ -1161,7 +866,7 @@ async function openPlaylistSheet(track){
             creator,
             tracks: [track],
             updatedAt: serverTimestamp(),
-            isPublic: true // Por defecto pública
+            isPublic: true
         });
         addMyPlaylistId(docRef.id);
         $("#plNewNameFromSong").value = "";
@@ -1355,7 +1060,6 @@ function startTimer(){
     $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
     $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
     
-    // ¡NUEVO! Enviamos el progreso a Android
     if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotificationProgress) {
         AndroidBridge.updateNotificationProgress(Math.round(cur), Math.round(dur));
     }
@@ -1578,7 +1282,6 @@ document.addEventListener("click", (e)=>{
   if(queueItem && viewingPlaylistId){
     const trackId = queueItem.dataset.trackId;
     const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
-    // Permitir editar solo si es *mi* playlist
     if (!pl || !isMyPlaylist(pl.id)) return; 
 
     const it = pl.tracks.find(t=>t.id===trackId);
@@ -1599,7 +1302,6 @@ document.addEventListener("click", (e)=>{
     });
     return;
   } else if (queueItem) {
-      // Aplica a colas que no son mis playlists (búsqueda, favs, recomendadas)
       const trackId = queueItem.dataset.trackId;
       const it = queue.find(t => t.id === trackId);
       if (!it) return;
@@ -1622,7 +1324,7 @@ document.addEventListener("click", (e)=>{
   if(plItem){
     const plId = plItem.dataset.plId;
     const P = communityPlaylists.find(p=>p.id===plId);
-    if(!P || !isMyPlaylist(P.id)) return; // Solo el creador ve las opciones
+    if(!P || !isMyPlaylist(P.id)) return;
 
     openActionSheet({
       title: P.name,
@@ -1695,8 +1397,6 @@ window.onYouTubeIframeAPIReady = function(){
       onStateChange:(e)=>{
         const st = e.data;
         if(st===YT.PlayerState.ENDED){ next(); }
-        // Se llama con un flag para solo actualizar indicadores de play/pause
-        // y no toda la UI, que sería innecesario.
         updateUIOnTrackChange(true);
       }
     }
@@ -1704,9 +1404,6 @@ window.onYouTubeIframeAPIReady = function(){
 };
 
 
-// =======================================================
-//  NUEVA FUNCIÓN para recibir comandos desde Android
-// =======================================================
 function handleNativeControl(action) {
     if (!ytPlayer) return;
 
@@ -1934,11 +1631,9 @@ function renderAllHomePlaylists() {
     ];
     
     allPlaylists.sort((a, b) => {
-      // updatedAt solo existe en playlists de la comunidad
-      // a las recomendadas se les da una fecha muy antigua para que queden abajo de las nuevas.
       const dateA = a.updatedAt?.toDate() || new Date(0); 
       const dateB = b.updatedAt?.toDate() || new Date(0);
-      return dateB - dateA; // Ordena de más reciente a más antiguo
+      return dateB - dateA;
     });
 
     const container = $("#allPlaylistsContainer");
