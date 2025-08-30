@@ -268,6 +268,7 @@ async function getSpotifyToken() {
     if (spotifyToken.value && Date.now() < spotifyToken.expires) {
         return spotifyToken.value;
     }
+
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
             method: 'POST',
@@ -290,24 +291,41 @@ async function getSpotifyToken() {
     }
 }
 
-async function searchSpotify(query, limit = 10) { // Limit reducido para no opacar a YT
+async function searchSpotify(query, limit = 20) {
     const token = await getSpotifyToken();
     if (!token) return { tracks: [], playlists: [] };
+
     try {
         const url = new URL('https://api.spotify.com/v1/search');
         url.searchParams.append('q', query);
         url.searchParams.append('type', 'track,playlist');
         url.searchParams.append('limit', limit);
         url.searchParams.append('market', 'AR');
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (!response.ok) throw new Error('No se pudo buscar en Spotify');
         const data = await response.json();
+
         const tracks = (data.tracks?.items || []).map(item => ({
-            source: 'spotify', type: 'spotify_track', id: item.id, title: item.name, author: item.artists.map(a => a.name).join(', '), thumb: item.album.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'
+            source: 'spotify',
+            type: 'spotify_track',
+            id: item.id,
+            title: item.name,
+            author: item.artists.map(a => a.name).join(', '),
+            thumb: item.album.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'
         }));
+
         const playlists = (data.playlists?.items || []).map(item => ({
-            source: 'spotify', type: 'spotify_playlist', id: item.id, title: item.name, author: item.owner.display_name, thumb: item.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'
+            source: 'spotify',
+            type: 'spotify_playlist',
+            id: item.id,
+            title: item.name,
+            author: item.owner.display_name,
+            thumb: item.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'
         }));
+        
         return { tracks, playlists };
     } catch (e) {
         console.error("Error en la búsqueda de Spotify:", e);
@@ -315,16 +333,31 @@ async function searchSpotify(query, limit = 10) { // Limit reducido para no opac
     }
 }
 
+
 async function fetchSpotifyPlaylist(playlistId) {
     const token = await getSpotifyToken();
     if (!token) return null;
+
     try {
-        const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (!response.ok) throw new Error('No se pudo obtener la playlist de Spotify');
         const data = await response.json();
+        
         return {
-            id: data.id, name: data.name, author: data.owner.display_name, thumb: data.images?.[0]?.url || '',
-            tracks: data.tracks.items.map(({track}) => track ? { source: 'spotify', type: 'spotify_track', id: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean)
+            id: data.id,
+            name: data.name,
+            author: data.owner.display_name,
+            thumb: data.images?.[0]?.url || '',
+            tracks: data.tracks.items.map(({track}) => track ? {
+                source: 'spotify',
+                type: 'spotify_track',
+                id: track.id,
+                title: track.name,
+                author: track.artists.map(a => a.name).join(', '),
+                thumb: track.album.images?.[0]?.url || ''
+            } : null).filter(Boolean)
         };
     } catch (e) {
         console.error("Error al buscar playlist en Spotify:", e);
@@ -334,7 +367,16 @@ async function fetchSpotifyPlaylist(playlistId) {
 
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
-  "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY", "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44", "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE", "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM", "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0", "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI", "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs", "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ", "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc", "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
+  "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
+  "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
+  "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE",
+  "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM",
+  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0",
+  "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI",
+  "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs",
+  "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ",
+  "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc",
+  "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
 ];
 let currentApiKeyIndex = 0;
 const getRotatedApiKey = () => {
@@ -346,32 +388,53 @@ const getRotatedApiKey = () => {
 async function fetchVideoDetailsByIds(ids) {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return [];
+
     const CHUNK_SIZE = 50;
-    const chunks = Array.from({ length: Math.ceil(uniqueIds.length / CHUNK_SIZE) }, (v, i) => uniqueIds.slice(i * CHUNK_SIZE, i * CHUNK_SIZE + CHUNK_SIZE));
+    const chunks = [];
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+        chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE));
+    }
+
     const fetchChunk = async (chunk, retryCount = 0) => {
         const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-        if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para el chunk: ${chunk.join(',')}`); return []; }
+        if (retryCount >= MAX_RETRIES) {
+            console.error(`Todas las API keys han fallado para el chunk: ${chunk.join(',')}`);
+            return [];
+        }
+
         const url = new URL('https://www.googleapis.com/youtube/v3/videos');
         const apiKey = getRotatedApiKey();
         url.searchParams.append('key', apiKey);
         url.searchParams.append('part', 'snippet');
         url.searchParams.append('id', chunk.join(','));
+
         try {
             const response = await fetch(url);
             if (!response.ok) {
-                if (response.status === 403) { console.warn(`API key ${apiKey} 403 → rotando`); return fetchChunk(chunk, retryCount + 1); }
+                if (response.status === 403) {
+                    console.warn(`API key ${apiKey} 403 → rotando`);
+                    return fetchChunk(chunk, retryCount + 1);
+                }
                 throw new Error(`API error: ${response.status}`);
             }
             const data = await response.json();
-            return data.items.map(item => ({ id: item.id, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" }));
-        } catch (e) { console.error('YouTube API fetch chunk failed:', e); return fetchChunk(chunk, retryCount + 1); }
+            return data.items.map(item => ({
+                id: item.id,
+                title: cleanTitle(item.snippet.title),
+                author: cleanAuthor(item.snippet.channelTitle),
+                thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
+            }));
+        } catch (e) {
+            console.error('YouTube API fetch chunk failed:', e);
+            return fetchChunk(chunk, retryCount + 1);
+        }
     };
+    
     const results = await Promise.all(chunks.map(chunk => fetchChunk(chunk)));
     return results.flat();
 }
 
-const BATCH_SIZE = 20;
-let paging = { query:"", pageToken:"", loading:false, hasMore:true };
+
 let searchAbort = null;
 
 /* ========= Nav ========= */
@@ -406,11 +469,16 @@ overlayInput?.addEventListener("keydown", async e=>{
     if (e.key !== "Enter") return;
     const q = overlayInput.value.trim();
     if (!q) return;
+
     closeSearch();
-    document.body.scrollTop = 0; document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+    
     const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
     const match = q.match(spotifyPlaylistRegex);
+    
     switchView("view-search");
+
     if (match && match[1]) {
         await handleSpotifyImport(match[1]);
     } else {
@@ -419,9 +487,12 @@ overlayInput?.addEventListener("keydown", async e=>{
 });
 
 /* ========= Búsqueda Mixta con Scroll Infinito (CORREGIDO) ========= */
+const BATCH_SIZE = 20;
+let paging = { query:"", pageToken:"", loading:false, hasMore:true };
+
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-  if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys han fallado.');
+  if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   const apiKey = getRotatedApiKey();
   url.searchParams.append('key', apiKey);
@@ -433,14 +504,26 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   try{
     const response = await fetch(url);
     if(!response.ok){
-      if(response.status===403){ console.warn(`API key ${apiKey} 403 → rota`); return youtubeSearch(query, pageToken, limit, retryCount+1); }
+      if(response.status===403){
+        console.warn(`API key ${apiKey} 403 → rota`);
+        return youtubeSearch(query, pageToken, limit, retryCount+1);
+      }
       throw new Error(`API error: ${response.status}`);
     }
     const data = await response.json();
     const resultItems = data.items.map(item => {
-        const baseItem = { source: 'youtube', id: item.id.videoId || item.id.playlistId, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || "" };
-        if (item.id.kind === 'youtube#video') return { ...baseItem, type: 'youtube_video' };
-        if (item.id.kind === 'youtube#playlist') return { ...baseItem, type: 'youtube_playlist' };
+        const baseItem = {
+            source: 'youtube',
+            id: item.id.videoId || item.id.playlistId,
+            title: cleanTitle(item.snippet.title),
+            author: cleanAuthor(item.snippet.channelTitle),
+            thumb: item.snippet.thumbnails?.high?.url || ""
+        };
+        if (item.id.kind === 'youtube#video') {
+            return { ...baseItem, type: 'youtube_video' };
+        } else if (item.id.kind === 'youtube#playlist') {
+            return { ...baseItem, type: 'youtube_playlist' };
+        }
         return null;
     }).filter(Boolean);
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
@@ -462,7 +545,7 @@ async function startSearch(query){
   try {
     const [ytResult, spResult] = await Promise.all([
         youtubeSearch(query, '', 30),
-        searchSpotify(query, 15)
+        searchSpotify(query, 20)
     ]);
 
     if (searchAbort.signal.aborted) return;
@@ -470,12 +553,20 @@ async function startSearch(query){
     paging.pageToken = ytResult.nextPageToken;
     paging.hasMore = !!ytResult.nextPageToken;
 
-    const combined = [ ...spResult.playlists, ...ytResult.items.filter(it => it.type === 'youtube_playlist'), ...spResult.tracks, ...ytResult.items.filter(it => it.type === 'youtube_video') ];
+    const combined = [
+        ...spResult.playlists,
+        ...ytResult.items.filter(it => it.type === 'youtube_playlist'),
+        ...spResult.tracks,
+        ...ytResult.items.filter(it => it.type === 'youtube_video')
+    ];
+
     if (resultsEl) resultsEl.innerHTML = "";
+    
     if (combined.length === 0 && !paging.hasMore) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
         return;
     }
+    
     items = dedupeById(combined);
     appendResults(items);
 
@@ -489,7 +580,11 @@ async function startSearch(query){
 
 function dedupeById(arr){
   const seen = new Set(items.map(i => i.id));
-  return arr.filter(it=>{ if(!it?.id || seen.has(it.id)) return false; seen.add(it.id); return true; });
+  return arr.filter(it=>{
+    if(!it?.id || seen.has(it.id)) return false;
+    seen.add(it.id);
+    return true;
+  });
 }
 
 async function loadNextPage(){
@@ -497,7 +592,10 @@ async function loadNextPage(){
   paging.loading = true;
   try{
     const result = await youtubeSearch(paging.query, paging.pageToken, BATCH_SIZE);
-    if(result.items.length === 0){ paging.hasMore = false; return; }
+    if(result.items.length === 0){
+        paging.hasMore = false;
+        return;
+    }
     const newItems = dedupeById(result.items);
     appendResults(newItems);
     items = items.concat(newItems);
@@ -521,10 +619,9 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    // LÓGICA CORREGIDA PARA ASIGNAR EL LOGO CORRECTO
     if (it.source === 'spotify') {
         logo = spotifyLogoSvg();
-    } else { // Si no es spotify, es youtube por defecto
+    } else { 
         logo = youtubeLogoSvg();
         item.dataset.trackId = it.id;
     }
@@ -532,9 +629,6 @@ function appendResults(chunk){
     if (it.type.includes('playlist')) {
         item.classList.add("playlist-result-item");
         indicator = '<div class="playlist-indicator">LISTA</div>';
-    } else {
-        // Renombramos el tipo para consistencia
-        it.type = it.source === 'spotify' ? 'spotify_track' : 'youtube_video';
     }
 
     item.innerHTML = `
@@ -572,23 +666,17 @@ function appendResults(chunk){
   refreshIndicators();
 }
 
+async function handleResultClick(e, it, forcePlay = false) {
+    if (e.target.closest('.more') || (e.target.closest('.card-play') && !forcePlay)) return;
 
-async function handleResultClick(event, item, forcePlay = false) {
-    if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return;
-
-    switch (item.type) {
-        case 'youtube_video':
-            playFromSearch(item.id, true);
-            break;
-        case 'youtube_playlist':
-            handlePlaylistResultClick(item.id, item.title);
-            break;
-        case 'spotify_track':
-            playSpotifyTrack(item);
-            break;
-        case 'spotify_playlist':
-            handleSpotifyImport(item.id);
-            break;
+    if (it.type === 'youtube_video') {
+        playFromSearch(it.id, true);
+    } else if (it.type === 'youtube_playlist') {
+        handlePlaylistResultClick(it.id, it.title);
+    } else if (it.type === 'spotify_track') {
+        playSpotifyTrack(it);
+    } else if (it.type === 'spotify_playlist') {
+        handleSpotifyImport(it.id);
     }
 }
 
@@ -596,12 +684,13 @@ async function playSpotifyTrack(track) {
     const resultsContainer = $("#results");
     const originalContent = resultsContainer.innerHTML;
     resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube...</h3><p>${track.author} - ${track.title}</p></div>`;
-    updateHomeGridVisibility();
     const ytEquivalent = await findYoutubeEquivalent(track);
+    
+    // Restaurar los resultados de la búsqueda antes de cambiar de vista
     resultsContainer.innerHTML = originalContent; 
+    
     if (ytEquivalent) {
         setQueue([ytEquivalent], "search", 0);
-        viewingPlaylistId = null;
         playCurrent(true);
         switchView('view-player');
     } else {
@@ -609,54 +698,41 @@ async function playSpotifyTrack(track) {
     }
 }
 
-async function handleSpotifyImport(playlistId) {
-    const resultsContainer = $("#results");
-    resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Importando desde Spotify...</h3><p>Esto puede tardar unos segundos.</p></div>`;
-    updateHomeGridVisibility();
-    try {
-        const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
-        if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) throw new Error("No se pudo obtener la playlist o está vacía.");
-        const youtubeQueue = (await Promise.all(spotifyPlaylist.tracks.map(findYoutubeEquivalent))).filter(Boolean);
-        if (youtubeQueue.length > 0) {
-            resultsContainer.innerHTML = "";
-            setQueue(youtubeQueue, 'youtube_playlist', 0);
-            viewingPlaylistId = null;
-            renderQueue(youtubeQueue, spotifyPlaylist.name);
-            switchView('view-player');
-            playCurrent(true);
-        } else { throw new Error("No se encontraron equivalentes en YouTube para las canciones de la lista."); }
-    } catch (error) {
-        console.error("Error al importar desde Spotify:", error);
-        resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Error al importar</h3><p>${error.message}</p></div>`;
-    }
-}
-
-async function findYoutubeEquivalent(track) {
-    if (!track || !track.title) return null;
-    const searchQuery = `${track.author} - ${track.title}`;
-    const searchResult = await youtubeSearch(searchQuery, '', 1);
-    const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
-    return ytTrack ? { ...ytTrack, originalId: track.id, thumb: ytTrack.thumb || track.thumb } : null;
-}
 
 async function fetchPlaylistItems(playlistId, retryCount = 0) {
     const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-    if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para la playlist ${playlistId}`); return []; }
+    if (retryCount >= MAX_RETRIES) {
+        console.error(`Todas las API keys han fallado para la playlist ${playlistId}`);
+        return [];
+    }
+
     const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
     const apiKey = getRotatedApiKey();
     url.searchParams.append('key', apiKey);
     url.searchParams.append('part', 'snippet');
     url.searchParams.append('playlistId', playlistId);
     url.searchParams.append('maxResults', 50);
+
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            if (response.status === 403) { return fetchPlaylistItems(playlistId, retryCount + 1); }
+            if (response.status === 403) {
+                console.warn(`API key 403 para playlistItems, rotando...`);
+                return fetchPlaylistItems(playlistId, retryCount + 1);
+            }
             throw new Error(`API error: ${response.status}`);
         }
         const data = await response.json();
-        return data.items.map(item => ({ id: item.snippet.resourceId.videoId, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })).filter(track => track.id);
-    } catch (e) { console.error('Fallo al buscar items de la playlist:', e); return fetchPlaylistItems(playlistId, retryCount + 1); }
+        return data.items.map(item => ({
+            id: item.snippet.resourceId.videoId,
+            title: cleanTitle(item.snippet.title),
+            author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle),
+            thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
+        })).filter(track => track.id);
+    } catch (e) {
+        console.error('Fallo al buscar items de la playlist:', e);
+        return fetchPlaylistItems(playlistId, retryCount + 1);
+    }
 }
 
 async function handlePlaylistResultClick(playlistId, playlistTitle) {
@@ -681,30 +757,46 @@ async function handlePlaylistResultClick(playlistId, playlistTitle) {
 function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
+
     const tracks = playlist.isRecommended ? playlist.data : playlist.tracks;
     if (!tracks || tracks.length === 0) return;
+
     const covers = tracks.slice(0, 4).map(track => track.thumb).filter(Boolean);
-    while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    while (covers.length < 4) {
+        covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    }
+    
     const logo = playlist.isRecommended ? youtubeLogoSvg() : spotifyLogoSvg();
+
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
+
     card.innerHTML = `
-        <div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
+        <div class="collage-container">
+            ${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}
+        </div>
         <div class="playlist-meta">
             <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
-            <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
-        </div>`;
+            <div class="creator-line">
+                ${logo}
+                <span>Creador: ${playlist.creator}</span>
+            </div>
+        </div>
+    `;
+
     card.onclick = () => {
         const queueTracks = playlist.isRecommended ? playlist.data : playlist.tracks;
         const queueId = playlist.isRecommended ? null : playlist.id;
         const queueTitle = playlist.isRecommended ? playlist.title : playlist.name;
+        
         setQueue(queueTracks, playlist.isRecommended ? 'recommended' : 'playlist', 0);
         viewingPlaylistId = queueId;
         renderQueue(queueTracks, queueTitle);
         switchView('view-player');
         playCurrent(true);
     };
+    
     container.appendChild(card);
 }
 
@@ -1310,7 +1402,7 @@ let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if(!('mediaSession' in navigator)||!track)return;
   try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){}
-  if(!mediaSessionHandlersSet){mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; try{navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)})); navigator.mediaSession.setActionHandler('seekforward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o),true)})); navigator.mediaSession.setActionHandler('seekto',d=>{s(()=>{if(!YT_READY||!d||typeof d.seekTime!=='number')return;ytPlayer.seekTo(d.seekTime,true)})()});}catch(e){}}
+  if(!mediaSessionHandlersSet){mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; try{navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)})); navigator.mediaSession.setActionHandler('seekforward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true)})); navigator.mediaSession.setActionHandler('seekto',d=>{s(()=>{if(!YT_READY||!d||typeof d.seekTime!=='number')return;ytPlayer.seekTo(d.seekTime,true)})()});}catch(e){}}
   try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch{}
 }
 /* ===== Android bridge (AIDE WebView) ===== */
