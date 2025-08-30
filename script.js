@@ -1485,6 +1485,25 @@ window.onYouTubeIframeAPIReady = function(){
       },
       onStateChange:(e)=>{
         const st = e.data;
+        
+        // ===============================================================
+        //  AQUÍ ESTÁ LA MODIFICACIÓN PARA COMUNICARSE CON ANDROID
+        // ===============================================================
+        if (st === YT.PlayerState.PLAYING) {
+          // Si el reproductor empieza a sonar, le avisamos a Android que inicie el servicio.
+          if (typeof AndroidBridge !== "undefined" && AndroidBridge.startMusicService) {
+            AndroidBridge.startMusicService();
+          }
+        } else if (st === YT.PlayerState.PAUSED || st === YT.PlayerState.ENDED) {
+          // Si la música se pausa o termina, le avisamos a Android que detenga el servicio.
+          if (typeof AndroidBridge !== "undefined" && AndroidBridge.stopMusicService) {
+            AndroidBridge.stopMusicService();
+          }
+        }
+        // ===============================================================
+        //  FIN DE LA MODIFICACIÓN
+        // ===============================================================
+
         if(st===YT.PlayerState.ENDED){ next(); }
         try{
           if('mediaSession' in navigator){
