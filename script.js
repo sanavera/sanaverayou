@@ -997,6 +997,7 @@ function updateUIOnTrackChange() {
   refreshIndicators();
   updateControlStates();
   updateMediaSession(currentTrack);
+  updateAndroidNotification();
 }
 function updateHero(track){
   const t = track || currentTrack;
@@ -1493,6 +1494,7 @@ window.onYouTubeIframeAPIReady = function(){
           }
         }catch{}
         refreshIndicators();
+        updateAndroidNotification();
       }
     }
   });
@@ -1605,6 +1607,38 @@ function updateMediaSession(track){
     navigator.mediaSession.playbackState = (st==='playing'?'playing':(st==='paused'?'paused':'none'));
   }catch{}
 }
+
+/* ===== Android bridge (AIDE WebView) ===== */
+function canUseAndroidBridge(){
+  try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); }
+  catch(e){ return false; }
+}
+
+function updateAndroidNotification(){
+  if (!canUseAndroidBridge()) return;
+  const isPlaying = (typeof getPlaybackState === 'function')
+    ? (getPlaybackState() === 'playing')
+    : (YT_READY && ytPlayer && (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING || ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING));
+
+  if (!currentTrack) { AndroidBridge.stopNotification(); return; }
+
+  AndroidBridge.updateNotification(
+    currentTrack.title || '',
+    cleanAuthor(currentTrack.author || ''),
+    currentTrack.thumb || '',
+    !!isPlaying
+  );
+}
+
+// Expuesto para MainActivity → javascript:handleNativeControl('...')
+window.handleNativeControl = function(control){
+  const c = String(control||'').toLowerCase();
+  if (c === 'action_play')  { if (YT_READY && ytPlayer) ytPlayer.playVideo(); return; }
+  if (c === 'action_pause') { if (YT_READY && ytPlayer) ytPlayer.pauseVideo(); return; }
+  if (c === 'action_next')  { next(); return; }
+  if (c === 'action_prev')  { prev(); return; }
+};
+
 
 /* ========= Init ========= */
 async function boot(){
@@ -1719,3 +1753,6 @@ function renderAllHomePlaylists() {
 boot();
 
 window.addEventListener('beforeunload', savePlayerState);
+window.addEventListener('beforeunload', function(){
+  if (canUseAndroidBridge()) AndroidBridge.stopNotification();
+});
