@@ -21,6 +21,192 @@ const dotsSvg = () => `
 /* ========= Estado ========= */
 let items = [];
 let favs  = [];
+let communityPlaylists = [];
+let queue = null;
+let queueType = null;
+let qIdx = -1;
+let currentTrack = null;
+let viewingPlaylistId = null;
+let currentQueueTitle = "";
+
+let isShuffle = false;
+let repeatMode = 'none';
+
+let ytPlayer = null, YT_READY = false, timer = null;
+let db; 
+
+const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
+const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
+let spotifyToken = { value: null, expires: 0 };
+
+const recommendedPlaylists = {
+  p1: { ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'], title: 'Melódicos en Inglés', creator: 'Luis Sanavera', data: [], isRecommended: true },
+  p2: { ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'], title: 'Cumbia estilo Santafesino', creator: 'Luis Sanavera', data: [], isRecommended: true },
+  cumbia: { ids: ['UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQSYNvA6NE', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c'], title: 'Cumbias del Recuerdo', creator: 'Luis Sanavera', data: [], isRecommended: true },
+  reggaeton: { ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'], title: 'Noche de Reggaetón', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
+  reggae: { ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', '1ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'], title: 'Vibras de Reggae', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
+  pop: { ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'], title: 'Éxitos Pop', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
+  rock_int: { ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'], title: 'Himnos del Rock', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
+  bachata: { ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'], title: 'Corazón de Bachata', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
+  international: { ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'], title: 'Clásicos 70/80/90s', creator: 'Sebastián Sanavera', data: [], isRecommended: true }
+};
+
+const PLAYER_STATE_KEY = "sy_player_state_v2";
+function getPlaybackState(){
+  if(!YT_READY || !ytPlayer) return "none";
+  const st = ytPlayer.getPlayerState();
+  return (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? "playing"
+       : (st===YT.PlayerState.PAUSED) ? "paused"
+       : "none";
+}
+function savePlayerState() {
+  if (!currentTrack || !ytPlayer) return;
+  const state = {
+    queue, queueType, qIdx,
+    currentTime: ytPlayer.getCurrentTime() || 0,
+    isShuffle, repeatMode,
+    wasPlaying: getPlaybackState()==="playing",
+    timestamp: Date.now()
+  };
+  try { localStorage.setItem(PLAYER_STATE_KEY, JSON.stringify(state)); } 
+  catch (e) { console.error("Error al guardar estado del reproductor:", e); }
+}
+function loadPlayerState() {
+  const savedState = localStorage.getItem(PLAYER_STATE_KEY);
+  if (!savedState) return null;
+  try {
+    const state = JSON.parse(savedState);
+    if (Date.now() - (state.timestamp || 0) > 2 * 60 * 60 * 1000) {
+      localStorage.removeItem(PLAYER_STATE_KEY); return null;
+    }
+    return state;
+  } catch (e) { console.error("Error al cargar estado del reproductor:", e); return null; }
+}
+function restorePlayerState(state) {
+  if (!state || !state.queue || state.qIdx < 0) return;
+  const restore = () => {
+    queue = state.queue;
+    queueType = state.queueType;
+    qIdx = state.qIdx;
+    currentTrack = queue[qIdx];
+    isShuffle = !!state.isShuffle;
+    repeatMode = state.repeatMode || 'none';
+
+    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: state.currentTime || 0 });
+    ytPlayer.setVolume(100);
+    if (state.wasPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
+    updateUIOnTrackChange();
+    startTimer();
+  };
+  if (YT_READY) restore(); else window.addEventListener('yt-ready', restore, { once: true });
+}
+
+function updateUIOnTrackChange(isStateChangeOnly = false) {
+  if (!isStateChangeOnly) {
+    updateHero(currentTrack);
+    updateMiniNow();
+  }
+  refreshIndicators();
+  updateControlStates();
+  updateMediaSession(currentTrack);
+
+  if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotification) {
+      if (currentTrack) {
+          AndroidBridge.updateNotification(
+              currentTrack.title,
+              cleanAuthor(currentTrack.author),
+              currentTrack.thumb,
+              getPlaybackState() === 'playing'
+          );
+      } else {
+          AndroidBridge.stopNotification();
+      }
+  }
+}
+
+function startTimer(){
+  stopTimer();
+  timer = setInterval(()=>{
+    if(!YT_READY || !currentTrack) return;
+    const state = ytPlayer.getPlayerState();
+    if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
+
+    const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
+    $("#cur") && ($("#cur").textContent = fmt(cur));
+    $("#dur") && ($("#dur").textContent = fmt(dur));
+    $("#seek") && ($("#seek").value = dur? Math.floor((cur/dur)*1000) : 0);
+    $("#miniCur") && ($("#miniCur").textContent = fmt(cur));
+    $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
+    $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
+
+    // ¡NUEVO! Enviamos el progreso a Android
+    if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotificationProgress) {
+        AndroidBridge.updateNotificationProgress(Math.round(cur), Math.round(dur));
+    }
+
+    savePlayerState();
+  }, 1000); // Lo hacemos cada 1 segundo
+}
+function stopTimer(){ clearInterval(timer); timer=null; }
+
+window.onYouTubeIframeAPIReady = function(){
+  ytPlayer = new YT.Player("player",{
+    width:300, height:150, videoId:"",
+    playerVars:{autoplay:0, controls:0, rel:0, playsinline:1},
+    events:{
+      onReady:()=>{
+        YT_READY=true;
+        window.dispatchEvent(new Event('yt-ready'));
+      },
+      onStateChange:(e)=>{
+        const st = e.data;
+        if(st===YT.PlayerState.ENDED){ next(); }
+        updateUIOnTrackChange(true);
+      }
+    }
+  });
+};
+
+function handleNativeControl(action) {
+    if (!ytPlayer) return;
+    switch(action) {
+        case 'action_play':
+        case 'action_pause':
+            togglePlay();
+            break;
+        case 'action_next':
+            next();
+            break;
+        case 'action_prev':
+            prev();
+            break;
+    }
+}
+// El resto del script.js (sin cambios)
+// ... (pegar el resto del archivo que ya tenés)
+/* ========= Utils ========= */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
+const cleanTitle = t => (t||"")
+  .replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"")
+  .replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"")
+  .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
+  .replace(/\s{2,}/g," ").trim();
+const cleanAuthor = a => (a||"")
+  .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, "")
+  .replace(/VEVO/gi, "")
+  .replace(/\s{2,}/g, " ")
+  .replace(/\s*-\s*$/, "")
+  .trim();
+const dotsSvg = () => `
+  <svg class="icon-dots" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path fill="currentColor" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/>
+  </svg>`;
+
+/* ========= Estado ========= */
+let items = [];
+let favs  = [];
 let communityPlaylists = []; // Playlists de la comunidad (Firebase)
 let queue = null;
 let queueType = null;
@@ -1168,6 +1354,12 @@ function startTimer(){
     $("#miniCur") && ($("#miniCur").textContent = fmt(cur));
     $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
     $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
+    
+    // ¡NUEVO! Enviamos el progreso a Android
+    if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotificationProgress) {
+        AndroidBridge.updateNotificationProgress(Math.round(cur), Math.round(dur));
+    }
+
 
     try{
       if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
@@ -1180,7 +1372,7 @@ function startTimer(){
     }catch(e) {}
 
     savePlayerState();
-  }, 500);
+  }, 1000);
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
