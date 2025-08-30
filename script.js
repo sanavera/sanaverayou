@@ -997,6 +997,9 @@ function updateUIOnTrackChange() {
   refreshIndicators();
   updateControlStates();
   updateMediaSession(currentTrack);
+  // ==================== PUENTE A ANDROID ====================
+  updateAndroidNotification(); 
+  // ==========================================================
 }
 function updateHero(track){
   const t = track || currentTrack;
@@ -1115,7 +1118,14 @@ function getNextIndex() {
 function next(){
   const nextIdx = getNextIndex();
   if (nextIdx !== -1) { qIdx = nextIdx; playCurrent(true); }
-  else { ytPlayer.stopVideo(); currentTrack = null; updateUIOnTrackChange(); }
+  else { 
+    ytPlayer.stopVideo(); 
+    currentTrack = null; 
+    updateUIOnTrackChange(); 
+    // ==================== PUENTE A ANDROID ====================
+    try { AndroidBridge.removeNotification(); } catch(e) {}
+    // ==========================================================
+  }
 }
 function prev(){
   if (!queue) return;
@@ -1457,6 +1467,10 @@ function refreshIndicators(){
 
   $("#npPlay")?.classList.toggle("playing", isPlaying);
   $("#miniPlay")?.classList.toggle("playing", isPlaying);
+  
+  // ==================== PUENTE A ANDROID ====================
+  updateAndroidNotification();
+  // ==========================================================
 }
 
 /* ========= Reproducción en segundo plano ========= */
@@ -1468,6 +1482,51 @@ document.addEventListener("visibilitychange", ()=>{
     ytPlayer.playVideo();
   }
 });
+
+// ======================================================================
+// ========= PUENTE DE COMUNICACIÓN CON ANDROID (NUEVO) =========
+// ======================================================================
+function updateAndroidNotification() {
+    // Solo intentamos comunicarnos si el objeto AndroidBridge existe
+    if (typeof AndroidBridge !== "undefined" && AndroidBridge.updateNotification) {
+        try {
+            if (currentTrack) {
+                const isPlaying = getPlaybackState() === 'playing';
+                AndroidBridge.updateNotification(
+                    currentTrack.title,
+                    cleanAuthor(currentTrack.author),
+                    currentTrack.thumb,
+                    isPlaying
+                );
+            } else {
+                AndroidBridge.removeNotification();
+            }
+        } catch (e) {
+            console.error("Error al llamar a AndroidBridge:", e);
+        }
+    }
+}
+
+// Esta función será llamada desde el código Java de Android
+function controlFromAndroid(action) {
+    if (!ytPlayer) return;
+    
+    switch(action) {
+        case 'action_play':
+            ytPlayer.playVideo();
+            break;
+        case 'action_pause':
+            ytPlayer.pauseVideo();
+            break;
+        case 'action_next':
+            next();
+            break;
+        case 'action_prev':
+            prev();
+            break;
+    }
+}
+
 
 /* ========= YouTube API ========= */
 function loadYTApi(){
@@ -1485,26 +1544,9 @@ window.onYouTubeIframeAPIReady = function(){
       },
       onStateChange:(e)=>{
         const st = e.data;
-        
-        // ===============================================================
-        //  AQUÍ ESTÁ LA MODIFICACIÓN PARA COMUNICARSE CON ANDROID
-        // ===============================================================
-        if (st === YT.PlayerState.PLAYING) {
-          // Si el reproductor empieza a sonar, le avisamos a Android que inicie el servicio.
-          if (typeof AndroidBridge !== "undefined" && AndroidBridge.startMusicService) {
-            AndroidBridge.startMusicService();
-          }
-        } else if (st === YT.PlayerState.PAUSED || st === YT.PlayerState.ENDED) {
-          // Si la música se pausa o termina, le avisamos a Android que detenga el servicio.
-          if (typeof AndroidBridge !== "undefined" && AndroidBridge.stopMusicService) {
-            AndroidBridge.stopMusicService();
-          }
-        }
-        // ===============================================================
-        //  FIN DE LA MODIFICACIÓN
-        // ===============================================================
-
         if(st===YT.PlayerState.ENDED){ next(); }
+        // La MediaSession API nativa del navegador la dejamos por si acaso,
+        // pero nuestra prioridad es la notificación nativa de Android.
         try{
           if('mediaSession' in navigator){
             navigator.mediaSession.playbackState = (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? 'playing'
@@ -1572,7 +1614,7 @@ function heroScrollInvalidate(){
 window.addEventListener("scroll", heroScrollInvalidate, { passive:true });
 window.addEventListener("resize", heroScrollInvalidate, { passive:true });
 
-/* ========= Media Session API ========= */
+/* ========= Media Session API (Navegador) ========= */
 let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if (!('mediaSession' in navigator) || !track) return;
