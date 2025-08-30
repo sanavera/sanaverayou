@@ -291,7 +291,7 @@ async function getSpotifyToken() {
     }
 }
 
-async function searchSpotify(query, limit = 10) {
+async function searchSpotify(query, limit = 20) {
     const token = await getSpotifyToken();
     if (!token) return { tracks: [], playlists: [] };
 
@@ -314,7 +314,7 @@ async function searchSpotify(query, limit = 10) {
             id: item.id,
             title: item.name,
             author: item.artists.map(a => a.name).join(', '),
-            thumb: item.album.images?.[0]?.url || ''
+            thumb: item.album.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'
         }));
 
         const playlists = (data.playlists?.items || []).map(item => ({
@@ -323,7 +323,7 @@ async function searchSpotify(query, limit = 10) {
             id: item.id,
             title: item.name,
             author: item.owner.display_name,
-            thumb: item.images?.[0]?.url || ''
+            thumb: item.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'
         }));
         
         return { tracks, playlists };
@@ -534,9 +534,9 @@ async function findYoutubeEquivalent(track) {
         id: ytTrack.id,
         title: ytTrack.title,
         author: ytTrack.author,
-        thumb: ytTrack.thumb || track.thumb, // Usar thumb de spotify como fallback
-        originalId: track.id, // Guardar id original de spotify
-        source: 'youtube' // La fuente final para reproducción es youtube
+        thumb: ytTrack.thumb || track.thumb,
+        originalId: track.id,
+        source: 'youtube'
     } : null;
 }
 
@@ -593,54 +593,50 @@ async function youtubeSearch(query, pageToken = '', limit = 20, retryCount = 0){
 }
 
 /* ========= Búsqueda Mixta (CORREGIDA) ========= */
-async function startSearch(query){
-  if(searchAbort) searchAbort.abort();
-  searchAbort = new AbortController();
-  paging = { query, pageToken:"", loading:false, hasMore:true };
-  items = [];
-  const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
-  updateHomeGridVisibility();
+async function startSearch(query) {
+    if (searchAbort) searchAbort.abort();
+    searchAbort = new AbortController();
+    paging = { query, pageToken: "", loading: false, hasMore: true };
+    items = [];
+    const resultsEl = $("#results");
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube y Spotify...</h3></div>`;
+    updateHomeGridVisibility();
 
-  try{
-    const [ytResult, spResult] = await Promise.all([
-        youtubeSearch(query, '', 15), // Pedimos más resultados
-        searchSpotify(query, 15)      
-    ]);
+    try {
+        const [ytResult, spResult] = await Promise.all([
+            youtubeSearch(query, '', 20),
+            searchSpotify(query, 20)
+        ]);
 
-    if(searchAbort.signal.aborted) return;
+        if (searchAbort.signal.aborted) return;
 
-    // Lógica de mezcla mejorada para intercalar resultados
-    const combined = [];
-    const ytPlaylists = ytResult.items.filter(i => i.type === 'youtube_playlist');
-    const ytVideos = ytResult.items.filter(i => i.type === 'youtube_video');
-    const spPlaylists = spResult.playlists;
-    const spTracks = spResult.tracks;
+        // Lógica de mezcla simple y efectiva
+        const combinedResults = [
+            ...spResult.playlists,
+            ...ytResult.items.filter(i => i.type === 'youtube_playlist'),
+            ...spResult.tracks,
+            ...ytResult.items.filter(i => i.type === 'youtube_video')
+        ];
 
-    const maxLength = Math.max(ytPlaylists.length, ytVideos.length, spPlaylists.length, spTracks.length);
+        if (resultsEl) resultsEl.innerHTML = "";
 
-    for (let i = 0; i < maxLength; i++) {
-        if (spPlaylists[i]) combined.push(spPlaylists[i]);
-        if (ytPlaylists[i]) combined.push(ytPlaylists[i]);
-        if (spTracks[i]) combined.push(spTracks[i]);
-        if (ytVideos[i]) combined.push(ytVideos[i]);
+        if (combinedResults.length === 0) {
+            if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
+            return;
+        }
+
+        const finalResults = dedupeById(combinedResults);
+        
+        appendResults(finalResults);
+        items = finalResults;
+        paging.hasMore = false; 
+
+    } catch (e) {
+        console.error('Falló la búsqueda mixta:', e);
+        if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Ocurrió un error al buscar.</p></div>`;
     }
-    
-    if(resultsEl) resultsEl.innerHTML = "";
-    if(combined.length === 0) {
-        if(resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
-        return;
-    }
-
-    const deduped = dedupeById(combined);
-    appendResults(deduped);
-    items = deduped;
-    paging.hasMore = false; // La paginación simple no funciona bien con resultados mezclados
-  }catch(e){ 
-      console.error('Falló la búsqueda mixta:', e); 
-      if(resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Ocurrió un error al buscar.</p></div>`;
-  }
 }
+
 
 function dedupeById(arr){
   const seen = new Set();
@@ -648,7 +644,6 @@ function dedupeById(arr){
 }
 
 async function loadNextPage(){
-  // Desactivado para la búsqueda mixta.
   return;
 }
 
@@ -663,25 +658,20 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    switch(it.type) {
-        case 'youtube_video':
-            logo = youtubeLogoSvg();
-            item.dataset.trackId = it.id;
-            break;
-        case 'youtube_playlist':
-            logo = youtubeLogoSvg();
-            item.classList.add("playlist-result-item");
-            indicator = '<div class="playlist-indicator">LISTA</div>';
-            break;
-        case 'spotify_track':
-            logo = spotifyLogoSvg();
-            item.dataset.trackId = it.id; // Usamos el id de spotify como referencia inicial
-            break;
-        case 'spotify_playlist':
-            logo = spotifyLogoSvg();
+    // AHORA SÍ: La decisión del logo se basa en la propiedad `source`
+    if (it.source === 'spotify') {
+        logo = spotifyLogoSvg();
+        if (it.type === 'spotify_playlist') {
             item.classList.add("playlist-result-item", "spotify-playlist-result-item");
             indicator = '<div class="playlist-indicator">LISTA</div>';
-            break;
+        }
+    } else { // Si no es spotify, es youtube
+        logo = youtubeLogoSvg();
+        item.dataset.trackId = it.id; // Asignamos trackId para la lógica de reproducción
+        if (it.type === 'youtube_playlist') {
+            item.classList.add("playlist-result-item");
+            indicator = '<div class="playlist-indicator">LISTA</div>';
+        }
     }
 
     item.innerHTML = `
@@ -711,7 +701,6 @@ function appendResults(chunk){
     if(cardPlayBtn) {
         cardPlayBtn.onclick = (e)=>{
           e.stopPropagation();
-          // Para videos de YT, podemos hacer toggle. Para spotify, siempre inicia la búsqueda.
           if (currentTrack?.id === it.id && it.source === 'youtube') {
              togglePlay(); 
           } else { 
@@ -1300,7 +1289,7 @@ function renderQueue(queueItems, title) {
       </div>`;
         li.onclick = (e) => {
             if (e.target.closest(".more") || e.target.closest(".card-play")) return;
-            qIdx = i; // Actualizamos el índice global
+            qIdx = i;
             setQueue(queueItems, queueType, i);
             playCurrent(true);
         };
@@ -1359,9 +1348,10 @@ document.addEventListener("click", async (e) => {
         const it = items.find(x => x.id === id);
         if (!it) return;
 
-        let trackForActions = { ...it }; // Clonar item
+        let trackForActions = { ...it };
 
-        // Si es de Spotify, necesitamos su equivalente de YT para agregarlo
+        if (it.type.includes('playlist')) return; // No actions for playlists yet
+
         if (it.source === 'spotify' && it.type === 'spotify_track') {
             const ytEquivalent = await findYoutubeEquivalent(it);
             if (!ytEquivalent) {
@@ -1371,12 +1361,6 @@ document.addEventListener("click", async (e) => {
             trackForActions = ytEquivalent;
         }
         
-        // No se puede agregar una playlist a otra playlist
-        if (it.type.includes('playlist')) {
-             // Podríamos ofrecer "Reproducir" o "Importar" en el futuro
-            return;
-        }
-
         openActionSheet({
             title: trackForActions.title,
             actions: [
@@ -1391,7 +1375,6 @@ document.addEventListener("click", async (e) => {
         });
         return;
     }
-    // ... El resto del código para favItem, queueItem, plItem (sin cambios)
 });
 
 
@@ -1401,7 +1384,14 @@ function refreshIndicators(){
   const curId = currentTrack?.id || "";
 
   $$(".result-item, .fav-item, .queue-item").forEach(el => {
-    const trackId = el.dataset.trackId;
+    let trackId = el.dataset.trackId;
+    if (!trackId) {
+        // For spotify results, the initial ID is from spotify. We check against originalId
+        const itemId = el.dataset.itemId;
+        if (currentTrack?.originalId === itemId) {
+            trackId = currentTrack.id;
+        }
+    }
     const isCurrentTrack = trackId === curId;
     el.classList.toggle("is-playing", isCurrentTrack);
     const cardPlay = el.querySelector(".card-play");
@@ -1411,6 +1401,7 @@ function refreshIndicators(){
   $("#npPlay")?.classList.toggle("playing", isPlaying);
   $("#miniPlay")?.classList.toggle("playing", isPlaying);
 }
+
 
 /* ========= Reproducción en segundo plano ========= */
 document.addEventListener("visibilitychange", ()=>{
