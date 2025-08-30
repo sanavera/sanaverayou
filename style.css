@@ -640,7 +640,7 @@ html, body { background-color: var(--bg); }
   color: var(--text-secondary);
   flex-shrink: 0;
 }
-.youtube-logo {
+.youtube-logo, .ytmusic-logo {
     color: #ff0000;
 }
 
