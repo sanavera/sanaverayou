@@ -683,3 +683,32 @@ html, body { background-color: var(--bg); }
   margin: 0;
   font-size: 0.9em;
 }
+
+/* ====== Mixed Search Results (NUEVO) ====== */
+
+.result-item .title-line {
+    gap: 8px; /* Espacio para el logo */
+}
+
+.result-item .source-logo {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.result-item .source-logo svg {
+    width: 16px;
+    height: 16px;
+}
+
+.result-item .spotify-logo {
+    color: #1DB954;
+}
+
+.result-item .youtube-logo {
+    color: #FF0000;
+}
+
+.spotify-playlist-result-item {
+  border-left: 3px solid #1DB954;
+}
