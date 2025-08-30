@@ -490,6 +490,7 @@ overlayInput?.addEventListener("keydown", async e=>{
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
+// AJUSTE: youtubeSearch ahora detecta si un resultado es "Topic"
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
@@ -512,12 +513,15 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     }
     const data = await response.json();
     const resultItems = data.items.map(item => {
+        // La detección de "Topic" se hace aquí, antes de limpiar el título del canal
+        const isTopic = /topic/i.test(item.snippet.channelTitle);
         const baseItem = {
             source: 'youtube',
             id: item.id.videoId || item.id.playlistId,
             title: cleanTitle(item.snippet.title),
             author: cleanAuthor(item.snippet.channelTitle),
-            thumb: item.snippet.thumbnails?.high?.url || ""
+            thumb: item.snippet.thumbnails?.high?.url || "",
+            isTopic: isTopic // Se añade el nuevo flag
         };
         if (item.id.kind === 'youtube#video') {
             return { ...baseItem, type: 'youtube_video' };
@@ -560,7 +564,6 @@ async function startSearch(query){
         ...ytResult.items.filter(it => it.type === 'youtube_video')
     ];
 
-    // AJUSTE: Ordenar para poner listas primero
     combined.sort((a, b) => {
         const aIsPlaylist = a.type.includes('playlist');
         const bIsPlaylist = b.type.includes('playlist');
@@ -627,9 +630,20 @@ function appendResults(chunk){
     item.dataset.trackId = it.id;
 
     let indicator = '';
-    
-    // AJUSTE: Lógica de íconos corregida para mostrar según la fuente (YouTube/Spotify)
-    const logo = it.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg();
+    let logo = '';
+
+    // AJUSTE: Nueva lógica de íconos para "Topic"
+    if (it.source === 'spotify') {
+      logo = spotifyLogoSvg();
+    } else { // Source es YouTube
+      if (it.isTopic) {
+        // Es "Topic", se elige un ícono al azar
+        logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeLogoSvg();
+      } else {
+        // Es un video normal de YouTube
+        logo = youtubeLogoSvg();
+      }
+    }
 
     if (it.type.includes('playlist')) {
         item.classList.add("playlist-result-item");
@@ -874,7 +888,6 @@ function removeMyPlaylistId(id) { let ids=getMyPlaylistIds(); ids=ids.filter(pid
 function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); }
 async function handlePrivacyToggle(playlistId, isPublic) { try { const {doc,updateDoc}=window.firebase; await updateDoc(doc(db,"playlists",playlistId),{isPublic}); } catch(e){console.error("Error al actualizar privacidad:",e);} }
 
-// AJUSTE: Añadida función para menú de opciones de playlist
 async function openPlaylistOptionsMenu(pl) {
   openActionSheet({
     title: pl.name,
@@ -889,15 +902,15 @@ async function openPlaylistOptionsMenu(pl) {
 
       if (act === "rename") {
         const newName = prompt("Nuevo nombre para la playlist:", pl.name);
-        if (newName === null || newName.trim() === "") return; // User cancelled or entered empty name
+        if (newName === null || newName.trim() === "") return;
 
         const newCreator = prompt("Nuevo nombre de creador (máx 20 caracteres):", pl.creator);
         if (newCreator === null || newCreator.trim() === "") return;
 
         try {
           await updateDoc(plRef, {
-            name: newName.trim().substring(0, 50), // Límite de caracteres
-            creator: newCreator.trim().substring(0, 20), // Límite de caracteres
+            name: newName.trim().substring(0, 50),
+            creator: newCreator.trim().substring(0, 20),
             updatedAt: serverTimestamp()
           });
         } catch (e) {
@@ -906,7 +919,6 @@ async function openPlaylistOptionsMenu(pl) {
         }
       }
       if (act === "delete") {
-        // Usamos un modal custom en vez de confirm()
         openActionSheet({
             title: `¿Eliminar "${pl.name}"?`,
             actions: [
@@ -930,7 +942,6 @@ async function openPlaylistOptionsMenu(pl) {
   });
 }
 
-// AJUSTE: renderPlaylists ahora muestra creador y añade menú de opciones
 function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
     if (!grid) return;
@@ -1369,7 +1380,6 @@ document.addEventListener("click", async (e) => {
     let track;
     const trackId = itemEl.dataset.trackId;
 
-    // --- Determinar el track correcto según el contexto ---
     if (itemEl.classList.contains("result-item")) {
         const itemId = itemEl.dataset.itemId;
         const sourceTrack = items.find(x => x.id === itemId);
