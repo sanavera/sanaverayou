@@ -52,7 +52,7 @@ let spotifyToken = { value: null, expires: 0 };
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
     title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
     data: [],
@@ -199,7 +199,6 @@ function loadPlayerState() {
   if (!savedState) return null;
   try {
     const state = JSON.parse(savedState);
-    // Expira después de 2 horas
     if (Date.now() - (state.timestamp || 0) > 2 * 60 * 60 * 1000) {
       localStorage.removeItem(PLAYER_STATE_KEY);
       return null;
@@ -283,7 +282,7 @@ async function getSpotifyToken() {
         const data = await response.json();
         spotifyToken = {
             value: data.access_token,
-            expires: Date.now() + (data.expires_in * 1000) - 60000 // Margen de 1 minuto
+            expires: Date.now() + (data.expires_in * 1000) - 60000 
         };
         return spotifyToken.value;
     } catch (e) {
@@ -301,7 +300,7 @@ async function searchSpotify(query, limit = 10) {
         url.searchParams.append('q', query);
         url.searchParams.append('type', 'track,playlist');
         url.searchParams.append('limit', limit);
-        url.searchParams.append('market', 'AR'); // Mercado Argentino
+        url.searchParams.append('market', 'AR');
 
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -358,7 +357,7 @@ async function fetchSpotifyPlaylist(playlistId) {
                 title: track.name,
                 author: track.artists.map(a => a.name).join(', '),
                 thumb: track.album.images?.[0]?.url || ''
-            } : null).filter(Boolean) // Filtra tracks nulos si los hubiera
+            } : null).filter(Boolean)
         };
     } catch (e) {
         console.error("Error al buscar playlist en Spotify:", e);
@@ -501,8 +500,6 @@ async function handleSpotifyImport(playlistId) {
         }
         
         const youtubeQueue = [];
-        // Para mejorar la UI, podemos procesar en batches y mostrar progreso.
-        // Por ahora, lo hacemos todo de una.
         for (const track of spotifyPlaylist.tracks) {
             const ytEquivalent = await findYoutubeEquivalent(track);
             if (ytEquivalent) {
@@ -511,9 +508,9 @@ async function handleSpotifyImport(playlistId) {
         }
         
         if (youtubeQueue.length > 0) {
-            resultsContainer.innerHTML = ""; // Limpiar mensaje de carga
+            resultsContainer.innerHTML = "";
             setQueue(youtubeQueue, 'youtube_playlist', 0);
-            viewingPlaylistId = null; // No es una playlist guardada localmente
+            viewingPlaylistId = null;
             renderQueue(youtubeQueue, spotifyPlaylist.name);
             switchView('view-player');
             playCurrent(true);
@@ -530,15 +527,16 @@ async function handleSpotifyImport(playlistId) {
 async function findYoutubeEquivalent(track) {
     if (!track || !track.title) return null;
     const searchQuery = `${track.author} - ${track.title}`;
-    const searchResult = await youtubeSearch(searchQuery, '', 1); // Buscamos solo el top 1
+    const searchResult = await youtubeSearch(searchQuery, '', 1);
     const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
     
-    // Devolvemos un objeto compatible con nuestra cola de reproducción
     return ytTrack ? {
         id: ytTrack.id,
         title: ytTrack.title,
         author: ytTrack.author,
-        thumb: ytTrack.thumb
+        thumb: ytTrack.thumb || track.thumb, // Usar thumb de spotify como fallback
+        originalId: track.id, // Guardar id original de spotify
+        source: 'youtube' // La fuente final para reproducción es youtube
     } : null;
 }
 
@@ -594,7 +592,7 @@ async function youtubeSearch(query, pageToken = '', limit = 20, retryCount = 0){
   }
 }
 
-/* ========= Búsqueda Mixta ========= */
+/* ========= Búsqueda Mixta (CORREGIDA) ========= */
 async function startSearch(query){
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
@@ -606,14 +604,27 @@ async function startSearch(query){
 
   try{
     const [ytResult, spResult] = await Promise.all([
-        youtubeSearch(query, '', 10), // Traemos 10 de YT
-        searchSpotify(query, 10)      // Traemos 10 de Spotify
+        youtubeSearch(query, '', 15), // Pedimos más resultados
+        searchSpotify(query, 15)      
     ]);
 
     if(searchAbort.signal.aborted) return;
 
-    // Juntamos todos los resultados
-    const combined = [...spResult.playlists, ...ytResult.items.filter(i => i.type === 'youtube_playlist'), ...spResult.tracks, ...ytResult.items.filter(i => i.type === 'youtube_video')];
+    // Lógica de mezcla mejorada para intercalar resultados
+    const combined = [];
+    const ytPlaylists = ytResult.items.filter(i => i.type === 'youtube_playlist');
+    const ytVideos = ytResult.items.filter(i => i.type === 'youtube_video');
+    const spPlaylists = spResult.playlists;
+    const spTracks = spResult.tracks;
+
+    const maxLength = Math.max(ytPlaylists.length, ytVideos.length, spPlaylists.length, spTracks.length);
+
+    for (let i = 0; i < maxLength; i++) {
+        if (spPlaylists[i]) combined.push(spPlaylists[i]);
+        if (ytPlaylists[i]) combined.push(ytPlaylists[i]);
+        if (spTracks[i]) combined.push(spTracks[i]);
+        if (ytVideos[i]) combined.push(ytVideos[i]);
+    }
     
     if(resultsEl) resultsEl.innerHTML = "";
     if(combined.length === 0) {
@@ -624,8 +635,7 @@ async function startSearch(query){
     const deduped = dedupeById(combined);
     appendResults(deduped);
     items = deduped;
-    // La paginación ahora solo funcionará para YouTube. Por simplicidad, la desactivamos en búsquedas mixtas.
-    paging.hasMore = false; 
+    paging.hasMore = false; // La paginación simple no funciona bien con resultados mezclados
   }catch(e){ 
       console.error('Falló la búsqueda mixta:', e); 
       if(resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Ocurrió un error al buscar.</p></div>`;
@@ -642,7 +652,7 @@ async function loadNextPage(){
   return;
 }
 
-/* ========= Render resultados ========= */
+/* ========= Render resultados (CORREGIDO) ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
@@ -665,6 +675,7 @@ function appendResults(chunk){
             break;
         case 'spotify_track':
             logo = spotifyLogoSvg();
+            item.dataset.trackId = it.id; // Usamos el id de spotify como referencia inicial
             break;
         case 'spotify_playlist':
             logo = spotifyLogoSvg();
@@ -700,6 +711,7 @@ function appendResults(chunk){
     if(cardPlayBtn) {
         cardPlayBtn.onclick = (e)=>{
           e.stopPropagation();
+          // Para videos de YT, podemos hacer toggle. Para spotify, siempre inicia la búsqueda.
           if (currentTrack?.id === it.id && it.source === 'youtube') {
              togglePlay(); 
           } else { 
@@ -741,8 +753,7 @@ async function playSpotifyTrack(track) {
 
     const ytEquivalent = await findYoutubeEquivalent(track);
     if (ytEquivalent) {
-        resultsContainer.innerHTML = ""; // Limpiar
-        // Creamos una cola de un solo item para reproducir
+        resultsContainer.innerHTML = ""; 
         setQueue([ytEquivalent], "search", 0);
         viewingPlaylistId = null;
         playCurrent(true);
@@ -819,9 +830,6 @@ function renderPlaylistCard(playlist) {
         covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     }
     
-    // Hecho: Usar SVGs para logos de la home también.
-    const isSpotify = playlist.creator !== 'Luis Sanavera' && playlist.creator !== 'Sebastián Sanavera' || !playlist.isRecommended;
-
     const logo = playlist.isRecommended ? youtubeLogoSvg() : spotifyLogoSvg();
 
     const card = document.createElement("article");
@@ -1081,7 +1089,7 @@ function setQueue(srcArr, type, idx){
   let finalSrc = srcArr;
   if (isShuffle) {
     const currentItem = srcArr[idx];
-    const others = srcArr.filter(item => item.id !== currentItem.id);
+    const others = srcArr.filter((item, index) => index !== idx);
     const shuffledOthers = others.sort(() => Math.random() - 0.5);
     finalSrc = [currentItem, ...shuffledOthers];
     idx = 0;
@@ -1210,16 +1218,9 @@ function toggleShuffle() {
   isShuffle = !isShuffle;
   $("#btnShuffle")?.classList.toggle('active', isShuffle);
   if (currentTrack) {
-    let currentQueueSource = [];
-    if (queueType === 'search') currentQueueSource = items;
-    else if (queueType === 'favs') currentQueueSource = favs;
-    else if (queueType === 'playlist') currentQueueSource = communityPlaylists.find(p => p.id === viewingPlaylistId)?.tracks || [];
-    else if (recommendedPlaylists[queueType]) currentQueueSource = recommendedPlaylists[queueType].data;
-    else if (queue) currentQueueSource = queue;
-    
+    let currentQueueSource = queue || [];
     const originalIndex = currentQueueSource.findIndex(t => t.id === currentTrack.id);
     setQueue(currentQueueSource, queueType, Math.max(0, originalIndex));
-    // Re-render queue if visible
     if ($("#queuePanel") && !$("#queuePanel").classList.contains('hide')) {
         renderQueue(queue, currentQueueTitle);
     }
@@ -1299,13 +1300,15 @@ function renderQueue(queueItems, title) {
       </div>`;
         li.onclick = (e) => {
             if (e.target.closest(".more") || e.target.closest(".card-play")) return;
-            if (isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
-            else { setQueue(queueItems, queueType, i); playCurrent(true); }
+            qIdx = i; // Actualizamos el índice global
+            setQueue(queueItems, queueType, i);
+            playCurrent(true);
         };
         li.querySelector(".card-play").onclick = (e) => {
             e.stopPropagation();
-            if (isUserPlaylist) playFromPlaylist(viewingPlaylistId, i, true);
-            else { setQueue(queueItems, queueType, i); playCurrent(true); }
+            qIdx = i;
+            setQueue(queueItems, queueType, i);
+            playCurrent(true);
         };
         ul.appendChild(li);
     });
@@ -1346,52 +1349,51 @@ function showPlaylistInPlayer(plId){
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
 /* ========= Menú tres puntitos global ========= */
-document.addEventListener("click", (e)=>{
-  const btn = e.target.closest(".icon-btn.more");
-  if(!btn) return;
+document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".icon-btn.more");
+    if (!btn) return;
 
-  const resultItemEl = btn.closest(".result-item");
-  const favItem   = btn.closest(".fav-item");
-  const queueItem  = btn.closest(".queue-item");
-  const plItem     = btn.closest(".pl-item");
+    const resultItemEl = btn.closest(".result-item");
+    if (resultItemEl) {
+        const id = resultItemEl.dataset.itemId;
+        const it = items.find(x => x.id === id);
+        if (!it) return;
 
-  if(resultItemEl){
-    const id = resultItemEl.dataset.itemId;
-    const it = items.find(x=>x.id===id);
-    if(!it) return;
+        let trackForActions = { ...it }; // Clonar item
 
-    // Para agregar a favoritos/playlist, necesitamos un objeto compatible con YT
-    let trackForActions = { id: it.id, title: it.title, author: it.author, thumb: it.thumb };
-    if (it.source === 'spotify') {
-        // En spotify, el ID para favoritos/playlist debe ser el ID de YouTube que encontremos.
-        // Por ahora, lo dejamos como una acción futura, o lo buscamos on-demand.
-        // Simplificación: No permitimos agregar a favs/pl desde un resultado de spotify directamente.
-        // El usuario debe reproducirlo primero.
-    }
-    
-    openActionSheet({
-      title: it.title,
-      actions: [
-        { id:"fav", label: isFav(trackForActions.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
-        { id:"pl",  label:"Agregar a playlist" },
-        { id:"cancel", label:"Cancelar", ghost:true }
-      ],
-      onAction: async (act)=>{
-        if (it.source === 'spotify' && (act === 'fav' || act === 'pl')) {
-            alert("Reproducí la canción primero para agregarla a tus listas.");
+        // Si es de Spotify, necesitamos su equivalente de YT para agregarlo
+        if (it.source === 'spotify' && it.type === 'spotify_track') {
+            const ytEquivalent = await findYoutubeEquivalent(it);
+            if (!ytEquivalent) {
+                alert("No se pudo encontrar esta canción en YouTube para agregarla a tus listas.");
+                return;
+            }
+            trackForActions = ytEquivalent;
+        }
+        
+        // No se puede agregar una playlist a otra playlist
+        if (it.type.includes('playlist')) {
+             // Podríamos ofrecer "Reproducir" o "Importar" en el futuro
             return;
         }
-        if(act==="fav") toggleFav(trackForActions);
-        if(act==="pl")  openPlaylistSheet(trackForActions);
-      }
-    });
-    return;
-  }
-  
-  if(favItem){ /* ... (código sin cambios) ... */ }
-  if(queueItem){ /* ... (código con lógica ajustada si es necesario) ... */ }
-  if(plItem){ /* ... (código sin cambios) ... */ }
+
+        openActionSheet({
+            title: trackForActions.title,
+            actions: [
+                { id: "fav", label: isFav(trackForActions.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
+                { id: "pl", label: "Agregar a playlist" },
+                { id: "cancel", label: "Cancelar", ghost: true }
+            ],
+            onAction: (act) => {
+                if (act === "fav") toggleFav(trackForActions);
+                if (act === "pl") openPlaylistSheet(trackForActions);
+            }
+        });
+        return;
+    }
+    // ... El resto del código para favItem, queueItem, plItem (sin cambios)
 });
+
 
 /* ========= Indicadores ========= */
 function refreshIndicators(){
@@ -1399,7 +1401,7 @@ function refreshIndicators(){
   const curId = currentTrack?.id || "";
 
   $$(".result-item, .fav-item, .queue-item").forEach(el => {
-    const trackId = el.dataset.trackId || el.dataset.itemId;
+    const trackId = el.dataset.trackId;
     const isCurrentTrack = trackId === curId;
     el.classList.toggle("is-playing", isCurrentTrack);
     const cardPlay = el.querySelector(".card-play");
