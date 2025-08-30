@@ -1415,8 +1415,30 @@ let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if(!('mediaSession' in navigator)||!track)return;
   try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){}
-  if(!mediaSessionHandlersSet){mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; try{navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)})); navigator.mediaSession.setActionHandler('seekforward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o),true)})); navigator.mediaSession.setActionHandler('seekto',d=>{s(()=>{if(!YT_READY||!d||typeof d.seekTime!=='number')return;ytPlayer.seekTo(d.seekTime,true)})()});}catch(e){}}
-  try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch{}
+  if(!mediaSessionHandlersSet){
+    mediaSessionHandlersSet=true; 
+    const s=fn=>()=>{try{fn()}catch(e){}}; 
+    try{
+        navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); 
+        navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); 
+        navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); 
+        navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); 
+        navigator.mediaSession.setActionHandler('seekbackward',s(d=>{
+            const o=d.seekOffset||10;
+            if(!YT_READY)return;
+            ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)
+        })); 
+        navigator.mediaSession.setActionHandler('seekforward',s(d=>{
+            const o=d.seekOffset||10;
+            if(!YT_READY)return;
+            ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true)
+        })); 
+        navigator.mediaSession.setActionHandler('seekto',s(d=>{
+            if(!YT_READY||!d||typeof d.seekTime!=='number')return;
+            ytPlayer.seekTo(d.seekTime,true)
+        }));
+    }catch(e){}
+}  try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch{}
 }
 /* ===== Android bridge (AIDE WebView) ===== */
 function canUseAndroidBridge(){ try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; } }
@@ -1477,3 +1499,4 @@ boot();
 
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
+
