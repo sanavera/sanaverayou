@@ -52,7 +52,7 @@ let spotifyToken = { value: null, expires: 0 };
 // --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3Vdo5etCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3Vdo5etCQ'],
+    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
     title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
     data: [],
@@ -268,6 +268,7 @@ async function getSpotifyToken() {
     if (spotifyToken.value && Date.now() < spotifyToken.expires) {
         return spotifyToken.value;
     }
+
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
             method: 'POST',
@@ -293,6 +294,7 @@ async function getSpotifyToken() {
 async function searchSpotify(query, limit = 20) {
     const token = await getSpotifyToken();
     if (!token) return { tracks: [], playlists: [] };
+
     try {
         const url = new URL('https://api.spotify.com/v1/search');
         url.searchParams.append('q', query);
@@ -300,7 +302,9 @@ async function searchSpotify(query, limit = 20) {
         url.searchParams.append('limit', limit);
         url.searchParams.append('market', 'AR');
 
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (!response.ok) throw new Error('No se pudo buscar en Spotify');
         const data = await response.json();
 
@@ -329,15 +333,18 @@ async function searchSpotify(query, limit = 20) {
     }
 }
 
+
 async function fetchSpotifyPlaylist(playlistId) {
     const token = await getSpotifyToken();
     if (!token) return null;
+
     try {
         const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('No se pudo obtener la playlist de Spotify');
         const data = await response.json();
+        
         return {
             id: data.id,
             name: data.name,
@@ -360,7 +367,16 @@ async function fetchSpotifyPlaylist(playlistId) {
 
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = [
-  "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY", "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44", "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE", "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM", "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0", "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI", "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs", "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ", "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc", "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
+  "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
+  "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
+  "AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE",
+  "AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM",
+  "AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0",
+  "AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI",
+  "AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs",
+  "AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ",
+  "AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc",
+  "AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"
 ];
 let currentApiKeyIndex = 0;
 const getRotatedApiKey = () => {
@@ -372,21 +388,26 @@ const getRotatedApiKey = () => {
 async function fetchVideoDetailsByIds(ids) {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return [];
+
     const CHUNK_SIZE = 50;
-    const chunks = Array.from({ length: Math.ceil(uniqueIds.length / CHUNK_SIZE) }, (v, i) =>
-        uniqueIds.slice(i * CHUNK_SIZE, i * CHUNK_SIZE + CHUNK_SIZE)
-    );
+    const chunks = [];
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+        chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE));
+    }
+
     const fetchChunk = async (chunk, retryCount = 0) => {
         const MAX_RETRIES = YOUTUBE_API_KEYS.length;
         if (retryCount >= MAX_RETRIES) {
             console.error(`Todas las API keys han fallado para el chunk: ${chunk.join(',')}`);
             return [];
         }
+
         const url = new URL('https://www.googleapis.com/youtube/v3/videos');
         const apiKey = getRotatedApiKey();
         url.searchParams.append('key', apiKey);
         url.searchParams.append('part', 'snippet');
         url.searchParams.append('id', chunk.join(','));
+
         try {
             const response = await fetch(url);
             if (!response.ok) {
@@ -408,11 +429,12 @@ async function fetchVideoDetailsByIds(ids) {
             return fetchChunk(chunk, retryCount + 1);
         }
     };
+    
     const results = await Promise.all(chunks.map(chunk => fetchChunk(chunk)));
     return results.flat();
 }
 
-const BATCH_SIZE = 20;
+
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 let searchAbort = null;
 
@@ -448,11 +470,16 @@ overlayInput?.addEventListener("keydown", async e=>{
     if (e.key !== "Enter") return;
     const q = overlayInput.value.trim();
     if (!q) return;
+
     closeSearch();
-    document.body.scrollTop = 0; document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+    
     const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
     const match = q.match(spotifyPlaylistRegex);
+    
     switchView("view-search");
+
     if (match && match[1]) {
         await handleSpotifyImport(match[1]);
     } else {
@@ -460,48 +487,64 @@ overlayInput?.addEventListener("keydown", async e=>{
     }
 });
 
-/* ========= Importador de Spotify y Búsqueda Mixta ========= */
-async function findYoutubeEquivalent(track) {
-    if (!track || !track.title) return null;
-    const searchQuery = `${track.artist || track.author} - ${track.track || track.title}`;
-    const searchResult = await youtubeSearch(searchQuery, '', 1);
-    const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
-    if (ytTrack) {
-        return {
-            ...ytTrack, // Copia todas las propiedades de ytTrack
-            originalId: track.id, // Guarda el ID original de Spotify
-            thumb: ytTrack.thumb || track.thumb, // Usa el thumb de YT, pero el de Spotify como fallback
-        };
-    }
-    return null;
-}
-
+/* ========= Importador de Spotify ========= */
 async function handleSpotifyImport(playlistId) {
     const resultsContainer = $("#results");
     resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Importando desde Spotify...</h3><p>Esto puede tardar unos segundos.</p></div>`;
     updateHomeGridVisibility();
+
     try {
         const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
-        if (!spotifyPlaylist) throw new Error("No se pudo obtener la playlist.");
-        const youtubeTracks = (await Promise.all(spotifyPlaylist.tracks.map(findYoutubeEquivalent))).filter(Boolean);
-        if (youtubeTracks.length > 0) {
+        if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) {
+            throw new Error("No se pudo obtener la playlist o está vacía.");
+        }
+        
+        const youtubeQueue = [];
+        for (const track of spotifyPlaylist.tracks) {
+            const ytEquivalent = await findYoutubeEquivalent(track);
+            if (ytEquivalent) {
+                youtubeQueue.push(ytEquivalent);
+            }
+        }
+        
+        if (youtubeQueue.length > 0) {
             resultsContainer.innerHTML = "";
-            setQueue(youtubeTracks, 'youtube_playlist', 0);
-            renderQueue(youtubeTracks, spotifyPlaylist.name);
+            setQueue(youtubeQueue, 'youtube_playlist', 0);
+            viewingPlaylistId = null;
+            renderQueue(youtubeQueue, spotifyPlaylist.name);
             switchView('view-player');
             playCurrent(true);
         } else {
-            throw new Error("No se encontraron canciones equivalentes en YouTube.");
+            throw new Error("No se encontraron equivalentes en YouTube para las canciones de la lista.");
         }
+
     } catch (error) {
         console.error("Error al importar desde Spotify:", error);
         resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Error al importar</h3><p>${error.message}</p></div>`;
     }
 }
 
-async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
+async function findYoutubeEquivalent(track) {
+    if (!track || !track.title) return null;
+    const searchQuery = `${track.author} - ${track.title}`;
+    const searchResult = await youtubeSearch(searchQuery, '', 1);
+    const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
+    
+    return ytTrack ? {
+        id: ytTrack.id,
+        title: ytTrack.title,
+        author: ytTrack.author,
+        thumb: ytTrack.thumb || track.thumb,
+        originalId: track.id,
+        source: 'youtube'
+    } : null;
+}
+
+
+/* ========= Motor de búsqueda ========= */
+async function youtubeSearch(query, pageToken = '', limit = 20, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-  if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys han fallado.');
+  if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   const apiKey = getRotatedApiKey();
   url.searchParams.append('key', apiKey);
@@ -514,16 +557,16 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     const response = await fetch(url);
     if(!response.ok){
       if(response.status===403){
-        console.warn(`API key ${apiKey} 403 → rota`);
+        console.warn(`API key de YouTube ${apiKey} 403 → rotando`);
         return youtubeSearch(query, pageToken, limit, retryCount+1);
       }
-      throw new Error(`API error: ${response.status}`);
+      throw new Error(`API error de YouTube: ${response.status}`);
     }
     const data = await response.json();
     const resultItems = data.items.map(item => {
         if (item.id.kind === 'youtube#video') {
             return {
-                source: 'youtube', // Asignar fuente
+                source: 'youtube',
                 type: 'youtube_video',
                 id: item.id.videoId,
                 title: cleanTitle(item.snippet.title),
@@ -532,7 +575,7 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
             };
         } else if (item.id.kind === 'youtube#playlist') {
             return {
-                source: 'youtube', // Asignar fuente
+                source: 'youtube',
                 type: 'youtube_playlist',
                 id: item.id.playlistId,
                 title: cleanTitle(item.snippet.title),
@@ -544,106 +587,98 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     }).filter(Boolean);
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
   }catch(e){
-    console.error('YouTube API search failed:', e);
-    return { items: [], hasMore:false, nextPageToken: null };
+    console.error('Fallo en búsqueda de YouTube:', e);
+    return { items: [], hasMore:false };
   }
 }
 
+/* ========= Búsqueda Mixta (CORREGIDA) ========= */
 async function startSearch(query) {
     if (searchAbort) searchAbort.abort();
     searchAbort = new AbortController();
-    paging = { query, pageToken: null, loading: true, hasMore: true };
+    paging = { query, pageToken: "", loading: false, hasMore: true };
     items = [];
-    $("#results").innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
+    const resultsEl = $("#results");
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube y Spotify...</h3></div>`;
     updateHomeGridVisibility();
 
     try {
         const [ytResult, spResult] = await Promise.all([
-            youtubeSearch(query, '', 30),
+            youtubeSearch(query, '', 20),
             searchSpotify(query, 20)
         ]);
 
         if (searchAbort.signal.aborted) return;
 
-        paging.pageToken = ytResult.nextPageToken;
-        paging.hasMore = ytResult.hasMore;
-        
-        const combined = [
+        // Lógica de mezcla simple y efectiva
+        const combinedResults = [
             ...spResult.playlists,
-            ...ytResult.items.filter(it => it.type === 'youtube_playlist'),
+            ...ytResult.items.filter(i => i.type === 'youtube_playlist'),
             ...spResult.tracks,
-            ...ytResult.items.filter(it => it.type === 'youtube_video')
+            ...ytResult.items.filter(i => i.type === 'youtube_video')
         ];
 
-        $("#results").innerHTML = "";
-        
-        if (combined.length === 0 && !paging.hasMore) {
-            $("#results").innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
+        if (resultsEl) resultsEl.innerHTML = "";
+
+        if (combinedResults.length === 0) {
+            if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
             return;
         }
 
-        items = dedupeById(combined);
-        appendResults(items);
+        const finalResults = dedupeById(combinedResults);
+        
+        appendResults(finalResults);
+        items = finalResults;
+        paging.hasMore = false; 
 
     } catch (e) {
-        console.error('Search failed:', e);
-        $("#results").innerHTML = `<div class="loading-indicator"><p>Ocurrió un error en la búsqueda.</p></div>`;
-    } finally {
-        paging.loading = false;
+        console.error('Falló la búsqueda mixta:', e);
+        if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Ocurrió un error al buscar.</p></div>`;
     }
 }
 
+
 function dedupeById(arr){
-  const seen = new Set(items.map(i => i.id));
+  const seen = new Set();
   return arr.filter(it=>{ if(!it?.id || seen.has(it.id)) return false; seen.add(it.id); return true; });
 }
 
 async function loadNextPage(){
-  if(paging.loading || !paging.hasMore || !paging.query) return;
-  paging.loading = true;
-  try{
-    const result = await youtubeSearch(paging.query, paging.pageToken, BATCH_SIZE);
-    if(result.items.length===0){ paging.hasMore=false; return; }
-    const newItems = dedupeById(result.items);
-    appendResults(newItems);
-    items = items.concat(newItems);
-    paging.pageToken = result.nextPageToken;
-    paging.hasMore   = result.hasMore;
-  }catch(e){
-    paging.hasMore=false; 
-  } finally {
-    paging.loading   = false;
-  }
+  return;
 }
 
-/* ========= Render resultados ========= */
+/* ========= Render resultados (CORREGIDO) ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.itemId = it.id;
-
-    let logo = '';
+    
     let indicator = '';
+    let logo = '';
 
+    // AHORA SÍ: La decisión del logo se basa en la propiedad `source`
     if (it.source === 'spotify') {
         logo = spotifyLogoSvg();
-    } else {
+        if (it.type === 'spotify_playlist') {
+            item.classList.add("playlist-result-item", "spotify-playlist-result-item");
+            indicator = '<div class="playlist-indicator">LISTA</div>';
+        }
+    } else { // Si no es spotify, es youtube
         logo = youtubeLogoSvg();
-        item.dataset.trackId = it.id; // Solo los de YT son directamente reproducibles
-    }
-
-    if (it.type.includes('playlist')) {
-        item.classList.add("playlist-result-item");
-        indicator = '<div class="playlist-indicator">LISTA</div>';
+        item.dataset.trackId = it.id; // Asignamos trackId para la lógica de reproducción
+        if (it.type === 'youtube_playlist') {
+            item.classList.add("playlist-result-item");
+            indicator = '<div class="playlist-indicator">LISTA</div>';
+        }
     }
 
     item.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
         ${indicator}
-        ${!it.type.includes('playlist') ? 
+        ${it.type.includes('video') || it.type.includes('track') ? 
           `<button class="card-play" title="Play/Pause" aria-label="Play/Pause">
             <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
@@ -660,46 +695,60 @@ function appendResults(chunk){
       <div class="actions">
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
-    item.addEventListener("click", e => handleResultClick(e, it));
-    
+    item.addEventListener("click", (e) => handleResultClick(e, it));
+
     const cardPlayBtn = item.querySelector(".card-play");
-    if (cardPlayBtn) {
-        cardPlayBtn.onclick = (e) => {
-            e.stopPropagation();
+    if(cardPlayBtn) {
+        cardPlayBtn.onclick = (e)=>{
+          e.stopPropagation();
+          if (currentTrack?.id === it.id && it.source === 'youtube') {
+             togglePlay(); 
+          } else { 
             handleResultClick(e, it, true);
+          }
         };
     }
+
     root.appendChild(item);
   }
   refreshIndicators();
 }
 
-async function handleResultClick(e, it, forcePlay = false) {
-    if (e.target.closest('.more') || (e.target.closest('.card-play') && !forcePlay)) return;
 
-    if (it.type === 'youtube_video') {
-        playFromSearch(it.id, true);
-    } else if (it.type === 'youtube_playlist') {
-        handlePlaylistResultClick(it.id, it.title);
-    } else if (it.type === 'spotify_track') {
-        playSpotifyTrack(it);
-    } else if (it.type === 'spotify_playlist') {
-        handleSpotifyImport(it.id);
+/* ========= Manejo de Clicks en Resultados ========= */
+async function handleResultClick(event, item, forcePlay = false) {
+    if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return;
+
+    switch (item.type) {
+        case 'youtube_video':
+            playFromSearch(item.id, true);
+            break;
+        case 'youtube_playlist':
+            handlePlaylistResultClick(item.id, item.title);
+            break;
+        case 'spotify_track':
+            playSpotifyTrack(item);
+            break;
+        case 'spotify_playlist':
+            handleSpotifyImport(item.id);
+            break;
     }
 }
 
 async function playSpotifyTrack(track) {
     const resultsContainer = $("#results");
-    const originalContent = resultsContainer.innerHTML;
     resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube...</h3><p>${track.author} - ${track.title}</p></div>`;
+    updateHomeGridVisibility();
+
     const ytEquivalent = await findYoutubeEquivalent(track);
     if (ytEquivalent) {
+        resultsContainer.innerHTML = ""; 
         setQueue([ytEquivalent], "search", 0);
+        viewingPlaylistId = null;
         playCurrent(true);
         switchView('view-player');
     } else {
-        alert("No se pudo encontrar un video para esta canción.");
-        resultsContainer.innerHTML = originalContent;
+        resultsContainer.innerHTML = `<div class="loading-indicator"><h3>No se encontró</h3><p>No se pudo encontrar un video para esta canción.</p></div>`;
     }
 }
 
@@ -709,6 +758,7 @@ async function fetchPlaylistItems(playlistId, retryCount = 0) {
         console.error(`Todas las API keys han fallado para la playlist ${playlistId}`);
         return [];
     }
+
     const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
     const apiKey = getRotatedApiKey();
     url.searchParams.append('key', apiKey);
@@ -720,6 +770,7 @@ async function fetchPlaylistItems(playlistId, retryCount = 0) {
         const response = await fetch(url);
         if (!response.ok) {
             if (response.status === 403) {
+                console.warn(`API key 403 para playlistItems, rotando...`);
                 return fetchPlaylistItems(playlistId, retryCount + 1);
             }
             throw new Error(`API error: ${response.status}`);
@@ -759,35 +810,53 @@ async function handlePlaylistResultClick(playlistId, playlistTitle) {
 function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
+
     const tracks = playlist.isRecommended ? playlist.data : playlist.tracks;
     if (!tracks || tracks.length === 0) return;
-    const covers = tracks.slice(0, 4).map(track => track.thumb);
-    while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+
+    const covers = tracks.slice(0, 4).map(track => track.thumb).filter(Boolean);
+    while (covers.length < 4) {
+        covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    }
+    
     const logo = playlist.isRecommended ? youtubeLogoSvg() : spotifyLogoSvg();
+
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
+
     card.innerHTML = `
-        <div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
+        <div class="collage-container">
+            ${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}
+        </div>
         <div class="playlist-meta">
             <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
-            <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
-        </div>`;
+            <div class="creator-line">
+                ${logo}
+                <span>Creador: ${playlist.creator}</span>
+            </div>
+        </div>
+    `;
+
     card.onclick = () => {
         const queueTracks = playlist.isRecommended ? playlist.data : playlist.tracks;
+        const queueId = playlist.isRecommended ? null : playlist.id;
         const queueTitle = playlist.isRecommended ? playlist.title : playlist.name;
+        
         setQueue(queueTracks, playlist.isRecommended ? 'recommended' : 'playlist', 0);
-        viewingPlaylistId = playlist.isRecommended ? null : playlist.id;
+        viewingPlaylistId = queueId;
         renderQueue(queueTracks, queueTitle);
         switchView('view-player');
         playCurrent(true);
     };
+    
     container.appendChild(card);
 }
 
+
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
-  const shouldShow = (!paging.query && items.length===0 && !$(".loading-indicator"));
+  const shouldShow = (items.length===0 && !$(".loading-indicator"));
   home.classList.toggle("hide", !shouldShow);
 }
 
@@ -852,17 +921,21 @@ function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
     if (!grid) return;
     grid.innerHTML = "";
+    
     const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
+
     if (myPlaylists.length === 0) {
         empty?.classList.remove("hide");
         return;
     }
     empty?.classList.add("hide");
+
     myPlaylists.forEach(pl => {
         const card = document.createElement("article");
         card.className="pl-item";
         card.dataset.plId = pl.id;
         const cover = pl.tracks[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
+        
         card.innerHTML = `
             <img class="pl-thumb-bg" src="${cover}" alt="">
             <div class="pl-overlay">
@@ -879,18 +952,23 @@ function renderPlaylists() {
                 </div>
             </div>
             <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
-        card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => handlePrivacyToggle(pl.id, e.target.checked));
+        
+        card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => {
+            handlePrivacyToggle(pl.id, e.target.checked);
+        });
+        
         card.addEventListener("click", (e) => {
             if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return;
             showPlaylistInPlayer(pl.id);
             switchView("view-player");
         });
+        
         card.classList.toggle("is-playing", viewingPlaylistId === pl.id && queueType === 'playlist');
         grid.appendChild(card);
     });
 }
 
-$("#btnNewPlaylist")?.addEventListener("click", () => $("#createPlaylistSheet").classList.add("show"));
+$("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
 $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
 $("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
 $("#createPlConfirm").onclick = async () => {
@@ -901,8 +979,7 @@ $("#createPlConfirm").onclick = async () => {
         const { getFirestore, collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [], updatedAt: serverTimestamp(), isPublic: true });
         addMyPlaylistId(docRef.id);
-        $("#newPlName").value = ""; $("#newPlCreator").value = "";
-        $("#createPlaylistSheet").classList.remove("show");
+        $("#newPlName").value = ""; $("#newPlCreator").value = ""; $("#createPlaylistSheet").classList.remove("show");
     } catch (e) { console.error("Error creando playlist: ", e); alert("Hubo un error al crear la playlist."); }
 };
 
@@ -912,7 +989,10 @@ function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
   sheet.innerHTML = `
     <div class="sheet-content">
       <div class="sheet-title">${title}</div>
-      ${actions.map(a=>`<button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">${a.label}</button>`).join("")}
+      ${actions.map(a=>`
+        <button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">
+          ${a.label}
+        </button>`).join("")}
     </div>`;
   sheet.classList.add("show");
   sheet.onclick = (e)=>{
@@ -927,7 +1007,9 @@ async function openPlaylistSheet(track){
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
+  
   const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
+
   myPlaylists.forEach(pl=>{
     const btn = document.createElement("button");
     btn.className="sheet-item";
@@ -936,7 +1018,7 @@ async function openPlaylistSheet(track){
       const { doc, updateDoc, serverTimestamp } = window.firebase;
       const plRef = doc(db, "playlists", pl.id);
       const updatedTracks = [...pl.tracks];
-      if (!updatedTracks.some(t => t.id === track.id)) updatedTracks.unshift(track);
+      if (!updatedTracks.some(t => t.id === track.id)) { updatedTracks.unshift(track); }
       try {
         await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
         sheet.classList.remove("show");
@@ -944,17 +1026,22 @@ async function openPlaylistSheet(track){
     };
     list.appendChild(btn);
   });
+  
   $("#plCreateFromSong").onclick = async () => {
-    const name = $("#plNewNameFromSong").value.trim(); if (!name) return;
-    const creator = prompt("Tu nombre (creador):")?.trim(); if (!creator) return;
+    const name = $("#plNewNameFromSong").value.trim();
+    if (!name) return;
+    const creator = prompt("Tu nombre (creador):")?.trim();
+    if (!creator) return;
+
     try {
         const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [track], updatedAt: serverTimestamp(), isPublic: true });
         addMyPlaylistId(docRef.id);
         $("#plNewNameFromSong").value = "";
         sheet.classList.remove("show");
-    } catch (e) { console.error("Error creando playlist desde canción: ", e); alert("Hubo un error."); }
+    } catch (e) { console.error("Error creando playlist desde canción: ", e); alert("Hubo un error al crear la playlist."); }
   };
+
   $("#plCancel").onclick = ()=> sheet.classList.remove("show");
   sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
 }
@@ -970,22 +1057,30 @@ function updateUIOnTrackChange() {
 }
 function updateHero(track){
   const t = track || currentTrack;
-  const favHero = $("#favHero"), npHero = $("#npHero");
+  const favHero = $("#favHero");
+  const npHero  = $("#npHero");
   if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  if ($("#favNowTitle")) $("#favNowTitle").textContent = t ? t.title : "—";
+  $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "—");
   if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  if ($("#npTitle")) $("#npTitle").textContent = t ? t.title : "Elegí una canción";
+  $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
+  
   let plName = "";
-  if (queueType === 'playlist' && viewingPlaylistId) plName = communityPlaylists.find(p => p.id === viewingPlaylistId)?.name || "";
-  else if (['recommended', 'youtube_playlist'].includes(queueType)) plName = currentQueueTitle;
-  if ($("#npSub")) $("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
+  if (queueType === 'playlist' && viewingPlaylistId) {
+    const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
+    plName = pl ? pl.name : "";
+  } else if (['recommended', 'youtube_playlist'].includes(queueType)) {
+    plName = currentQueueTitle;
+  }
+  
+  $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—"));
 }
 function setQueue(srcArr, type, idx){
-  let finalSrc = [...srcArr];
-  if (isShuffle && finalSrc.length > 1) {
-    const currentItem = finalSrc[idx];
-    const others = finalSrc.filter((item, index) => index !== idx);
-    finalSrc = [currentItem, ...others.sort(() => Math.random() - 0.5)];
+  let finalSrc = srcArr;
+  if (isShuffle) {
+    const currentItem = srcArr[idx];
+    const others = srcArr.filter((item, index) => index !== idx);
+    const shuffledOthers = others.sort(() => Math.random() - 0.5);
+    finalSrc = [currentItem, ...shuffledOthers];
     idx = 0;
   }
   queue = finalSrc;
@@ -996,13 +1091,14 @@ function playCurrent(autoplay=false){
   if(!YT_READY || !queue || qIdx<0 || qIdx>=queue.length) return;
   currentTrack = queue[qIdx];
   ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
-  if(autoplay) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
+  if(!autoplay) ytPlayer.pauseVideo();
   startTimer();
   updateUIOnTrackChange();
 }
 function playFromSearch(trackId, autoplay=false) {
-    const videoItems = items.filter(it => it.type === 'youtube_video' || (it.source === 'youtube' && it.type === 'video'));
+    const videoItems = items.filter(it => it.source === 'youtube' && it.type === 'youtube_video');
     const videoIndex = videoItems.findIndex(v => v.id === trackId);
+
     if (videoIndex > -1) {
         setQueue(videoItems, "search", videoIndex);
         viewingPlaylistId = null;
@@ -1040,19 +1136,21 @@ async function removeFromPlaylist(plId, trackId){
   try { await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() }); } catch (e) { console.error("Error quitando canción: ", e); alert("No se pudo quitar la canción."); }
 }
 
+/* Mini reproductor */
 function updateMiniNow(){
   const has = !!currentTrack;
   const dock = $("#seekDock");
   dock && dock.classList.toggle("show", has);
   if(!has) return;
-  $("#miniThumb").src = currentTrack.thumb;
-  $("#miniTitle").textContent = currentTrack.title;
-  $("#miniAuthor").textContent = cleanAuthor(currentTrack.author) || "";
+  $("#miniThumb") && ($("#miniThumb").src = currentTrack.thumb);
+  $("#miniTitle") && ($("#miniTitle").textContent = currentTrack.title);
+  $("#miniAuthor") && ($("#miniAuthor").textContent = cleanAuthor(currentTrack.author) || "");
 }
 
 function getNextIndex() {
-  if (!queue || queue.length < 1) return -1;
+  if (!queue) return -1;
   if (repeatMode === 'one') return qIdx;
+  
   let next = qIdx + 1;
   if (next >= queue.length) return (repeatMode === 'all') ? 0 : -1;
   return next;
@@ -1065,11 +1163,11 @@ function next(){
 function prev(){
   if (!queue) return;
   if (ytPlayer.getCurrentTime() > 3) ytPlayer.seekTo(0, true);
-  else if (qIdx > 0) { qIdx--; playCurrent(true); }
-  else if (repeatMode === 'all') { qIdx = queue.length - 1; playCurrent(true); }
+  else if (qIdx - 1 >= 0) { qIdx--; playCurrent(true); }
 }
 $("#btnNext")?.addEventListener("click", next);
 $("#btnPrev")?.addEventListener("click", prev);
+
 function seekToFrac(frac){
   if(!YT_READY) return;
   const d = ytPlayer.getDuration()||0;
@@ -1077,35 +1175,57 @@ function seekToFrac(frac){
 }
 $("#seek")?.addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
 $("#miniSeek")?.addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
+
 function startTimer(){
   stopTimer();
   timer = setInterval(()=>{
-    if(!YT_READY || !currentTrack || getPlaybackState() !== 'playing') return;
+    if(!YT_READY || !currentTrack) return;
+    const state = ytPlayer.getPlayerState();
+    if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
+
     const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
-    $("#cur").textContent = fmt(cur); $("#dur").textContent = fmt(dur); $("#seek").value = dur? Math.floor((cur/dur)*1000) : 0;
-    $("#miniCur").textContent = fmt(cur); $("#miniDur").textContent = fmt(dur); $("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0;
-    if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') navigator.mediaSession.setPositionState({ duration: dur||0, playbackRate: 1, position: cur||0 });
+    $("#cur") && ($("#cur").textContent = fmt(cur));
+    $("#dur") && ($("#dur").textContent = fmt(dur));
+    $("#seek") && ($("#seek").value = dur? Math.floor((cur/dur)*1000) : 0);
+    $("#miniCur") && ($("#miniCur").textContent = fmt(cur));
+    $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
+    $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
+
+    try{
+      if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
+        navigator.mediaSession.setPositionState({ duration: dur||0, playbackRate: ytPlayer.getPlaybackRate(), position: cur||0 });
+      }
+    }catch(e) {}
+
     savePlayerState();
   }, 500);
 }
 function stopTimer(){ clearInterval(timer); timer=null; }
 
+/* ========= Shuffle / Repeat ========= */
 function toggleShuffle() {
   isShuffle = !isShuffle;
   $("#btnShuffle")?.classList.toggle('active', isShuffle);
-  if (currentTrack && queue) {
-    const currentQueueSource = [...queue]; // Clonar para no modificar la fuente original
+  if (currentTrack) {
+    let currentQueueSource = queue || [];
     const originalIndex = currentQueueSource.findIndex(t => t.id === currentTrack.id);
     setQueue(currentQueueSource, queueType, Math.max(0, originalIndex));
-    if(!$("#queuePanel").classList.contains('hide')) renderQueue(queue, currentQueueTitle);
+    if ($("#queuePanel") && !$("#queuePanel").classList.contains('hide')) {
+        renderQueue(queue, currentQueueTitle);
+    }
   }
 }
 function cycleRepeat() {
   const modes = ['none', 'all', 'one'];
-  repeatMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
+  const currentModeIdx = modes.indexOf(repeatMode);
+  repeatMode = modes[(currentModeIdx + 1) % modes.length];
   const btn = $("#btnRepeat");
-  btn?.classList.toggle('active', repeatMode !== 'none');
-  if (btn) btn.innerHTML = (repeatMode === 'one') ? `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>` : `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
+  btn && btn.classList.toggle('active', repeatMode !== 'none');
+  if (btn){
+    btn.innerHTML = (repeatMode === 'one')
+      ? `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>`
+      : `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
+  }
 }
 function updateControlStates() {
   $("#btnShuffle")?.classList.toggle('active', isShuffle);
@@ -1114,16 +1234,22 @@ function updateControlStates() {
 $("#btnShuffle")?.addEventListener("click", toggleShuffle);
 $("#btnRepeat")?.addEventListener("click", cycleRepeat);
 
+/* ========= Cola (Player) ========= */
 function renderQueue(queueItems, title) {
     const panel = $("#queuePanel");
     currentQueueTitle = title;
-    panel?.classList.remove("hide");
+    panel && panel.classList.remove("hide");
+
     const header = panel.querySelector(".section-head");
-    if(header) {
-        header.querySelector('#btnSavePlaylist')?.remove();
-        header.querySelector('#queueTitle').textContent = title;
+    if (header) {
+        let saveBtn = header.querySelector('#btnSavePlaylist');
+        if (saveBtn) saveBtn.remove();
+        
+        const titleEl = header.querySelector('#queueTitle');
+        if (titleEl) titleEl.textContent = title;
+
         if (queueType === 'youtube_playlist') {
-            const saveBtn = document.createElement('button');
+            saveBtn = document.createElement('button');
             saveBtn.id = 'btnSavePlaylist';
             saveBtn.className = 'pill';
             saveBtn.textContent = 'Guardar Lista';
@@ -1131,116 +1257,245 @@ function renderQueue(queueItems, title) {
             header.appendChild(saveBtn);
         }
     }
-    const ul = $("#queueList"); if (!ul) return; ul.innerHTML = "";
-    const isUserPl = queueType === 'playlist';
-    if (!isUserPl) viewingPlaylistId = null;
-    queueItems.forEach((t, i) => {
+
+    const ul = $("#queueList");
+    if (!ul) return;
+    ul.innerHTML = "";
+
+    const isUserPlaylist = queueType === 'playlist';
+    if (!isUserPlaylist) viewingPlaylistId = null;
+
+    (queueItems || []).forEach((t, i) => {
         const li = document.createElement("li");
-        li.className = "queue-item"; li.dataset.trackId = t.id;
+        li.className = "queue-item";
+        li.dataset.trackId = t.id;
         li.innerHTML = `
-          <div class="thumb-wrap"><img class="thumb" src="${t.thumb}" alt="">...</div>
-          <div class="meta">...</div>
-          <div class="actions"><button class="icon-btn more">...</button></div>`;
+      <div class="thumb-wrap">
+        <img class="thumb" src="${t.thumb}" alt="">
+        <button class="card-play" title="Play" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+      </div>
+      <div class="meta">
+        <div class="title-line">
+          <span class="title-text">${t.title}</span>
+          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+        <div class="subtitle">${cleanAuthor(t.author) || ""}</div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
+      </div>`;
         li.onclick = (e) => {
-            if (e.target.closest(".more")) return;
-            qIdx = i; setQueue([...queueItems], queueType, i); playCurrent(true);
+            if (e.target.closest(".more") || e.target.closest(".card-play")) return;
+            qIdx = i;
+            setQueue(queueItems, queueType, i);
+            playCurrent(true);
+        };
+        li.querySelector(".card-play").onclick = (e) => {
+            e.stopPropagation();
+            qIdx = i;
+            setQueue(queueItems, queueType, i);
+            playCurrent(true);
         };
         ul.appendChild(li);
     });
     refreshIndicators();
 }
+
 async function saveCurrentQueueAsPlaylist() {
-    if (!queue || queue.length === 0) { alert("La cola está vacía."); return; }
-    let creator = localStorage.getItem('sy_creator_name') || prompt("Tu nombre de creador:")?.trim();
-    if (!creator) return;
-    localStorage.setItem('sy_creator_name', creator);
-    const btn = $('#btnSavePlaylist'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+    if (!queue || queue.length === 0 || queueType !== 'youtube_playlist') {
+        alert("No hay una lista de reproducción válida para guardar."); return;
+    }
+    let creator = localStorage.getItem('sy_creator_name');
+    if (!creator) {
+        creator = prompt("Para guardar, ingresá tu nombre de creador:")?.trim();
+        if (!creator) return; 
+        localStorage.setItem('sy_creator_name', creator);
+    }
+    const btn = $('#btnSavePlaylist');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
     try {
         const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), { name: currentQueueTitle, creator, tracks: queue, updatedAt: serverTimestamp(), isPublic: true });
         addMyPlaylistId(docRef.id);
-        if (btn) btn.textContent = 'Guardada ✔';
+        if (btn) { btn.textContent = 'Guardada ✔'; }
     } catch (e) {
-        console.error("Error guardando playlist: ", e); alert("Error al guardar.");
+        console.error("Error guardando la playlist: ", e); alert("Hubo un error al guardar la playlist.");
         if (btn) { btn.disabled = false; btn.textContent = 'Guardar Lista'; }
     }
 }
+
+
 function showPlaylistInPlayer(plId){
   const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
   viewingPlaylistId = plId;
   queueType = 'playlist';
+  setQueue(pl.tracks, 'playlist', qIdx > -1 ? qIdx : 0);
   renderQueue(pl.tracks, pl.name);
 }
-function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); if($("#queueList")) $("#queueList").innerHTML=""; viewingPlaylistId=null; renderPlaylists(); }
+function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
+/* ========= Menú tres puntitos global ========= */
 document.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".icon-btn.more"); if (!btn) return;
-    const resultItem = btn.closest(".result-item"), favItem = btn.closest(".fav-item"), queueItem = btn.closest(".queue-item"), plItem = btn.closest(".pl-item");
-    if (resultItem) {
-        const id = resultItem.dataset.itemId;
-        const it = items.find(x => x.id === id); if (!it) return;
-        if(it.type.includes('playlist')) return; // No actions for playlists in search results for now
-        let trackForActions = it.source === 'spotify' ? await findYoutubeEquivalent(it) : it;
-        if (!trackForActions) { alert("No se encontró equivalente en YouTube."); return; }
-        openActionSheet({ title: trackForActions.title, actions: [{ id: "fav", label: isFav(trackForActions.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" }, { id: "pl", label: "Agregar a playlist" }, { id: "cancel", label: "Cancelar", ghost: true }],
-            onAction: (act) => { if (act === "fav") toggleFav(trackForActions); if (act === "pl") openPlaylistSheet(trackForActions); }
+    const btn = e.target.closest(".icon-btn.more");
+    if (!btn) return;
+
+    const resultItemEl = btn.closest(".result-item");
+    if (resultItemEl) {
+        const id = resultItemEl.dataset.itemId;
+        const it = items.find(x => x.id === id);
+        if (!it) return;
+
+        let trackForActions = { ...it };
+
+        if (it.type.includes('playlist')) return; // No actions for playlists yet
+
+        if (it.source === 'spotify' && it.type === 'spotify_track') {
+            const ytEquivalent = await findYoutubeEquivalent(it);
+            if (!ytEquivalent) {
+                alert("No se pudo encontrar esta canción en YouTube para agregarla a tus listas.");
+                return;
+            }
+            trackForActions = ytEquivalent;
+        }
+        
+        openActionSheet({
+            title: trackForActions.title,
+            actions: [
+                { id: "fav", label: isFav(trackForActions.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
+                { id: "pl", label: "Agregar a playlist" },
+                { id: "cancel", label: "Cancelar", ghost: true }
+            ],
+            onAction: (act) => {
+                if (act === "fav") toggleFav(trackForActions);
+                if (act === "pl") openPlaylistSheet(trackForActions);
+            }
         });
+        return;
     }
-    // ... (resto de los handlers para favs, queue, etc.)
 });
+
+
+/* ========= Indicadores ========= */
+function refreshIndicators(){
+  const isPlaying = getPlaybackState() === 'playing';
+  const curId = currentTrack?.id || "";
+
+  $$(".result-item, .fav-item, .queue-item").forEach(el => {
+    let trackId = el.dataset.trackId;
+    if (!trackId) {
+        // For spotify results, the initial ID is from spotify. We check against originalId
+        const itemId = el.dataset.itemId;
+        if (currentTrack?.originalId === itemId) {
+            trackId = currentTrack.id;
+        }
+    }
+    const isCurrentTrack = trackId === curId;
+    el.classList.toggle("is-playing", isCurrentTrack);
+    const cardPlay = el.querySelector(".card-play");
+    if (cardPlay) cardPlay.classList.toggle("playing", isPlaying && isCurrentTrack);
+  });
+
+  $("#npPlay")?.classList.toggle("playing", isPlaying);
+  $("#miniPlay")?.classList.toggle("playing", isPlaying);
+}
+
+
+/* ========= Reproducción en segundo plano ========= */
+document.addEventListener("visibilitychange", ()=>{
+  if(!YT_READY || !currentTrack) return;
+  if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
+    const t = ytPlayer.getCurrentTime()||0;
+    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds:t, suggestedQuality:"auto" });
+    ytPlayer.playVideo();
+  }
+});
+
+/* ========= YouTube API ========= */
 function loadYTApi(){
   if(window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
   const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
 }
 window.onYouTubeIframeAPIReady = function(){
-  ytPlayer = new YT.Player("player",{ width:300, height:150, playerVars:{autoplay:0, controls:0, rel:0, playsinline:1},
-    events:{ onReady:()=>{ YT_READY=true; window.dispatchEvent(new Event('yt-ready')); },
-      onStateChange:(e)=>{ if(e.data===YT.PlayerState.ENDED) next(); refreshIndicators(); updateMediaSession(currentTrack); updateAndroidNotification(); }
+  ytPlayer = new YT.Player("player",{
+    width:300, height:150, videoId:"",
+    playerVars:{autoplay:0, controls:0, rel:0, playsinline:1},
+    events:{
+      onReady:()=>{ YT_READY=true; window.dispatchEvent(new Event('yt-ready')); },
+      onStateChange:(e)=>{
+        const st = e.data;
+        if(st===YT.PlayerState.ENDED){ next(); }
+        try{ if('mediaSession' in navigator){ navigator.mediaSession.playbackState = (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? 'playing' : (st===YT.PlayerState.PAUSED ? 'paused' : 'none'); } }catch{}
+        refreshIndicators();
+        updateAndroidNotification();
+      }
     }
   });
 };
+
+/* ========= Infinite scroll ========= */
 const sentinel = $("#sentinel");
-if (sentinel) new IntersectionObserver((e)=>{ if(e[0].isIntersecting) loadNextPage(); },{rootMargin:"800px"}).observe(sentinel);
-let rafPending = false, lastScrollY = 0, targetT = 0, currentT = 0; const EPS = 0.001, DIST = 200;
-function applyHeroT(t){ const s=Math.round(t*1000)/1000,a=$(".view.active");if(!a)return;const f=a.querySelector("#favHero,.fav-hero"),n=a.querySelector("#npHero,.np-hero,.player-header-sticky");if(f)f.style.setProperty("--hero-t",s);if(n)n.style.setProperty("--hero-t",s);}
-function heroScrollTickRaf(){rafPending=!1;const a=$(".view.active");if(!a){applyHeroT(0);return}const v=a.getBoundingClientRect().top+window.scrollY,y=Math.max(0,lastScrollY-v);targetT=Math.min(1,y/DIST),currentT+=(targetT-currentT)*.25,Math.abs(targetT-currentT)<EPS&&(currentT=targetT),applyHeroT(currentT),Math.abs(targetT-currentT)>=EPS&&(requestAnimationFrame(heroScrollTickRaf),rafPending=!0)}
-function heroScrollInvalidate(){lastScrollY=window.scrollY||document.documentElement.scrollTop||0,rafPending||(rafPending=!0,requestAnimationFrame(heroScrollTickRaf))}
-window.addEventListener("scroll",heroScrollInvalidate,{passive:!0}),window.addEventListener("resize",heroScrollInvalidate,{passive:!0});
+if (sentinel){
+  const io = new IntersectionObserver((entries)=>{
+    for(const en of entries){ if(en.isIntersecting){ loadNextPage(); } }
+  },{ root:null, rootMargin:"800px 0px", threshold:0 });
+  io.observe(sentinel);
+}
+
+/* ========= HERO shrink con rAF ========= */
+let rafPending = false; let lastScrollY = 0; let targetT = 0, currentT = 0; const EPS = 0.001; const DIST = 200;
+function applyHeroT(t){ const tSnap=Math.round(t*1000)/1000; const a=document.querySelector(".view.active"); if(!a)return; const fav=a.querySelector("#favHero, .fav-hero"); const np=a.querySelector("#npHero, .np-hero, .player-header-sticky"); if(fav)fav.style.setProperty("--hero-t", tSnap); if(np)np.style.setProperty("--hero-t",tSnap); }
+function heroScrollTickRaf(){ rafPending=false; const a=document.querySelector(".view.active"); if(!a){applyHeroT(0);return;} const vT=a.getBoundingClientRect().top+window.scrollY; const y=Math.max(0,lastScrollY - vT); targetT=Math.min(1,y/DIST); currentT+=(targetT-currentT)*0.25; if(Math.abs(targetT-currentT)<EPS)currentT=targetT; applyHeroT(currentT); if(Math.abs(targetT-currentT)>=EPS){requestAnimationFrame(heroScrollTickRaf);rafPending=true;} }
+function heroScrollInvalidate(){ lastScrollY=window.scrollY||document.documentElement.scrollTop||0; if(!rafPending){rafPending=true;requestAnimationFrame(heroScrollTickRaf);} }
+window.addEventListener("scroll", heroScrollInvalidate, { passive:true }); window.addEventListener("resize", heroScrollInvalidate, { passive:true });
+
+/* ========= Media Session API ========= */
 let mediaSessionHandlersSet = false;
-function updateMediaSession(t){if(!("mediaSession"in navigator)||!t)return;try{navigator.mediaSession.metadata=new MediaMetadata({title:t.title||"Reproduciendo",artist:cleanAuthor(t.author)||"—",album:queueType==="playlist"?communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||"":t.album||"",artwork:[{src:t.thumb,sizes:"512x512"}]})}catch(e){}if(!mediaSessionHandlersSet){mediaSessionHandlersSet=!0;const s=t=>()=>{try{t()}catch(e){}};try{navigator.mediaSession.setActionHandler("play",s(()=>togglePlay())),navigator.mediaSession.setActionHandler("pause",s(()=>togglePlay())),navigator.mediaSession.setActionHandler("previoustrack",s(()=>prev())),navigator.mediaSession.setActionHandler("nexttrack",s(()=>next())),navigator.mediaSession.setActionHandler("seekbackward",s(t=>{const o=t.seekOffset||10;YT_READY&&ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),!0)})),navigator.mediaSession.setActionHandler("seekforward",s(t=>{const o=t.seekOffset||10;YT_READY&&ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,!0)})),navigator.mediaSession.setActionHandler("seekto",t=>{s(()=>{YT_READY&&t&&"number"==typeof t.seekTime&&ytPlayer.seekTo(t.seekTime,!0)})()})}catch(e){}}}
-function canUseAndroidBridge(){try{return!!(window.AndroidBridge&&AndroidBridge.updateNotification&&AndroidBridge.stopNotification)}catch(e){return!1}}
-function updateAndroidNotification(){if(canUseAndroidBridge()){const t="playing"===("function"==typeof getPlaybackState?getPlaybackState():YT_READY&&ytPlayer&&(ytPlayer.getPlayerState()===YT.PlayerState.PLAYING||ytPlayer.getPlayerState()===YT.PlayerState.BUFFERING));currentTrack?AndroidBridge.updateNotification(currentTrack.title||"",cleanAuthor(currentTrack.author||""),currentTrack.thumb||"",!!t):AndroidBridge.stopNotification()}}
-window.handleNativeControl=function(t){const e=String(t||"").toLowerCase();"action_play"===e&&YT_READY&&ytPlayer&&ytPlayer.playVideo(),"action_pause"===e&&YT_READY&&ytPlayer&&ytPlayer.pauseVideo(),"action_next"===e&&next(),"action_prev"===e&&prev()};
+function updateMediaSession(track){
+  if(!('mediaSession' in navigator)||!track)return;
+  try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){}
+  if(!mediaSessionHandlersSet){mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; try{navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)})); navigator.mediaSession.setActionHandler('seekforward',s(d=>{const o=d.seekOffset||10;if(!YT_READY)return;ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true)})); navigator.mediaSession.setActionHandler('seekto',d=>{s(()=>{if(!YT_READY||!d||typeof d.seekTime!=='number')return;ytPlayer.seekTo(d.seekTime,true)})()});}catch(e){}}
+  try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch{}
+}
+/* ===== Android bridge (AIDE WebView) ===== */
+function canUseAndroidBridge(){ try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; } }
+function updateAndroidNotification(){ if (!canUseAndroidBridge()) return; const isPlaying = (typeof getPlaybackState === 'function') ? (getPlaybackState() === 'playing') : (YT_READY && ytPlayer && (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING || ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING)); if (!currentTrack) { AndroidBridge.stopNotification(); return; } AndroidBridge.updateNotification( currentTrack.title || '', cleanAuthor(currentTrack.author || ''), currentTrack.thumb || '', !!isPlaying ); }
+window.handleNativeControl = function(c){ const a=String(c||'').toLowerCase(); if(a==='action_play'){if(YT_READY&&ytPlayer)ytPlayer.playVideo();return} if(a==='action_pause'){if(YT_READY&&ytPlayer)ytPlayer.pauseVideo();return} if(a==='action_next'){next();return} if(a==='action_prev'){prev();return} };
+
+
+/* ========= Init ========= */
 async function boot(){
   initTheme();
+  
   const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
   const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
   window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
+
   onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
     communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    renderPlaylists();
-    renderAllHomePlaylists();
+    renderPlaylists(); renderAllHomePlaylists();
     if (viewingPlaylistId && queueType === 'playlist') {
       const updatedPlaylist = communityPlaylists.find(p => p.id === viewingPlaylistId);
-      if (updatedPlaylist) {
-        const currentId = currentTrack ? currentTrack.id : null;
-        renderQueue(updatedPlaylist.tracks, updatedPlaylist.name);
-        setQueue(updatedPlaylist.tracks, 'playlist', qIdx);
-        const newIdx = updatedPlaylist.tracks.findIndex(t => t.id === currentId);
-        if (newIdx !== -1) qIdx = newIdx;
-        else { qIdx = Math.min(qIdx, updatedPlaylist.tracks.length - 1); if (updatedPlaylist.tracks.length === 0) { currentTrack = null; ytPlayer.stopVideo(); } else { currentTrack = queue[qIdx]; } updateUIOnTrackChange(); }
-      } else { hideQueuePanel(); if (queueType === 'playlist') { currentTrack = null; queue = null; ytPlayer.stopVideo(); updateUIOnTrackChange(); } }
+      if(updatedPlaylist){
+        const currentId=currentTrack?currentTrack.id:null; renderQueue(updatedPlaylist.tracks,updatedPlaylist.name); setQueue(updatedPlaylist.tracks,'playlist',qIdx); const newIdx=updatedPlaylist.tracks.findIndex(t=>t.id===currentId);
+        if(newIdx!==-1){qIdx=newIdx}else{qIdx=Math.min(qIdx,updatedPlaylist.tracks.length-1);if(updatedPlaylist.tracks.length===0){currentTrack=null;ytPlayer.stopVideo()}else{currentTrack=queue[qIdx]} updateUIOnTrackChange()}
+      }else{hideQueuePanel();if(queueType==='playlist'){currentTrack=null;queue=null;ytPlayer.stopVideo();updateUIOnTrackChange()}}
     }
   });
+
   const playlistKeys = Object.keys(recommendedPlaylists);
   const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
   const results = await Promise.all(fetchPromises);
   playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; });
+  
   renderAllHomePlaylists();
   updateHomeGridVisibility();
+
   loadFavs();
   renderFavs();
   loadYTApi();
@@ -1252,12 +1507,14 @@ async function boot(){
 
 function renderAllHomePlaylists() {
     const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && p.tracks && p.tracks.length > 0);
-    const allPlaylists = [...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists];
+    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
     allPlaylists.sort((a, b) => { const dateA = a.updatedAt?.toDate() || new Date(0); const dateB = b.updatedAt?.toDate() || new Date(0); return dateB - dateA; });
     const container = $("#allPlaylistsContainer");
     if(container) container.innerHTML = "";
     allPlaylists.forEach(p => renderPlaylistCard(p));
 }
+
 boot();
+
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
