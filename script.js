@@ -3,10 +3,18 @@ const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
 
+// Normalizador de strings
+const sy_normalize = str => {
+    if (!str) return "";
+    return str.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Saca tildes
+        .replace(/[^\w\s]/g, '') // Elimina símbolos
+        .replace(/\s+/g, ' ').trim(); // Colapsa espacios
+};
+
 const cleanTitle = t => (t||"")
   .replace(/\[(official\s*)?(music\s*)?(video\s*)?(lyric\s*)?(audio\s*)?(hd\s*)?(vevo\s*)?.*?\]/ig,"")
   .replace(/\((official\s*)?(music\s*)?(video\s*)?(lyric\s*)?(audio\s*)?(hd\s*)?(vevo\s*)?.*?\)/ig,"")
-  .replace(/\b(videoclip|video oficial|audio oficial|lyric video|lyrics|mv|oficial|en vivo|live|versión \d{4}|remaster|vevo)\b/ig,"")
   .replace(/\s*-\s*$/, "")
   .replace(/\s{2,}/g," ").trim();
 
@@ -17,186 +25,104 @@ const cleanAuthor = a => (a||"")
   .replace(/\s*-\s*$/, "")
   .trim();
 
-const sy_normalize = str => {
-    if (!str) return "";
-    return str.toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/\b(official|video oficial|lyric|version|audio|en vivo|live|remaster)\b/g, '')
-        .replace(/[\[\]()]/g, '')
-        .replace(/[^\w\s-]/g, '')
-        .replace(/\s{2,}/g, ' ')
+// Generador de alias para artistas
+const sy_authorAliases = (author) => {
+    if (!author) return [];
+    const normalizedAuthor = sy_normalize(author);
+    const aliases = [normalizedAuthor];
+    if (normalizedAuthor.includes("patricio rey y sus redonditos de ricota")) {
+        aliases.push("los redondos", "patricio rey");
+    }
+    // Aquí se podrían agregar más reglas de alias
+    return aliases;
+};
+
+// Limpiador de sufijos de canciones
+const sy_cleanSongSuffixes = (song) => {
+    return song
+        .replace(/\((en vivo|live|versión \d{4}|official audio|lyric video|vevo)\)/ig, '')
+        .replace(/\[(hd|official audio|lyric video|vevo)\]/ig, '')
+        .replace(/-(en vivo|live|versión \d{4}|official audio|lyric video|vevo)/i, '')
         .trim();
 };
 
-const sy_hashId = (id) => {
-    if (!id) return 0;
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-        const char = id.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash |= 0;
+// Divisor inteligente de títulos
+const sy_splitTitle = (title, author) => {
+    const separators = / - |–|—|•|:/;
+    const parts = title.split(separators);
+    const authorAliases = sy_authorAliases(author);
+
+    if (parts.length > 1) {
+        const left = parts[0].trim();
+        const right = parts.slice(1).join(' ').trim();
+        const normLeft = sy_normalize(left);
+        const normRight = sy_normalize(right);
+
+        const leftMatchesAuthor = authorAliases.some(alias => normLeft.length > 3 && (normLeft.includes(alias) || alias.includes(normLeft)));
+        const rightMatchesAuthor = authorAliases.some(alias => normRight.length > 3 && (normRight.includes(alias) || alias.includes(normRight)));
+
+        if (leftMatchesAuthor && !rightMatchesAuthor) { // Patrón: Artista - Canción
+            return { song: sy_cleanSongSuffixes(right), artist: author };
+        }
+        if (rightMatchesAuthor && !leftMatchesAuthor) { // Patrón: Canción - Artista
+            return { song: sy_cleanSongSuffixes(left), artist: author };
+        }
     }
-    return Math.abs(hash);
+    // Fallback: si no hay patrón claro
+    return { song: sy_cleanSongSuffixes(cleanTitle(title)), artist: cleanAuthor(author) };
 };
 
-const sy_debounce = (func, delay) => {
-    let timeout;
-    return function(...args) {
-        const context = this;
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(context, args), delay);
-    };
+// Truncado inteligente
+const sy_truncateSong = (songTitle) => {
+    const maxLength = 60;
+    if (songTitle.length <= maxLength) return songTitle;
+
+    let cutIndex = -1;
+    [' – ', ' (', ' |'].forEach(sep => {
+        const index = songTitle.lastIndexOf(sep, maxLength);
+        if (index > cutIndex) cutIndex = index;
+    });
+
+    if (cutIndex > maxLength / 2) {
+        return songTitle.substring(0, cutIndex).trim();
+    }
+
+    const lastSpace = songTitle.lastIndexOf(' ', maxLength);
+    return lastSpace > 0 ? songTitle.substring(0, lastSpace).trim() + '…' : songTitle.substring(0, maxLength - 1) + '…';
 };
 
-// Objetivo 1, Cambio 1: Helper de detección de Topic
-const sy_isTopic = (title = '', channel = '', description = '') => {
-    const topicRegex = /\bTopic\b/i;
-    const falsePositiveRegex = /\b(Hot Topics|Trending Topics|Topic Show)\b/i;
-    const textToCheck = `${title} ${channel}`; // Description is too noisy
-    if (falsePositiveRegex.test(textToCheck)) return false;
-    return topicRegex.test(channel); // Check channel title is most reliable
+// Procesador de títulos para UI
+const sy_processDisplayTitles = (itemList) => {
+    return itemList.map(it => {
+        if (it.type && it.type.includes('playlist')) {
+            it.displaySong = it.title;
+            it.displayArtist = it.author;
+            it.titleOriginal = it.titleOriginal || it.title;
+            return it;
+        }
+        it.titleOriginal = it.titleOriginal || it.title;
+        const { song, artist } = sy_splitTitle(it.titleOriginal, it.author);
+        it.displaySong = sy_truncateSong(song);
+        it.displayArtist = artist;
+        it.title = it.displaySong; // Actualizar title para UI
+        return it;
+    });
 };
 
-// Objetivo 2, Cambio 7-11: Lógica para Canales Oficiales
+
+const sy_hashId = (id) => { if (!id) return 0; let hash = 0; for (let i = 0; i < id.length; i++) { const char = id.charCodeAt(i); hash = ((hash << 5) - hash) + char; hash |= 0; } return Math.abs(hash); };
+const sy_debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
+
+const sy_isTopic = (title = '', channel = '', description = '') => { const topicRegex = /\bTopic\b/i; const falsePositiveRegex = /\b(Hot Topics|Trending Topics|Topic Show)\b/i; const textToCheck = `${title} ${channel}`; if (falsePositiveRegex.test(textToCheck)) return false; return topicRegex.test(channel); };
 const sy_channelMetaCache = new Map();
 let sy_channelFetchQueue = new Set();
 let sy_isFetchingChannels = false;
-
-// String similarity helper (Levenshtein distance based)
-const sy_stringSimilarity = (s1, s2) => {
-    let longer = s1, shorter = s2;
-    if (s1.length < s2.length) { longer = s2; shorter = s1; }
-    const longerLength = longer.length;
-    if (longerLength === 0) return 1.0;
-    return (longerLength - editDistance(longer, shorter)) / parseFloat(longerLength);
-    function editDistance(s1, s2) {
-        s1 = s1.toLowerCase(); s2 = s2.toLowerCase();
-        const costs = [];
-        for (let i = 0; i <= s1.length; i++) {
-            let lastValue = i;
-            for (let j = 0; j <= s2.length; j++) {
-                if (i === 0) costs[j] = j;
-                else if (j > 0) {
-                    let newValue = costs[j - 1];
-                    if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-                    costs[j - 1] = lastValue;
-                    lastValue = newValue;
-                }
-            }
-            if (i > 0) costs[s2.length] = lastValue;
-        }
-        return costs[s2.length];
-    }
-};
-
-const sy_fetchChannelMeta = sy_debounce(async () => {
-    if (sy_isFetchingChannels || sy_channelFetchQueue.size === 0) return;
-    sy_isFetchingChannels = true;
-    const idsToFetch = [...sy_channelFetchQueue];
-    sy_channelFetchQueue.clear();
-
-    const CHUNK_SIZE = 50;
-    for (let i = 0; i < idsToFetch.length; i += CHUNK_SIZE) {
-        const chunk = idsToFetch.slice(i, i + CHUNK_SIZE);
-        const url = new URL('https://www.googleapis.com/youtube/v3/channels');
-        const apiKey = getRotatedApiKey();
-        url.searchParams.append('key', apiKey);
-        url.searchParams.append('part', 'snippet,brandingSettings,statistics');
-        url.searchParams.append('id', chunk.join(','));
-
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`API error channels: ${response.status}`);
-            const data = await response.json();
-
-            data.items?.forEach(channel => {
-                sy_channelMetaCache.set(channel.id, channel);
-                // Update items in memory without re-rendering
-                items.filter(item => item.channelId === channel.id).forEach(item => {
-                    sy_decorateItem(item, true); // Force re-decoration
-                });
-            });
-        } catch (e) {
-            console.error('Failed to fetch channel metadata:', e);
-            // Re-queue failed chunk
-            chunk.forEach(id => sy_channelFetchQueue.add(id));
-        }
-    }
-    sy_isFetchingChannels = false;
-    // If more items were queued during fetch, trigger again
-    if(sy_channelFetchQueue.size > 0) sy_fetchChannelMeta();
-}, 1000);
-
-// Objetivo 2, Cambio 8
-const sy_scoreOfficial = (channelMeta, probableArtistName) => {
-    let score = 0;
-    const normalizedArtist = sy_normalize(probableArtistName);
-    const { snippet, brandingSettings } = channelMeta;
-    const normalizedTitle = sy_normalize(snippet.title);
-
-    if (sy_stringSimilarity(normalizedTitle, normalizedArtist) >= 0.9) score += 3;
-    if (/\bvevo\b/i.test(snippet.title)) score += 2;
-    if (snippet.customUrl && sy_stringSimilarity(sy_normalize(snippet.customUrl), normalizedArtist) >= 0.9) score += 1;
-    const desc = brandingSettings?.channel?.description || snippet.description || '';
-    if (/\b(official|canal oficial|sitio oficial|página oficial)\b/i.test(desc)) score += 1;
-
-    if (/\b(Topic)\b/i.test(snippet.title)) score -= 3;
-    if (/\b(tributo|fans|fanpage|cover|karaoke)\b/i.test(snippet.title)) score -= 2;
-
-    return { isOfficial: score >= 3, score };
-};
-
-// Objetivo 2, Cambio 9
-const sy_isOfficialArtistChannel = (channelId, probableArtistName) => {
-    if (sy_channelMetaCache.has(channelId)) {
-        return sy_scoreOfficial(sy_channelMetaCache.get(channelId), probableArtistName);
-    }
-    // Return provisional false and queue fetch
-    if (channelId) {
-       sy_channelFetchQueue.add(channelId);
-       sy_fetchChannelMeta();
-    }
-    return { isOfficial: false, score: 0 };
-};
-
-// Objetivo 1, Cambio 5: Memo de íconos estable
+const sy_stringSimilarity = (s1, s2) => { let longer = s1, shorter = s2; if (s1.length < s2.length) { longer = s2; shorter = s1; } const longerLength = longer.length; if (longerLength === 0) return 1.0; return (longerLength - editDistance(longer, shorter)) / parseFloat(longerLength); function editDistance(s1, s2) { s1 = s1.toLowerCase(); s2 = s2.toLowerCase(); const costs = []; for (let i = 0; i <= s1.length; i++) { let lastValue = i; for (let j = 0; j <= s2.length; j++) { if (i === 0) costs[j] = j; else if (j > 0) { let newValue = costs[j - 1]; if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1; costs[j - 1] = lastValue; lastValue = newValue; } } if (i > 0) costs[s2.length] = lastValue; } return costs[s2.length]; } };
+const sy_fetchChannelMeta = sy_debounce(async () => { if (sy_isFetchingChannels || sy_channelFetchQueue.size === 0) return; sy_isFetchingChannels = true; const idsToFetch = [...sy_channelFetchQueue]; sy_channelFetchQueue.clear(); const CHUNK_SIZE = 50; for (let i = 0; i < idsToFetch.length; i += CHUNK_SIZE) { const chunk = idsToFetch.slice(i, i + CHUNK_SIZE); const url = new URL('https://www.googleapis.com/youtube/v3/channels'); const apiKey = getRotatedApiKey(); url.searchParams.append('key', apiKey); url.searchParams.append('part', 'snippet,brandingSettings,statistics'); url.searchParams.append('id', chunk.join(',')); try { const response = await fetch(url); if (!response.ok) throw new Error(`API error channels: ${response.status}`); const data = await response.json(); data.items?.forEach(channel => { sy_channelMetaCache.set(channel.id, channel); items.filter(item => item.channelId === channel.id).forEach(item => { sy_decorateItem(item, true); }); }); } catch (e) { console.error('Failed to fetch channel metadata:', e); chunk.forEach(id => sy_channelFetchQueue.add(id)); } } sy_isFetchingChannels = false; if(sy_channelFetchQueue.size > 0) sy_fetchChannelMeta(); }, 1000);
+const sy_scoreOfficial = (channelMeta, probableArtistName) => { let score = 0; const normalizedArtist = sy_normalize(probableArtistName); const { snippet, brandingSettings } = channelMeta; const normalizedTitle = sy_normalize(snippet.title); if (sy_stringSimilarity(normalizedTitle, normalizedArtist) >= 0.9) score += 3; if (/\bvevo\b/i.test(snippet.title)) score += 2; if (snippet.customUrl && sy_stringSimilarity(sy_normalize(snippet.customUrl), normalizedArtist) >= 0.9) score += 1; const desc = brandingSettings?.channel?.description || snippet.description || ''; if (/\b(official|canal oficial|sitio oficial|página oficial)\b/i.test(desc)) score += 1; if (/\b(Topic)\b/i.test(snippet.title)) score -= 3; if (/\b(tributo|fans|fanpage|cover|karaoke)\b/i.test(snippet.title)) score -= 2; return { isOfficial: score >= 3, score }; };
+const sy_isOfficialArtistChannel = (channelId, probableArtistName) => { if (sy_channelMetaCache.has(channelId)) { return sy_scoreOfficial(sy_channelMetaCache.get(channelId), probableArtistName); } if (channelId) { sy_channelFetchQueue.add(channelId); sy_fetchChannelMeta(); } return { isOfficial: false, score: 0 }; };
 const sy_iconMemo = new Map();
-
-// Objetivo 1, Cambio 2: Decorador único por ítem
-const sy_decorateItem = (it, force = false) => {
-    if (it.logoType && !force) return it;
-    if (sy_iconMemo.has(it.id) && !force) {
-        const memoized = sy_iconMemo.get(it.id);
-        Object.assign(it, memoized);
-        return it;
-    }
-
-    if (it.source === 'spotify') {
-        it.isTopic = false;
-        it.isOfficial = false;
-        it.logoType = 'spotify';
-    } else { // source is youtube
-        it.isTopic = it.isTopic; // Should be pre-calculated
-        const { isOfficial } = sy_isOfficialArtistChannel(it.channelId, it.author);
-        it.isOfficial = isOfficial;
-
-        if (it.isTopic || it.isOfficial) {
-            it.logoType = (sy_hashId(it.id) % 2 === 0) ? 'spotify' : 'ytmusic';
-        } else {
-            it.logoType = 'youtube';
-        }
-    }
-    
-    // Objetivo 2, Cambio 10: orderWeight
-    it.orderWeight = it.type.includes('playlist') ? 1
-                   : it.isTopic ? 2
-                   : it.isOfficial ? 3
-                   : 4;
-
-    sy_iconMemo.set(it.id, { isTopic: it.isTopic, isOfficial: it.isOfficial, logoType: it.logoType, orderWeight: it.orderWeight });
-    return it;
-};
-
+const sy_decorateItem = (it, force = false) => { if (it.logoType && !force) return it; if (sy_iconMemo.has(it.id) && !force) { const memoized = sy_iconMemo.get(it.id); Object.assign(it, memoized); return it; } if (it.source === 'spotify') { it.isTopic = false; it.isOfficial = false; it.logoType = 'spotify'; } else { it.isTopic = it.isTopic; const { isOfficial } = sy_isOfficialArtistChannel(it.channelId, it.author); it.isOfficial = isOfficial; if (it.isTopic || it.isOfficial) { it.logoType = (sy_hashId(it.id) % 2 === 0) ? 'spotify' : 'ytmusic'; } else { it.logoType = 'youtube'; } } it.orderWeight = it.type.includes('playlist') ? 1 : it.isTopic ? 2 : it.isOfficial ? 3 : 4; sy_iconMemo.set(it.id, { isTopic: it.isTopic, isOfficial: it.isOfficial, logoType: it.logoType, orderWeight: it.orderWeight }); return it; };
 
 const dotsSvg = () => `<svg class="icon-dots" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>`;
 const youtubeLogoSvg = () => `<span class="source-logo youtube-logo" title="YouTube"><svg viewBox="0 0 28 20" fill="currentColor" height="1em" width="1em"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"></path></svg></span>`;
@@ -214,14 +140,14 @@ function loadPlayerState() { const savedState = localStorage.getItem(PLAYER_STAT
 function restorePlayerState(state) { if (!state || !state.queue || state.qIdx < 0) return; const restore = () => { queue = state.queue; queueType = state.queueType; qIdx = state.qIdx; currentTrack = queue[qIdx]; isShuffle = !!state.isShuffle; sy_originalQueue = state.sy_originalQueue || null; sy_shuffledSeed = state.sy_shuffledSeed || null; repeatMode = state.repeatMode || 'none'; ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: state.currentTime || 0, suggestedQuality: "auto" }); ytPlayer.setVolume(state.volume || 100); if (state.wasPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo(); updateUIOnTrackChange(); startTimer(); }; if (YT_READY) restore(); else window.addEventListener('yt-ready', restore, { once: true }); }
 const THEME_KEY = "sy_theme_v1"; function applyTheme(theme){ document.documentElement.setAttribute("data-theme", theme); localStorage.setItem(THEME_KEY, theme); const tBtn = $("#themeToggle"); if(tBtn){ const isLight = theme === "light"; tBtn.classList.toggle("is-light", isLight); tBtn.setAttribute("aria-label", isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"); tBtn.title = tBtn.getAttribute("aria-label"); } const meta = document.querySelector('meta[name="theme-color"]'); if(meta){ const cssColor = getComputedStyle(document.documentElement).getPropertyValue("--dock-bg").trim(); meta.setAttribute("content", cssColor || (theme==="light" ? "#ffffff" : "#0b0a11")); } document.documentElement.style.colorScheme = (theme==="light"?"light":"dark"); } function initTheme(){ const saved = localStorage.getItem(THEME_KEY) || "dark"; applyTheme(saved); $("#themeToggle")?.addEventListener("click", ()=>{ const cur = document.documentElement.getAttribute("data-theme") || "dark"; applyTheme(cur === "dark" ? "light" : "dark"); }); }
 async function getSpotifyToken() { if (spotifyToken.value && Date.now() < spotifyToken.expires) return spotifyToken.value; try { const response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' }); if (!response.ok) throw new Error('Falló la autenticación con Spotify'); const data = await response.json(); spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 }; return spotifyToken.value; } catch (e) { console.error("Error obteniendo token de Spotify:", e); return null; } }
-async function searchSpotify(query, limit = 10) { const token = await getSpotifyToken(); if (!token) return { tracks: [], playlists: [] }; try { const url = new URL('https://api.spotify.com/v1/search'); url.searchParams.append('q', query); url.searchParams.append('type', 'track,playlist'); url.searchParams.append('limit', limit); url.searchParams.append('market', 'AR'); const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('No se pudo buscar en Spotify'); const data = await response.json(); const tracks = (data.tracks?.items || []).map(item => ({ source: 'spotify', type: 'spotify_track', id: item.id, title: item.name, author: item.artists.map(a => a.name).join(', '), thumb: item.album.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png' })); const playlists = (data.playlists?.items || []).map(item => ({ source: 'spotify', type: 'spotify_playlist', id: item.id, title: item.name, author: item.owner.display_name, thumb: item.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png' })); return { tracks, playlists }; } catch (e) { console.error("Error en la búsqueda de Spotify:", e); return { tracks: [], playlists: [] }; } }
-async function fetchSpotifyPlaylist(playlistId) { const token = await getSpotifyToken(); if (!token) return null; try { const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('No se pudo obtener la playlist de Spotify'); const data = await response.json(); return { id: data.id, name: data.name, author: data.owner.display_name, thumb: data.images?.[0]?.url || '', tracks: data.tracks.items.map(({track}) => track ? { source: 'spotify', type: 'spotify_track', id: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean) }; } catch (e) { console.error("Error al buscar playlist en Spotify:", e); return null; } }
+async function searchSpotify(query, limit = 10) { const token = await getSpotifyToken(); if (!token) return { tracks: [], playlists: [] }; try { const url = new URL('https://api.spotify.com/v1/search'); url.searchParams.append('q', query); url.searchParams.append('type', 'track,playlist'); url.searchParams.append('limit', limit); url.searchParams.append('market', 'AR'); const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('No se pudo buscar en Spotify'); const data = await response.json(); const tracks = (data.tracks?.items || []).map(item => ({ source: 'spotify', type: 'spotify_track', id: item.id, title: item.name, titleOriginal: item.name, author: item.artists.map(a => a.name).join(', '), thumb: item.album.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png' })); const playlists = (data.playlists?.items || []).map(item => ({ source: 'spotify', type: 'spotify_playlist', id: item.id, title: item.name, titleOriginal: item.name, author: item.owner.display_name, thumb: item.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png' })); return { tracks, playlists }; } catch (e) { console.error("Error en la búsqueda de Spotify:", e); return { tracks: [], playlists: [] }; } }
+async function fetchSpotifyPlaylist(playlistId) { const token = await getSpotifyToken(); if (!token) return null; try { const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('No se pudo obtener la playlist de Spotify'); const data = await response.json(); return { id: data.id, name: data.name, author: data.owner.display_name, thumb: data.images?.[0]?.url || '', tracks: data.tracks.items.map(({track}) => track ? { source: 'spotify', type: 'spotify_track', id: track.id, title: track.name, titleOriginal: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean) }; } catch (e) { console.error("Error al buscar playlist en Spotify:", e); return null; } }
 
 /* ========= API YouTube ========= */
 const YOUTUBE_API_KEYS = ["AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY","AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44","AIzaSyD_WZVpBaXosHIzpHoS0JJcQFlB03jc9DE","AIzaSyCiryC1WiODR0hisMRDeej5FPsTjF3MTTM","AIzaSyC3-V6pED9HDjEYpgtU9Tcw8YcZem9pVM0","AIzaSyDCjAPw7pG9GxRTsy-czuoRVF-u_Qu--hI","AIzaSyDjcQqc8bL_bvO06OXIG_sR_LIUV0bX0cs","AIzaSyB_alWAvGwiNWgowsZwf45tkR0Q9R04DJQ","AIzaSyB_hGk25Hdpt6Q7jzOr8dR6h50m7lrJGNc","AIzaSyAHjMoRWCpAuxp1hEb-nMxVPFdNAit_QnQ"];
 let currentApiKeyIndex = 0;
 const getRotatedApiKey = () => { const k = YOUTUBE_API_KEYS[currentApiKeyIndex]; currentApiKeyIndex = (currentApiKeyIndex + 1) % YOUTUBE_API_KEYS.length; return k; };
-async function fetchVideoDetailsByIds(ids) { const uniqueIds = [...new Set(ids)]; if (uniqueIds.length === 0) return []; const CHUNK_SIZE = 50; const chunks = []; for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) { chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE)); } const fetchChunk = async (chunk, retryCount = 0) => { const MAX_RETRIES = YOUTUBE_API_KEYS.length; if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para el chunk: ${chunk.join(',')}`); return []; } const url = new URL('https://www.googleapis.com/youtube/v3/videos'); const apiKey = getRotatedApiKey(); url.searchParams.append('key', apiKey); url.searchParams.append('part', 'snippet'); url.searchParams.append('id', chunk.join(',')); try { const response = await fetch(url); if (!response.ok) { if (response.status === 403) { console.warn(`API key ${apiKey} 403 → rotando`); return fetchChunk(chunk, retryCount + 1); } throw new Error(`API error: ${response.status}`); } const data = await response.json(); return data.items.map(item => ({ id: item.id, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })); } catch (e) { console.error('YouTube API fetch chunk failed:', e); return fetchChunk(chunk, retryCount + 1); } }; const results = await Promise.all(chunks.map(chunk => fetchChunk(chunk))); return results.flat(); }
+async function fetchVideoDetailsByIds(ids) { const uniqueIds = [...new Set(ids)]; if (uniqueIds.length === 0) return []; const CHUNK_SIZE = 50; const chunks = []; for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) { chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE)); } const fetchChunk = async (chunk, retryCount = 0) => { const MAX_RETRIES = YOUTUBE_API_KEYS.length; if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para el chunk: ${chunk.join(',')}`); return []; } const url = new URL('https://www.googleapis.com/youtube/v3/videos'); const apiKey = getRotatedApiKey(); url.searchParams.append('key', apiKey); url.searchParams.append('part', 'snippet'); url.searchParams.append('id', chunk.join(',')); try { const response = await fetch(url); if (!response.ok) { if (response.status === 403) { console.warn(`API key ${apiKey} 403 → rotando`); return fetchChunk(chunk, retryCount + 1); } throw new Error(`API error: ${response.status}`); } const data = await response.json(); return data.items.map(item => ({ id: item.id, title: item.snippet.title, titleOriginal: item.snippet.title, author: item.snippet.channelTitle, thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })); } catch (e) { console.error('YouTube API fetch chunk failed:', e); return fetchChunk(chunk, retryCount + 1); } }; const results = await Promise.all(chunks.map(chunk => fetchChunk(chunk))); return results.flat(); }
 /* ========= Nav & Search Overlay (sin cambios) ========= */
 function switchView(id){ $$(".view").forEach(v=>v.classList.remove("active")); const view = $("#"+id); if (view) view.classList.add("active"); $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id)); if(id!=="view-search") sy_searchCache = null; if(id==="view-search") updateHomeGridVisibility(); heroScrollInvalidate(); }
 $("#bottomNav").addEventListener("click", e=>{ const btn = e.target.closest(".nav-btn"); if(!btn || btn.classList.contains('active')) return; switchView(btn.dataset.view); });
@@ -232,7 +158,6 @@ overlayInput?.addEventListener("keydown", async e=>{ if (e.key !== "Enter") retu
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
-// Objetivo 1, Cambio 3
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length; if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
   const url = new URL('https://www.googleapis.com/youtube/v3/search'); const apiKey = getRotatedApiKey(); url.searchParams.append('key', apiKey); url.searchParams.append('q', query); url.searchParams.append('part', 'snippet'); url.searchParams.append('type', 'video,playlist'); url.searchParams.append('maxResults', limit); if(pageToken) url.searchParams.append('pageToken', pageToken);
@@ -244,10 +169,8 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
             const { title: titleOriginal, channelTitle: authorOriginal, description, channelId } = item.snippet;
             const baseItem = {
                 source: 'youtube', id: item.id.videoId || item.id.playlistId,
-                title: cleanTitle(titleOriginal), author: cleanAuthor(authorOriginal),
-                titleOriginal, authorOriginal, channelId, description: description || '',
-                thumb: item.snippet.thumbnails?.high?.url || "",
-                isTopic: sy_isTopic(titleOriginal, authorOriginal, description)
+                title: cleanTitle(titleOriginal), titleOriginal, author: cleanAuthor(authorOriginal), authorOriginal, channelId, description: description || '',
+                thumb: item.snippet.thumbnails?.high?.url || "", isTopic: sy_isTopic(titleOriginal, authorOriginal, description)
             };
             if (item.id.kind === 'youtube#video') return { ...baseItem, type: 'youtube_video' };
             if (item.id.kind === 'youtube#playlist') return { ...baseItem, type: 'youtube_playlist' };
@@ -271,9 +194,9 @@ async function startSearch(query){
     const [ytResult, spResult] = await Promise.all([ youtubeSearch(query, '', 30), searchSpotify(query, 20) ]);
     paging.pageToken = ytResult.nextPageToken; paging.hasMore = !!ytResult.nextPageToken;
     let combined = [ ...spResult.playlists, ...ytResult.items.filter(it => it.type === 'youtube_playlist'), ...spResult.tracks, ...ytResult.items.filter(it => it.type === 'youtube_video') ];
-    // Objetivo 1, Cambio 4
-    const decorated = combined.map(it => sy_decorateItem(it));
-    items = dedupeAndSort(decorated);
+    const decorated = combined.map(sy_decorateItem);
+    const deduped = dedupeAndSort(decorated);
+    items = sy_processDisplayTitles(deduped);
     if (resultsEl) resultsEl.innerHTML = "";
     if (items.length === 0 && !paging.hasMore) { if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator" aria-live="polite"><p>No se encontraron resultados.</p></div>`; return; }
     appendResults(items);
@@ -282,12 +205,11 @@ async function startSearch(query){
   } finally { paging.loading = false; }
 }
 
-// Objetivo 1, Cambio 6 + Objetivo 2
 function dedupeAndSort(arr) {
     const seen = new Map();
     arr.forEach(it => {
         if (it.type.includes('playlist')) { if (!seen.has(it.id)) seen.set(it.id, it); return; }
-        const key = `${sy_normalize(it.author)}-${sy_normalize(it.title)}`;
+        const key = `${sy_normalize(it.author)}-${sy_normalize(it.titleOriginal)}`;
         const existing = seen.get(key);
         if (!existing) { seen.set(key, it);
         } else {
@@ -299,7 +221,7 @@ function dedupeAndSort(arr) {
         }
     });
     const unique = Array.from(seen.values());
-    unique.sort((a, b) => a.orderWeight - b.orderWeight);
+    unique.sort((a, b) => (a.orderWeight || 4) - (b.orderWeight || 4));
     return unique;
 }
 
@@ -309,12 +231,11 @@ async function loadNextPage(){
   try{
     const result = await youtubeSearch(paging.query, paging.pageToken, BATCH_SIZE);
     if(result.items.length === 0){ paging.hasMore = false; return; }
-    // Objetivo 1, Cambio 4
     const decoratedNewItems = result.items.map(sy_decorateItem);
     const allItems = [...items, ...decoratedNewItems];
     const dedupedAll = dedupeAndSort(allItems);
-    const finalNewItems = dedupedAll.slice(items.length);
-
+    const finalNewItemsRaw = dedupedAll.slice(items.length);
+    const finalNewItems = sy_processDisplayTitles(finalNewItemsRaw);
     appendResults(finalNewItems);
     items = dedupedAll;
     paging.pageToken = result.nextPageToken; paging.hasMore = !!result.nextPageToken;
@@ -323,20 +244,20 @@ async function loadNextPage(){
   } finally { paging.loading = false; }
 }
 
-/* ========= Render, Spotify Import, etc (sin cambios funcionales mayores) ========= */
-function appendResults(chunk) { const root = $("#results"); if (!root || chunk.length === 0) return; const fragment = document.createDocumentFragment(); for (const it of chunk) { const itemEl = document.createElement("article"); itemEl.className = "result-item"; itemEl.dataset.itemId = it.id; itemEl.dataset.trackId = it.type.includes('video') || it.type.includes('track') ? it.id : ''; if (!it.logoType) sy_decorateItem(it); const logo = it.logoType === 'spotify' ? spotifyLogoSvg() : it.logoType === 'ytmusic' ? youtubeMusicLogoSvg() : youtubeLogoSvg(); let indicator = ''; if (it.type.includes('playlist')) { itemEl.classList.add("playlist-result-item"); if (it.source === 'spotify') itemEl.classList.add("spotify-playlist-result-item"); indicator = '<div class="playlist-indicator">LISTA</div>'; } itemEl.innerHTML = ` <div class="thumb-wrap"><img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="" width="56" height="56">${indicator} ${!it.type.includes('playlist') ? `<button class="card-play" title="Play/Pause" aria-label="Play/Pause" aria-pressed="false"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : ''} </div> <div class="meta"> <div class="title-line">${logo}<span class="title-text">${it.title}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div> <div class="subtitle">${cleanAuthor(it.author) || ""}</div> </div> <div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`; itemEl.addEventListener("click", (e) => handleResultClick(e, it)); let pressTimer; itemEl.addEventListener('touchstart', (e) => { if (e.target.closest(".more, .card-play")) return; pressTimer = setTimeout(() => { e.preventDefault(); itemEl.querySelector(".more")?.click(); }, 500); }, { passive: true }); itemEl.addEventListener('touchend', () => clearTimeout(pressTimer)); itemEl.addEventListener('touchmove', () => clearTimeout(pressTimer)); fragment.appendChild(itemEl); } root.appendChild(fragment); refreshIndicators(); }
+/* ========= Render, Spotify Import, etc ========= */
+function appendResults(chunk) { const root = $("#results"); if (!root || chunk.length === 0) return; const fragment = document.createDocumentFragment(); for (const it of chunk) { const itemEl = document.createElement("article"); itemEl.className = "result-item"; itemEl.dataset.itemId = it.id; itemEl.dataset.trackId = it.type.includes('video') || it.type.includes('track') ? it.id : ''; itemEl.setAttribute('title', it.titleOriginal); if (!it.logoType) sy_decorateItem(it); const logo = it.logoType === 'spotify' ? spotifyLogoSvg() : it.logoType === 'ytmusic' ? youtubeMusicLogoSvg() : youtubeLogoSvg(); let indicator = ''; if (it.type.includes('playlist')) { itemEl.classList.add("playlist-result-item"); if (it.source === 'spotify') itemEl.classList.add("spotify-playlist-result-item"); indicator = '<div class="playlist-indicator">LISTA</div>'; } itemEl.innerHTML = ` <div class="thumb-wrap"><img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="" width="56" height="56">${indicator} ${!it.type.includes('playlist') ? `<button class="card-play" title="Play/Pause" aria-label="Play/Pause" aria-pressed="false"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : ''} </div> <div class="meta"> <div class="title-line">${logo}<span class="title-text">${it.displaySong}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div> <div class="subtitle">${it.displayArtist}</div> </div> <div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`; itemEl.addEventListener("click", (e) => handleResultClick(e, it)); let pressTimer; itemEl.addEventListener('touchstart', (e) => { if (e.target.closest(".more, .card-play")) return; pressTimer = setTimeout(() => { e.preventDefault(); itemEl.querySelector(".more")?.click(); }, 500); }, { passive: true }); itemEl.addEventListener('touchend', () => clearTimeout(pressTimer)); itemEl.addEventListener('touchmove', () => clearTimeout(pressTimer)); fragment.appendChild(itemEl); } root.appendChild(fragment); refreshIndicators(); }
 async function handleResultClick(event, item, forcePlay = false) { if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return; switch (item.type) { case 'youtube_video': playFromSearch(item.id, true); break; case 'youtube_playlist': handlePlaylistResultClick(item.id, item.title); break; case 'spotify_track': playSpotifyTrack(item); break; case 'spotify_playlist': handleSpotifyImport(item.id); break; } }
 async function playSpotifyTrack(track) { const resultsContainer = $("#results"); const originalContent = resultsContainer.innerHTML; resultsContainer.innerHTML = `<div class="loading-indicator" aria-live="polite"><h3>Buscando en YouTube...</h3><p>${track.author} - ${track.title}</p></div>`; updateHomeGridVisibility(); const ytEquivalent = await findYoutubeEquivalent(track); resultsContainer.innerHTML = originalContent; if (ytEquivalent) { setQueue([ytEquivalent], "search", 0); viewingPlaylistId = null; playCurrent(true); switchView('view-player'); } else { alert("No se pudo encontrar un video para esta canción."); } }
 async function sy_promisePool(poolLimit, array, iteratorFn) { const ret = []; const executing = []; for (const item of array) { const p = Promise.resolve().then(() => iteratorFn(item)); ret.push(p); if (poolLimit <= array.length) { const e = p.then(() => executing.splice(executing.indexOf(e), 1)); executing.push(e); if (executing.length >= poolLimit) await Promise.race(executing); } } return Promise.all(ret); }
 async function handleSpotifyImport(playlistId) { const resultsContainer = $("#results"); resultsContainer.innerHTML = `<div class="loading-indicator" aria-live="polite"><h3>Importando desde Spotify...</h3><p>Esto puede tardar unos segundos.</p></div>`; updateHomeGridVisibility(); try { const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId); if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) throw new Error("No se pudo obtener la playlist o está vacía."); const youtubeQueue = (await sy_promisePool(8, spotifyPlaylist.tracks, findYoutubeEquivalent)).filter(Boolean); if (youtubeQueue.length > 0) { resultsContainer.innerHTML = ""; setQueue(youtubeQueue, 'youtube_playlist', 0); viewingPlaylistId = null; renderQueue(youtubeQueue, spotifyPlaylist.name); switchView('view-player'); playCurrent(true); } else { throw new Error("No se encontraron equivalentes en YouTube para las canciones de la lista."); } } catch (error) { console.error("Error al importar desde Spotify:", error); resultsContainer.innerHTML = `<div class="loading-indicator" aria-live="polite"><h3>Error al importar</h3><p>${error.message}</p></div>`; } }
 const sy_sp2yt_cache = { KEY: 'sy_sp2yt_v1', TTL: 7 * 24 * 60 * 60 * 1000, get(spId) { try { const cache = JSON.parse(localStorage.getItem(this.KEY) || '{}'); const entry = cache[spId]; if (entry && (Date.now() - entry.timestamp < this.TTL)) { return entry.ytId; } if (entry) delete cache[spId]; localStorage.setItem(this.KEY, JSON.stringify(cache)); return null; } catch { return null; } }, set(spId, ytId) { try { const cache = JSON.parse(localStorage.getItem(this.KEY) || '{}'); cache[spId] = { ytId, timestamp: Date.now() }; localStorage.setItem(this.KEY, JSON.stringify(cache)); } catch(e) { console.error("Error guardando en caché sp2yt:", e); } } };
 async function findYoutubeEquivalent(track) { if (!track || !track.title) return null; const cachedYtId = sy_sp2yt_cache.get(track.id); if (cachedYtId) { const details = await fetchVideoDetailsByIds([cachedYtId]); if(details[0]) return { ...details[0], originalId: track.id }; } const searchQuery = `${track.author} - ${track.title}`; const searchResult = await youtubeSearch(searchQuery, '', 1); const ytTrack = searchResult.items.find(item => item.type === 'youtube_video'); if (ytTrack) sy_sp2yt_cache.set(track.id, ytTrack.id); return ytTrack ? { ...ytTrack, originalId: track.id, thumb: ytTrack.thumb || track.thumb } : null; }
-async function fetchPlaylistItems(playlistId, retryCount = 0) { const MAX_RETRIES = YOUTUBE_API_KEYS.length; if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para la playlist ${playlistId}`); return []; } const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems'); const apiKey = getRotatedApiKey(); url.searchParams.append('key', apiKey); url.searchParams.append('part', 'snippet'); url.searchParams.append('playlistId', playlistId); url.searchParams.append('maxResults', 50); try { const response = await fetch(url); if (!response.ok) { if (response.status === 403) { return fetchPlaylistItems(playlistId, retryCount + 1); } throw new Error(`API error: ${response.status}`); } const data = await response.json(); return data.items.map(item => ({ id: item.snippet.resourceId.videoId, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })).filter(track => track.id); } catch (e) { console.error('Fallo al buscar items de la playlist:', e); return fetchPlaylistItems(playlistId, retryCount + 1); } }
+async function fetchPlaylistItems(playlistId, retryCount = 0) { const MAX_RETRIES = YOUTUBE_API_KEYS.length; if (retryCount >= MAX_RETRIES) { console.error(`Todas las API keys han fallado para la playlist ${playlistId}`); return []; } const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems'); const apiKey = getRotatedApiKey(); url.searchParams.append('key', apiKey); url.searchParams.append('part', 'snippet'); url.searchParams.append('playlistId', playlistId); url.searchParams.append('maxResults', 50); try { const response = await fetch(url); if (!response.ok) { if (response.status === 403) { return fetchPlaylistItems(playlistId, retryCount + 1); } throw new Error(`API error: ${response.status}`); } const data = await response.json(); return data.items.map(item => ({ id: item.snippet.resourceId.videoId, title: item.snippet.title, titleOriginal: item.snippet.title, author: item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle, thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })).filter(track => track.id); } catch (e) { console.error('Fallo al buscar items de la playlist:', e); return fetchPlaylistItems(playlistId, retryCount + 1); } }
 async function handlePlaylistResultClick(playlistId, playlistTitle) { try { const tracks = await fetchPlaylistItems(playlistId); if (tracks.length > 0) { setQueue(tracks, 'youtube_playlist', 0); viewingPlaylistId = null; renderQueue(tracks, playlistTitle); switchView('view-player'); playCurrent(true); } else { alert("Esta lista de reproducción está vacía o es privada."); } } catch (e) { console.error("No se pudo cargar la playlist:", e); alert("No se pudo cargar la lista de reproducción."); } }
 function renderPlaylistCard(playlist) { const container = $("#allPlaylistsContainer"); if (!container) return; const tracks = playlist.isRecommended ? playlist.data : playlist.tracks; if (!tracks || tracks.length === 0) return; const covers = tracks.slice(0, 4).map(track => track.thumb).filter(Boolean); while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="); const logo = playlist.isRecommended ? youtubeLogoSvg() : spotifyLogoSvg(); const card = document.createElement("article"); card.className = "playlist-card"; card.dataset.id = playlist.id || playlist.title; card.innerHTML = `<div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage" width="100" height="100" decoding="async">`).join('')}</div><div class="playlist-meta"><h4 class="playlist-title">${playlist.title || playlist.name}</h4><div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div></div>`; card.onclick = () => { const queueTracks = playlist.isRecommended ? playlist.data : playlist.tracks; const queueId = playlist.isRecommended ? null : playlist.id; const queueTitle = playlist.isRecommended ? playlist.title : playlist.name; setQueue(queueTracks, playlist.isRecommended ? 'recommended' : 'playlist', 0); viewingPlaylistId = queueId; renderQueue(queueTracks, queueTitle); switchView('view-player'); playCurrent(true); }; container.appendChild(card); }
 function updateHomeGridVisibility(){ const home = $("#homeSection"); if(!home) return; const shouldShow = (items.length===0 && !$(".loading-indicator")); home.classList.toggle("hide", !shouldShow); }
 const LS_FAVS = "sanayera_favs_v1"; function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_FAVS)||"[]"); }catch{ favs=[]; } } function saveFavs(){ localStorage.setItem(LS_FAVS, JSON.stringify(favs)); } function isFav(id){ return favs.some(f=>f.id===id); } function toggleFav(track){ if(isFav(track.id)) favs = favs.filter(f=>f.id!==track.id); else favs.unshift(track); saveFavs(); renderFavs(); refreshIndicators(); }
-function renderFavs(){ const ul = $("#favList"); if(!ul) return; ul.innerHTML=""; favs.forEach(it=>{ const li = document.createElement("li"); li.className = "fav-item"; li.dataset.trackId = it.id; li.innerHTML = `<div class="thumb-wrap"><img class="thumb" src="${it.thumb}" alt="" width="56" height="56" decoding="async"><button class="card-play" title="Play/Pause" aria-label="Play/Pause"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button></div><div class="meta"><div class="title-line"><span class="title-text">${it.title}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="subtitle">${cleanAuthor(it.author)||""}</div></div><div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`; li.addEventListener("click", e=>{ if(e.target.closest(".more") || e.target.closest(".card-play")) return; playFromFav(it, true); }); li.querySelector(".card-play").onclick = (e)=>{ e.stopPropagation(); if(currentTrack?.id === it.id){ togglePlay(); } else{ playFromFav(it, true); } }; ul.appendChild(li); }); updateHero(currentTrack); refreshIndicators(); }
+function renderFavs(){ const ul = $("#favList"); if(!ul) return; ul.innerHTML=""; const processedFavs = sy_processDisplayTitles(favs); processedFavs.forEach(it=>{ const li = document.createElement("li"); li.className = "fav-item"; li.dataset.trackId = it.id; li.setAttribute('title', it.titleOriginal); li.innerHTML = `<div class="thumb-wrap"><img class="thumb" src="${it.thumb}" alt="" width="56" height="56" decoding="async"><button class="card-play" title="Play/Pause" aria-label="Play/Pause"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button></div><div class="meta"><div class="title-line"><span class="title-text">${it.displaySong}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="subtitle">${it.displayArtist}</div></div><div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`; li.addEventListener("click", e=>{ if(e.target.closest(".more") || e.target.closest(".card-play")) return; playFromFav(it, true); }); li.querySelector(".card-play").onclick = (e)=>{ e.stopPropagation(); if(currentTrack?.id === it.id){ togglePlay(); } else{ playFromFav(it, true); } }; ul.appendChild(li); }); updateHero(currentTrack); refreshIndicators(); }
 const LS_USER_PLAYLIST_IDS = "sy_user_playlist_ids_v1"; function getMyPlaylistIds() { try { return JSON.parse(localStorage.getItem(LS_USER_PLAYLIST_IDS) || "[]"); } catch { return []; } } function addMyPlaylistId(id) { const ids=getMyPlaylistIds(); if(!ids.includes(id)){ ids.push(id); localStorage.setItem(LS_USER_PLAYLIST_IDS,JSON.stringify(ids)); } } function removeMyPlaylistId(id) { let ids=getMyPlaylistIds(); ids=ids.filter(pid=>pid!==id); localStorage.setItem(LS_USER_PLAYLIST_IDS,JSON.stringify(ids)); } function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); } async function handlePrivacyToggle(playlistId, isPublic) { try { const {doc,updateDoc}=window.firebase; await updateDoc(doc(db,"playlists",playlistId),{isPublic}); } catch(e){console.error("Error al actualizar privacidad:",e);} }
 async function openPlaylistOptionsMenu(pl) { if (!isMyPlaylist(pl.id)) return; openActionSheet({ title: pl.name, actions: [ { id: "rename", label: "Renombrar" }, { id: "delete", label: "Eliminar playlist", danger: true }, { id: "cancel", label: "Cancelar", ghost: true } ], onAction: async (act) => { const { doc, updateDoc, deleteDoc, serverTimestamp } = window.firebase; const plRef = doc(db, "playlists", pl.id); if (act === "rename") { const newName = prompt("Nuevo nombre para la playlist:", pl.name); if (newName === null || newName.trim().replace(/\s+/g, ' ') === "" || newName.trim().length > 50) { alert("Nombre inválido. Debe tener entre 1 y 50 caracteres."); return; } const newCreator = prompt("Nuevo nombre de creador (máx 20 caracteres):", pl.creator); if (newCreator === null || newCreator.trim().replace(/\s+/g, ' ') === "" || newCreator.trim().length > 20) { alert("Nombre de creador inválido. Debe tener entre 1 y 20 caracteres."); return; } try { await updateDoc(plRef, { name: newName.trim().replace(/\s+/g, ' '), creator: newCreator.trim().replace(/\s+/g, ' '), updatedAt: serverTimestamp() }); } catch (e) { console.error("Error al renombrar playlist:", e); alert("No se pudo renombrar la playlist."); } } if (act === "delete") { openActionSheet({ title: `¿Eliminar "${pl.name}"?`, actions: [ {id: "confirm_delete", label: "Sí, eliminar", danger: true}, {id: "cancel", label: "Cancelar", ghost: true} ], onAction: async (confirmAct) => { if(confirmAct === 'confirm_delete') { try { await deleteDoc(plRef); removeMyPlaylistId(pl.id); } catch (e) { console.error("Error al eliminar playlist:", e); alert("No se pudo eliminar la playlist."); } } } }); } } }); }
 function renderPlaylists() { const grid = $("#plList"), empty = $("#plEmpty"); if (!grid) return; grid.innerHTML = ""; const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id)); if (myPlaylists.length === 0) { empty?.classList.remove("hide"); return; } empty?.classList.add("hide"); myPlaylists.forEach(pl => { const card = document.createElement("article"); card.className="pl-item"; card.dataset.plId = pl.id; const cover = pl.tracks[0]?.thumb || "https://i.imgur.com/gCa3j5g.png"; card.innerHTML = `<img class="pl-thumb-bg" src="${cover}" alt="" width="150" height="180" decoding="async"><div class="pl-overlay"><div class="pl-meta"><div class="pl-title">${pl.name}</div><div class="pl-creator">por ${pl.creator || 'Anónimo'}</div><div class="pl-subtitle">${pl.tracks.length} temas</div></div><div class="pl-privacy-toggle"><label class="switch"><input type="checkbox" ${pl.isPublic ? 'checked' : ''}><span class="slider"></span></label><span>Pública</span></div></div><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`; card.querySelector(".more").addEventListener("click", (e) => { e.stopPropagation(); openPlaylistOptionsMenu(pl); }); card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => { handlePrivacyToggle(pl.id, e.target.checked); }); card.addEventListener("click", (e) => { if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return; showPlaylistInPlayer(pl.id); switchView("view-player"); }); card.classList.toggle("is-playing", viewingPlaylistId === pl.id && queueType === 'playlist'); grid.appendChild(card); }); }
@@ -345,8 +266,8 @@ $("#createPlConfirm").onclick = async () => { const name = $("#newPlName").value
 function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){ const sheet = $("#menuSheet"); if(!sheet) return; sheet.innerHTML = `<div class="sheet-content"><div class="sheet-title">${title}</div>${actions.map(a=>`<button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">${a.label}</button>`).join("")}</div>`; sheet.classList.add("show"); sheet.onclick = (e)=>{ if(e.target===sheet){ sheet.classList.remove("show"); return; } const btn = e.target.closest(".sheet-item"); if(!btn) return; const id = btn.dataset.id; sheet.classList.remove("show"); if(id) onAction(id); }; }
 async function openPlaylistSheet(track){ const sheet = $("#playlistSheet"); if(!sheet) return; sheet.classList.add("show"); const list = $("#plChoices"); list.innerHTML=""; const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id)); myPlaylists.forEach(pl=>{ const btn = document.createElement("button"); btn.className="sheet-item"; btn.textContent = pl.name; btn.onclick = async ()=>{ const { doc, updateDoc, serverTimestamp } = window.firebase; const plRef = doc(db, "playlists", pl.id); const updatedTracks = [...pl.tracks]; if (!updatedTracks.some(t => t.id === track.id)) { updatedTracks.unshift(track); } try { await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() }); sheet.classList.remove("show"); } catch(e) { console.error("Error agregando canción: ", e); alert("No se pudo agregar la canción."); } }; list.appendChild(btn); }); $("#plCreateFromSong").onclick = async () => { const name = $("#plNewNameFromSong").value.trim(); if (!name) return; const creator = prompt("Tu nombre (creador):")?.trim(); if (!creator) return; try { const { collection, addDoc, serverTimestamp } = window.firebase; const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [track], updatedAt: serverTimestamp(), isPublic: true }); addMyPlaylistId(docRef.id); $("#plNewNameFromSong").value = ""; sheet.classList.remove("show"); } catch (e) { console.error("Error creando playlist desde canción: ", e); alert("Hubo un error al crear la playlist."); } }; $("#plCancel").onclick = ()=> sheet.classList.remove("show"); sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true}); }
 function updateUIOnTrackChange() { updateHero(currentTrack); updateMiniNow(); refreshIndicators(); updateControlStates(); updateMediaSession(currentTrack); updateAndroidNotification(); }
-function updateHero(track){ const t = track || currentTrack; const favHero = $("#favHero"); const npHero  = $("#npHero"); if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none"; $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "—"); if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none"; $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción"); let plName = ""; if (queueType === 'playlist' && viewingPlaylistId) { const pl = communityPlaylists.find(p => p.id === viewingPlaylistId); plName = pl ? pl.name : ""; } else if (['recommended', 'youtube_playlist'].includes(queueType)) { plName = currentQueueTitle; } $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—")); }
-function setQueue(srcArr, type, idx){ sy_originalQueue = [...srcArr]; if (isShuffle) { const currentItem = srcArr[idx]; queue = sy_fisherYatesShuffle([...srcArr], sy_shuffledSeed); const newIdx = queue.findIndex(t => t.id === currentItem.id); if(newIdx > 0) { [queue[0], queue[newIdx]] = [queue[newIdx], queue[0]]; } idx = 0; } else { queue = [...srcArr]; } queueType = type; qIdx = idx; }
+function updateHero(track){ const t = track || currentTrack; const favHero = $("#favHero"); const npHero  = $("#npHero"); if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none"; $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.displaySong : "—"); if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none"; $("#npTitle") && ($("#npTitle").textContent = t ? t.displaySong : "Elegí una canción"); let plName = ""; if (queueType === 'playlist' && viewingPlaylistId) { const pl = communityPlaylists.find(p => p.id === viewingPlaylistId); plName = pl ? pl.name : ""; } else if (['recommended', 'youtube_playlist'].includes(queueType)) { plName = currentQueueTitle; } $("#npSub") && ($("#npSub").textContent = t ? `${t.displayArtist}${plName ? ` • ${plName}` : ""}` : (plName || "—")); }
+function setQueue(srcArr, type, idx){ const processedArr = sy_processDisplayTitles(srcArr); sy_originalQueue = [...processedArr]; if (isShuffle) { const currentItem = processedArr[idx]; queue = sy_fisherYatesShuffle([...processedArr], sy_shuffledSeed); const newIdx = queue.findIndex(t => t.id === currentItem.id); if(newIdx > 0) { [queue[0], queue[newIdx]] = [queue[newIdx], queue[0]]; } idx = 0; } else { queue = [...processedArr]; } queueType = type; qIdx = idx; }
 function playCurrent(autoplay=false){ if(!YT_READY || !queue || qIdx<0 || qIdx>=queue.length) return; currentTrack = queue[qIdx]; ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"}); if(!autoplay) ytPlayer.pauseVideo(); startTimer(); updateUIOnTrackChange(); }
 function playFromSearch(trackId, autoplay=false) { const videoItems = items.filter(it => it.source === 'youtube' && it.type === 'youtube_video'); const videoIndex = videoItems.findIndex(v => v.id === trackId); if (videoIndex > -1) { setQueue(videoItems, "search", videoIndex); viewingPlaylistId = null; playCurrent(autoplay); } }
 function playFromFav(track, autoplay=false){ const i = favs.findIndex(f=>f.id===track.id); setQueue(favs, "favs", Math.max(i,0)); viewingPlaylistId = null; playCurrent(autoplay); }
@@ -355,7 +276,7 @@ function playPlaylist(id){ const pl = communityPlaylists.find(p=>p.id===id); if(
 function togglePlay(){ if(!YT_READY || !currentTrack) return; const st = ytPlayer.getPlayerState(); (st===YT.PlayerState.PLAYING)? ytPlayer.pauseVideo() : ytPlayer.playVideo(); }
 $("#npPlay")?.addEventListener("click", togglePlay); $("#miniPlay")?.addEventListener("click", togglePlay);
 async function removeFromPlaylist(plId, trackId){ const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return; const { doc, updateDoc, serverTimestamp } = window.firebase; const plRef = doc(db, "playlists", plId); const updatedTracks = pl.tracks.filter(t => t.id !== trackId); try { await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() }); } catch (e) { console.error("Error quitando canción: ", e); alert("No se pudo quitar la canción."); } }
-function updateMiniNow(){ const has = !!currentTrack; const dock = $("#seekDock"); dock && dock.classList.toggle("show", has); if(!has) return; $("#miniThumb") && ($("#miniThumb").src = currentTrack.thumb); $("#miniTitle") && ($("#miniTitle").textContent = currentTrack.title); $("#miniAuthor") && ($("#miniAuthor").textContent = cleanAuthor(currentTrack.author) || ""); }
+function updateMiniNow(){ const has = !!currentTrack; const dock = $("#seekDock"); dock && dock.classList.toggle("show", has); if(!has) return; $("#miniThumb") && ($("#miniThumb").src = currentTrack.thumb); $("#miniTitle") && ($("#miniTitle").textContent = currentTrack.displaySong); $("#miniAuthor") && ($("#miniAuthor").textContent = currentTrack.displayArtist || ""); }
 function getNextIndex() { if (!queue) return -1; if (repeatMode === 'one' && getPlaybackState() !== 'none') return qIdx; let next = qIdx + 1; if (next >= queue.length) return (repeatMode === 'all') ? 0 : -1; return next; }
 function next(){ const nextIdx = getNextIndex(); if (nextIdx !== -1) { qIdx = nextIdx; playCurrent(true); } else { ytPlayer.stopVideo(); currentTrack = null; updateUIOnTrackChange(); } }
 function prev(){ if (!queue) return; if (ytPlayer.getCurrentTime() > 3) ytPlayer.seekTo(0, true); else if (qIdx - 1 >= 0) { qIdx--; playCurrent(true); } }
@@ -369,7 +290,7 @@ function toggleShuffle() { isShuffle = !isShuffle; $("#btnShuffle")?.classList.t
 function cycleRepeat() { const modes = ['none', 'all', 'one']; const currentModeIdx = modes.indexOf(repeatMode); repeatMode = modes[(currentModeIdx + 1) % modes.length]; const btn = $("#btnRepeat"); if(btn) { btn.classList.toggle('active', repeatMode !== 'none'); btn.innerHTML = (repeatMode === 'one') ? `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>` : `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`; } }
 function updateControlStates() { $("#btnShuffle")?.classList.toggle('active', isShuffle); $("#btnRepeat")?.classList.toggle('active', repeatMode !== 'none'); }
 $("#btnShuffle")?.addEventListener("click", toggleShuffle); $("#btnRepeat")?.addEventListener("click", cycleRepeat);
-function renderQueue(queueItems, title) { const panel = $("#queuePanel"); currentQueueTitle = title; panel && panel.classList.remove("hide"); const header = panel.querySelector(".section-head"); if (header) { let saveBtn = header.querySelector('#btnSavePlaylist'); if (saveBtn) saveBtn.remove(); const titleEl = header.querySelector('#queueTitle'); if (titleEl) titleEl.textContent = title; if ((queueType === 'youtube_playlist' || queueType === 'spotify_playlist') && queue?.length > 0) { saveBtn = document.createElement('button'); saveBtn.id = 'btnSavePlaylist'; saveBtn.className = 'pill'; saveBtn.textContent = 'Guardar Lista'; saveBtn.onclick = saveCurrentQueueAsPlaylist; header.appendChild(saveBtn); } } const ul = $("#queueList"); if (!ul) return; ul.innerHTML = ""; const isUserPlaylist = queueType === 'playlist'; if (!isUserPlaylist) viewingPlaylistId = null; (queueItems || []).forEach((t, i) => { const li = document.createElement("li"); li.className = "queue-item"; li.dataset.trackId = t.id; li.innerHTML = `<div class="thumb-wrap"><img class="thumb" src="${t.thumb}" alt="" width="56" height="56" decoding="async"><button class="card-play" title="Play" aria-label="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button></div><div class="meta"><div class="title-line"><span class="title-text">${t.title}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="subtitle">${cleanAuthor(t.author) || ""}</div></div><div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`; li.onclick = (e) => { if (e.target.closest(".more") || e.target.closest(".card-play")) return; qIdx = i; playCurrent(true); }; li.querySelector(".card-play").onclick = (e) => { e.stopPropagation(); qIdx = i; playCurrent(true); }; ul.appendChild(li); }); refreshIndicators(); }
+function renderQueue(queueItems, title) { const panel = $("#queuePanel"); currentQueueTitle = title; panel && panel.classList.remove("hide"); const header = panel.querySelector(".section-head"); if (header) { let saveBtn = header.querySelector('#btnSavePlaylist'); if (saveBtn) saveBtn.remove(); const titleEl = header.querySelector('#queueTitle'); if (titleEl) titleEl.textContent = title; if ((queueType === 'youtube_playlist' || queueType === 'spotify_playlist') && queue?.length > 0) { saveBtn = document.createElement('button'); saveBtn.id = 'btnSavePlaylist'; saveBtn.className = 'pill'; saveBtn.textContent = 'Guardar Lista'; saveBtn.onclick = saveCurrentQueueAsPlaylist; header.appendChild(saveBtn); } } const ul = $("#queueList"); if (!ul) return; ul.innerHTML = ""; const isUserPlaylist = queueType === 'playlist'; if (!isUserPlaylist) viewingPlaylistId = null; (queueItems || []).forEach((t, i) => { const li = document.createElement("li"); li.className = "queue-item"; li.dataset.trackId = t.id; li.setAttribute('title', t.titleOriginal); li.innerHTML = `<div class="thumb-wrap"><img class="thumb" src="${t.thumb}" alt="" width="56" height="56" decoding="async"><button class="card-play" title="Play" aria-label="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button></div><div class="meta"><div class="title-line"><span class="title-text">${t.displaySong}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div><div class="subtitle">${t.displayArtist}</div></div><div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`; li.onclick = (e) => { if (e.target.closest(".more") || e.target.closest(".card-play")) return; qIdx = i; playCurrent(true); }; li.querySelector(".card-play").onclick = (e) => { e.stopPropagation(); qIdx = i; playCurrent(true); }; ul.appendChild(li); }); refreshIndicators(); }
 async function saveCurrentQueueAsPlaylist() { if (!queue || queue.length === 0) { alert("No hay una lista de reproducción válida para guardar."); return; } let creator = localStorage.getItem('sy_creator_name'); if (!creator) { creator = prompt("Para guardar, ingresá tu nombre de creador:")?.trim(); if (!creator) return; localStorage.setItem('sy_creator_name', creator); } const btn = $('#btnSavePlaylist'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; } try { const { collection, addDoc, serverTimestamp } = window.firebase; const docRef = await addDoc(collection(db, "playlists"), { name: currentQueueTitle, creator, tracks: queue, updatedAt: serverTimestamp(), isPublic: true }); addMyPlaylistId(docRef.id); if (btn) { btn.textContent = 'Guardada ✔'; } } catch (e) { console.error("Error guardando la playlist: ", e); alert("Hubo un error al guardar la playlist."); if (btn) { btn.disabled = false; btn.textContent = 'Guardar Lista'; } } }
 function showPlaylistInPlayer(plId){ const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return; viewingPlaylistId = plId; queueType = 'playlist'; setQueue(pl.tracks, 'playlist', qIdx > -1 ? qIdx : 0); renderQueue(pl.tracks, pl.name); }
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
@@ -381,9 +302,9 @@ window.onYouTubeIframeAPIReady = function(){ ytPlayer = new YT.Player("player",{
 const sentinel = $("#sentinel"); if (sentinel){ const io = new IntersectionObserver((entries)=>{ if (entries[0].isIntersecting && paging.hasMore && !paging.loading){ loadNextPage(); } },{ root:null, rootMargin:"800px 0px", threshold:0 }); io.observe(sentinel); }
 let rafPending = false; let lastScrollY = 0; let targetT = 0, currentT = 0; const EPS = 0.001; const DIST = 200; function applyHeroT(t){ const tSnap=Math.round(t*1000)/1000; const a=document.querySelector(".view.active"); if(!a)return; const fav=a.querySelector("#favHero, .fav-hero"); const np=a.querySelector("#npHero, .np-hero, .player-header-sticky"); if(fav)fav.style.setProperty("--hero-t", tSnap); if(np)np.style.setProperty("--hero-t",tSnap); } function heroScrollTickRaf(){ rafPending=false; const a=document.querySelector(".view.active"); if(!a){applyHeroT(0);return;} const vT=a.getBoundingClientRect().top+window.scrollY; const y=Math.max(0,lastScrollY - vT); targetT=Math.min(1,y/DIST); currentT+=(targetT-currentT)*0.25; if(Math.abs(targetT-currentT)<EPS)currentT=targetT; applyHeroT(currentT); if(Math.abs(targetT-currentT)>=EPS){requestAnimationFrame(heroScrollTickRaf);rafPending=true;} } function heroScrollInvalidate(){ lastScrollY=window.scrollY||document.documentElement.scrollTop||0; if(!rafPending){rafPending=true;requestAnimationFrame(heroScrollTickRaf);} } window.addEventListener("scroll", heroScrollInvalidate, { passive:true }); window.addEventListener("resize", heroScrollInvalidate, { passive:true });
 let mediaSessionHandlersSet = false;
-function updateMediaSession(track){ if(!('mediaSession' in navigator)||!track)return; navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]}); if(!mediaSessionHandlersSet){ mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true) })); navigator.mediaSession.setActionHandler('seekforward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true) })); navigator.mediaSession.setActionHandler('seekto',s(d=>{ if(!YT_READY||!d||typeof d.seekTime!=='number')return; ytPlayer.seekTo(d.seekTime,true) })); } const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none')); }
+function updateMediaSession(track){ if(!('mediaSession' in navigator)||!track)return; navigator.mediaSession.metadata=new MediaMetadata({title:track.displaySong||'Reproduciendo',artist:track.displayArtist||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]}); if(!mediaSessionHandlersSet){ mediaSessionHandlersSet=true; const s=fn=>()=>{try{fn()}catch(e){}}; navigator.mediaSession.setActionHandler('play',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay())); navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev())); navigator.mediaSession.setActionHandler('nexttrack',s(()=>next())); navigator.mediaSession.setActionHandler('seekbackward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true) })); navigator.mediaSession.setActionHandler('seekforward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true) })); navigator.mediaSession.setActionHandler('seekto',s(d=>{ if(!YT_READY||!d||typeof d.seekTime!=='number')return; ytPlayer.seekTo(d.seekTime,true) })); } const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none')); }
 function canUseAndroidBridge(){ try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; } }
-function updateAndroidNotification(){ if (!canUseAndroidBridge()) return; const isPlaying = getPlaybackState() === 'playing'; if (!currentTrack) { AndroidBridge.stopNotification(); return; } AndroidBridge.updateNotification( currentTrack.title || '', cleanAuthor(currentTrack.author || ''), currentTrack.thumb || '', isPlaying ); }
+function updateAndroidNotification(){ if (!canUseAndroidBridge()) return; const isPlaying = getPlaybackState() === 'playing'; if (!currentTrack) { AndroidBridge.stopNotification(); return; } AndroidBridge.updateNotification( currentTrack.displaySong || '', currentTrack.displayArtist || '', currentTrack.thumb || '', isPlaying ); }
 window.handleNativeControl = function(c){ const a=String(c||'').toLowerCase(); if(a==='action_play'){if(YT_READY&&ytPlayer)ytPlayer.playVideo();return} if(a==='action_pause'){if(YT_READY&&ytPlayer)ytPlayer.pauseVideo();return} if(a==='action_next'){next();return} if(a==='action_prev'){prev();return} };
 async function boot(){ initTheme(); const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" }; const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"); const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"); window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc }; const app = initializeApp(firebaseConfig); db = getFirestore(app); onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => { communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); renderPlaylists(); renderAllHomePlaylists(); if (viewingPlaylistId && queueType === 'playlist') { const updatedPlaylist = communityPlaylists.find(p => p.id === viewingPlaylistId); if(updatedPlaylist){ const currentId=currentTrack?currentTrack.id:null; renderQueue(updatedPlaylist.tracks,updatedPlaylist.name); setQueue(updatedPlaylist.tracks,'playlist',qIdx); const newIdx=updatedPlaylist.tracks.findIndex(t=>t.id===currentId); if(newIdx!==-1){qIdx=newIdx}else{qIdx=Math.min(qIdx,updatedPlaylist.tracks.length-1);if(updatedPlaylist.tracks.length===0){currentTrack=null;ytPlayer.stopVideo()}else{currentTrack=queue[qIdx]} updateUIOnTrackChange()} }else{hideQueuePanel();if(queueType==='playlist'){currentTrack=null;queue=null;ytPlayer.stopVideo();updateUIOnTrackChange()}} } }); const playlistKeys = Object.keys(recommendedPlaylists); const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids)); const results = await Promise.all(fetchPromises); playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; }); renderAllHomePlaylists(); updateHomeGridVisibility(); loadFavs(); renderFavs(); loadYTApi(); const savedState = loadPlayerState(); if (savedState) restorePlayerState(savedState); heroScrollInvalidate(); document.title = "SanaveraYou Pro"; }
 function renderAllHomePlaylists() { const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && p.tracks && p.tracks.length > 0); const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ]; allPlaylists.sort((a, b) => { const dateA = a.updatedAt?.toDate() || new Date(0); const dateB = b.updatedAt?.toDate() || new Date(0); return dateB - dateA; }); const container = $("#allPlaylistsContainer"); if(container) container.innerHTML = ""; allPlaylists.forEach(p => renderPlaylistCard(p)); }
