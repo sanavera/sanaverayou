@@ -10,7 +10,7 @@
   --accent:#ef4444; --accent-hover:#dc2626; --accent-light:#f87171;
   --dots:#ff6b6b;
 
-  /* navegaciÃ³n / player */
+  /* navegación / player */
   --dock-bg:#0b0a11;
   --mini-bg:rgba(11,10,17,1);
   --track-bg:rgba(255,255,255,.12);
@@ -58,7 +58,7 @@ body{
 .up{ text-transform:uppercase; letter-spacing:.08em; font-weight:700; font-size:.7rem; }
 .hide{display:none !important}
 
-/* â€”â€”â€” Flotantes arriba â€”â€”â€” */
+/* ——— Flotantes arriba ——— */
 .logo-float{
   position:fixed; left:12px; top:12px; z-index:1200;
   width:36px; height:36px; border-radius:10px; object-fit:cover;
@@ -108,7 +108,7 @@ body{
 html[data-theme="light"] .theme-toggle .sun{ display:none; }
 html[data-theme="light"] .theme-toggle .moon{ display:block; }
 
-/* Overlay de bÃºsqueda */
+/* Overlay de búsqueda */
 .search-overlay{ position:fixed; inset:0; display:none; z-index:1100; background:rgba(0,0,0,.45); backdrop-filter:blur(2px);}
 .search-overlay.show{display:block;}
 .search-card{
@@ -125,7 +125,7 @@ html[data-theme="light"] .search-card{ background:rgba(255,255,255,.98); border-
 html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a; border-color:#e2e8f0; }
 #overlaySearchInput:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(239,68,68,.1);}
 
-/* â€”â€”â€” Vistas â€”â€”â€” */
+/* ——— Vistas ——— */
 .view{
   display:none;
   padding: var(--side-pad);
@@ -175,7 +175,7 @@ html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a;
 .thumb{width:56px;height:56px;border-radius:12px;object-fit:cover;border:2px solid rgba(255,255,255,.08)}
 html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 
-/* BotÃ³n play sobre thumb */
+/* Botón play sobre thumb */
 .card-play{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:40px;height:40px;border-radius:50%;border:none;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.55);padding:0;
@@ -198,7 +198,7 @@ html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 .icon-btn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 .icon-btn.more, .icon-btn.more svg, .icon-btn.more path{color:var(--dots)!important;fill:var(--dots)!important}
 
-/* ====== PLAYLISTS (Nuevo diseÃ±o de tarjetas) ====== */
+/* ====== PLAYLISTS (Nuevo diseño de tarjetas) ====== */
 .pl-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -206,7 +206,7 @@ html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 }
 .pl-item {
   position: relative;
-  aspect-ratio: 1 / 1.2; /* Ligeramente mÃ¡s alto */
+  aspect-ratio: 1 / 1.2; /* Ligeramente más alto */
   border-radius: var(--radius);
   overflow: hidden;
   background-color: var(--surface);
@@ -350,7 +350,7 @@ input:checked + .slider:before {
   opacity: calc(1 - var(--hero-t, 0) * 2);
 }
 
-/* ===== Reproductor (Header pegado que tambiÃ©n achica) ===== */
+/* ===== Reproductor (Header pegado que también achica) ===== */
 .player-header-sticky {
   position: sticky;
   top: var(--side-pad);
@@ -474,7 +474,7 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
 }
 .mini-btn .i-pause{display:none}.mini-btn.playing .i-play{display:none}.mini-btn.playing .i-pause{display:block}
 
-/* ===== MenÃº de los 3 puntitos (Sheet) ===== */
+/* ===== Menú de los 3 puntitos (Sheet) ===== */
 .sheet{position:fixed; inset:0; display:none; z-index:1300; background:rgba(8,9,12,.55); backdrop-filter:blur(6px);}
 .sheet.show{ display:block; }
 .sheet-content{
@@ -516,7 +516,7 @@ html[data-theme="light"] .sheet-actions .pill { color: #fff; }
 .sheet-row input { flex: 1; }
 
 
-/* BotÃ³n â€œNueva / Crearâ€ */
+/* Botón “Nueva / Crear” */
 .pill{ padding:9px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.15);
   background:rgba(255,255,255,.08); color:#fff; font-weight:600; cursor:pointer; transition:var(--fast); }
 html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:#0f172a; }
@@ -717,15 +717,47 @@ html, body { background-color: var(--bg); }
   border-left: 3px solid #1DB954;
 }
 
-/* === Search Mode Switch (pills) === */
-.sy-search-mode{ display:flex; gap:.5rem; margin-top:.5rem; }
-.sy-mode-pill{ display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .6rem; background:var(--chip-bg, rgba(255,255,255,.06)); border-radius:999px; user-select:none; cursor:pointer; }
-.sy-mode-pill input{ appearance:none; width:0; height:0; position:absolute; }
-.sy-mode-pill span{ font-size:.9rem; opacity:.9; }
-.sy-mode-pill:has(input:checked){ background:var(--accent, #e74c3c); color:#fff; }
-#syClickShield{ touch-action:none; }
+/* ========== Spotify Import UI (Ayelén) ========== */
+.sy-pl-toolbar{
+  display:flex; justify-content:flex-end; align-items:center;
+  gap:8px; margin: 8px 8px 12px;
+}
+.sy-spotify-icon{
+  width:18px; height:18px; display:inline-block; margin-right:8px;
+  background: radial-gradient(circle at 30% 30%, #1db954, #128a3b);
+  border-radius:50%;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.08);
+}
+.sy-modal{ position: fixed; inset:0; display:none; z-index: 10000; }
+.sy-modal.show{ display:block; }
+.sy-modal__overlay{ position:absolute; inset:0; background: rgba(0,0,0,.45); }
+.sy-modal__card{
+  position: relative; margin: 6vh auto 0; max-width: 680px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 16px; padding: 16px 16px 12px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.35);
+}
+.sy-modal__header{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.sy-modal__header h3{ margin:0; }
+.sy-modal__body .muted{ opacity:.8; font-size:14px; }
+.sy-field{ display:flex; flex-direction:column; gap:4px; margin: 12px 0; }
+.sy-field input{ padding:10px 12px; border:1px solid var(--border); border-radius:10px; background: var(--bg); color: var(--ink); }
+.sy-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
+.sy-spinner{ text-align:center; padding: 8px; }
+.sy-error{ background:#2b1c1c; color:#f6d6d6; padding: 8px 10px; border-radius: 8px; border:1px solid #472525; }
 
-/* dark theme fixes */
-:root{ --app-dark-bg:#0f1218; --app-dark-surface:#121826; }
-body.dark, body.theme-dark{ background: var(--app-dark-bg) !important; }
-.hero, .player-hero, .player-header, .sticky-hero{ background: var(--app-dark-bg); }
+.sy-pl-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin: 10px 0; }
+.sy-checkall{ display:flex; align-items:center; gap:6px; }
+.sy-switch{ display:flex; align-items:center; gap:8px; font-size:13px; opacity:.9; }
+.sy-pl-list{ max-height: 52vh; overflow:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px; }
+.sy-pl-row{ display:grid; grid-template-columns: 20px 48px 1fr auto; gap:10px; align-items:center; padding:8px; border:1px solid var(--border); border-radius:12px; background: var(--surface-2, var(--surface)); }
+.sy-pl-row img{ width:48px; height:48px; object-fit:cover; border-radius:8px; background: #111; }
+.sy-pl-meta{ display:flex; flex-direction:column; }
+.sy-pl-name{ font-weight:700; }
+.sy-pl-sub{ font-size:12px; opacity:.75; }
+
+/* Body lock when modal open */
+.sy-modal-open{ overflow:hidden; }
+
+/* Dark theme safety */
+html[data-theme="dark"] .sy-modal__card{ background: var(--bg-secondary, #0f1214); }
+
