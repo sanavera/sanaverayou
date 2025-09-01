@@ -1,19 +1,3 @@
-
-// --- Auto assemble SPOTIFY_BASIC if missing ---
-(function(){
-  if (!window.SPOTIFY_BASIC) {
-    const ids = [
-      window.SPOTIFY_CLIENT_ID, window.SPOTIFY_ID, window.SP_ID, window.SPOTIFY_APP_ID
-    ].filter(Boolean);
-    const secs = [
-      window.SPOTIFY_CLIENT_SECRET, window.SPOTIFY_SECRET, window.SP_SECRET, window.SPOTIFY_APP_SECRET
-    ].filter(Boolean);
-    if (ids.length && secs.length) {
-      try { window.SPOTIFY_BASIC = btoa(String(ids[0]) + ':' + String(secs[0])); } catch(e){}
-    }
-  }
-})();
-
 /* ========= Utils ========= */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -303,7 +287,7 @@ async function getSpotifyToken() {
         const data = await response.json();
         spotifyToken = {
             value: data.access_token,
-            expires: Date.now() + (data.expires_in * 1000) - 60000
+            expires: Date.now() + (data.expires_in * 1000) - 60000 // Refresh 1 min before expiry
         };
         return spotifyToken.value;
     } catch (e) {
@@ -1615,11 +1599,8 @@ boot();
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 
-/* ========== Spotify Import UI & Logic (Ayelén) ========== */
-
-/* Config: set this at runtime if you have real credentials */
-// window.SPOTIFY_BASIC = btoa('<client_id>' + ':' + '<client_secret>');
-const SPOTIFY_IMPORT_MAX_TRACKS = 50; // visible hint only; we don't fetch tracks yet here
+/* ========== Spotify Import UI & Logic (CORREGIDO) ========== */
+const SPOTIFY_IMPORT_MAX_TRACKS = 50; 
 
 function sy_initSpotifyImportUI() {
   const playlistsView = document.getElementById('view-playlists');
@@ -1634,15 +1615,13 @@ function sy_initSpotifyImportUI() {
   btn.id = 'syBtnImportSpotify';
   btn.className = 'pill accent';
   btn.type = 'button';
-  btn.innerHTML = `<span class="sy-spotify-icon" aria-hidden="true"></span> Importar desde Spotify`;
+  btn.innerHTML = `<svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em" style="margin-right: 8px;"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg> Importar desde Spotify`;
   if (header && header.parentElement === playlistsView) {
     playlistsView.insertBefore(bar, header.nextElementSibling || grid);
   } else {
     playlistsView.insertBefore(bar, grid);
   }
   bar.appendChild(btn);
-  btn.addEventListener('click', sy_openSpotifyImportModal);
-
   btn.addEventListener('click', sy_openSpotifyImportModal);
 }
 
@@ -1656,20 +1635,17 @@ function sy_openSpotifyImportModal() {
     <div class="sy-modal__overlay" data-close="1"></div>
     <div class="sy-modal__card" role="dialog" aria-modal="true" aria-labelledby="sySmTitle">
       <div class="sy-modal__header">
-        <div class="sy-spotify-icon"></div>
         <h3 id="sySmTitle">Importar playlists desde Spotify</h3>
       </div>
       <div class="sy-modal__body" id="sySmBody">
-        <p class="muted">Ingresá tu usuario de Spotify o pegá el enlace a tu perfil. Solo listas públicas. Límite por lista: ${SPOTIFY_IMPORT_MAX_TRACKS} temas.</p>
+        <p class="muted">Ingresá tu nombre de usuario de Spotify o pegá el enlace a tu perfil para buscar tus listas públicas.</p>
         <label class="sy-field">
           <span>Usuario o URL de perfil</span>
           <input id="sySmInput" type="text" placeholder="ej. luchosanavera o https://open.spotify.com/user/..." autocomplete="off">
         </label>
         <div class="sy-actions">
           <button class="btn" id="sySmCancel">Cancelar</button>
-          <button class="btn accent" id="sySmFetch">Importar</button>
-        </div>
-        
+          <button class="btn accent" id="sySmFetch">Buscar Playlists</button>
         </div>
         <div class="sy-spinner" id="sySmSpinner" hidden>Cargando…</div>
         <div id="sySmResults" class="sy-pl-results" hidden></div>
@@ -1677,7 +1653,6 @@ function sy_openSpotifyImportModal() {
     </div>
   `;
   document.body.appendChild(modal);
-  // if no creds, show inline credential helper
   
   modal.addEventListener('click', (e)=>{ if (e.target.dataset.close) sy_showModal('sySpotifyModal', false); });
   document.getElementById('sySmCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
@@ -1696,56 +1671,16 @@ function sy_showModal(id, show) {
 
 function sy_parseSpotifyUserId(input) {
   if (!input) return null;
-  input = input.trim();
-  
-  try {
-    const u = new URL(input);
-    const parts = u.pathname.split('/').filter(Boolean);
-    
-    // strip optional locale segment like intl-es
-    const p = parts[0] && parts[0].startsWith('intl-') ? parts.slice(1) : parts;
-    
-    // handle /user/{id}/playlists and /profile/{id}/playlists
-    const ixUser = p.indexOf('user');
-    const ixProf = p.indexOf('profile');
-    
-    if (ixUser !== -1 && p[ixUser+1]) return p[ixUser+1];
-    if (ixProf !== -1 && p[ixProf+1]) return p[ixProf+1];
-    
-    // handle other patterns
-    const idx = parts.indexOf('user');
-    if (idx >= 0 && parts.length > idx + 1) { return parts[idx + 1]; }
-    
-    // https://open.spotify.com/intl-es/user/{id}
-    const idx2 = parts.indexOf('intl-es');
-    if (idx2 !== -1 && parts[idx2+1] === 'user' && parts[idx2+2]) return parts[idx2+2];
-    
-  } catch(_) {}
-  
-  // fallback plain text (might be a real user_id)
-  return input;
-}
-
-async function sy_getSpotifyToken() {
-  if (!window.SPOTIFY_BASIC) throw new Error('Falta configurar SPOTIFY_BASIC');
-  // cache in sessionStorage
-  const cached = sessionStorage.getItem('sy_spotify_token');
-  const exp = Number(sessionStorage.getItem('sy_spotify_token_exp')||0);
-  if (cached && Date.now() < exp) return cached;
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Basic ' + window.SPOTIFY_BASIC,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: 'grant_type=client_credentials'
-  });
-  if (!res.ok) throw new Error('Token Spotify error ' + res.status);
-  const data = await res.json();
-  const ttl = (data.expires_in || 3600) - 120;
-  sessionStorage.setItem('sy_spotify_token', data.access_token);
-  sessionStorage.setItem('sy_spotify_token_exp', String(Date.now()+ ttl*1000));
-  return data.access_token;
+  const cleanedInput = input.trim().split('?')[0];
+  const spotifyUserRegex = /open\.spotify\.com\/(?:user|profile)\/([a-zA-Z0-9]+)/;
+  const match = cleanedInput.match(spotifyUserRegex);
+  if (match && match[1]) {
+    return match[1];
+  }
+  if (!cleanedInput.includes('/') && !cleanedInput.includes(':')) {
+    return cleanedInput;
+  }
+  return null;
 }
 
 async function sy_fetchSpotifyUserPlaylists() {
@@ -1757,16 +1692,26 @@ async function sy_fetchSpotifyUserPlaylists() {
   results.innerHTML = '';
   spinner.hidden = false;
 
+  if (!userId) {
+    spinner.hidden = true;
+    results.innerHTML = `<p class="muted">Formato de usuario o URL no válido. Por favor, intenta de nuevo.</p>`;
+    results.hidden = false;
+    return;
+  }
+
   try {
-    const token = await sy_getSpotifyToken();
+    const token = await getSpotifyToken(); // Usamos la función de token global
     let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
     const all = [];
     while (url) {
       const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token }});
-      if (!r.ok) throw new Error('Spotify ' + r.status);
+      if (!r.ok) {
+         if (r.status === 404) throw new Error(`Usuario <strong>${userId}</strong> no encontrado.`);
+         throw new Error('Error de API de Spotify: ' + r.status);
+      }
       const d = await r.json();
       for (const it of (d.items||[])) {
-        all.append? all.append(it) : all.push(it);
+        all.push(it);
       }
       url = d.next;
     }
@@ -1776,7 +1721,7 @@ async function sy_fetchSpotifyUserPlaylists() {
     }
     sy_renderSpotifyPlaylistsSelection(userId, all);
   } catch (e) {
-    results.innerHTML = `<div class=\"sy-error\">No se pudo leer Spotify ahora. Si sos el dueño del sitio, configurá el token de la app. Los usuarios no deben ingresar credenciales.</div>`;
+    results.innerHTML = `<div class="sy-error">No se pudieron obtener las playlists. <br><small>${e.message}</small></div>`;
     results.hidden = false;
   } finally {
     spinner.hidden = true;
@@ -1784,27 +1729,22 @@ async function sy_fetchSpotifyUserPlaylists() {
 }
 
 function sy_renderSpotifyPlaylistsSelection(userId, list) {
-  const body = document.getElementById('sySmBody');
   const results = document.getElementById('sySmResults');
   results.hidden = false;
-  const total = list.length;
-  const checks = list.map((p, idx) => {
-    const cover = (p.images && p.images[0] && p.images[0].url) || '';
-    const tracks = p.tracks && p.tracks.total || 0;
+  
+  const checks = list.map((p) => {
+    const cover = p.images?.[0]?.url || '';
+    const tracks = p.tracks?.total || 0;
     const id = p.id;
     const name = p.name || 'Playlist sin nombre';
     return `
       <label class="sy-pl-row">
         <input type="checkbox" class="sy-pl-check" data-plid="${id}" data-plname="${String(name).replace(/"/g,'&quot;')}" data-tracks="${tracks}" data-cover="${String(cover).replace(/"/g,'&quot;')}" checked>
-        <img src="${cover}" alt="" onerror="this.style.visibility='hidden'">
+        <img src="${cover}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
         <div class="sy-pl-meta">
           <div class="sy-pl-name">${name}</div>
           <div class="sy-pl-sub">${tracks} temas</div>
         </div>
-        <label class="sy-switch">
-          <input type="checkbox" class="sy-pl-public" data-plid="${id}" checked>
-          <span>Pública</span>
-        </label>
       </label>`;
   }).join('');
 
@@ -1812,11 +1752,7 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
     <div class="sy-pl-head">
       <label class="sy-checkall">
         <input type="checkbox" id="syPlAll" checked>
-        <span>Seleccionar todo</span>
-      </label>
-      <label class="sy-switch">
-        <input type="checkbox" id="syPlAllPublic" checked>
-        <span>Poner todas en público</span>
+        <span>Seleccionar todo (${list.length})</span>
       </label>
     </div>
     <div class="sy-pl-list">
@@ -1824,7 +1760,7 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
     </div>
     <div class="sy-actions">
       <button class="btn" id="syPlCancel">Cerrar</button>
-      <button class="btn accent" id="syPlImport">Importar</button>
+      <button class="btn accent" id="syPlImport">Importar Seleccionadas</button>
     </div>
   `;
 
@@ -1832,20 +1768,17 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
   document.getElementById('syPlAll').onchange = (e)=> {
     document.querySelectorAll('#sySmResults .sy-pl-check').forEach(ch => ch.checked = e.target.checked);
   };
-  document.getElementById('syPlAllPublic').onchange = (e)=> {
-    document.querySelectorAll('#sySmResults .sy-pl-public').forEach(ch => ch.checked = e.target.checked);
-  };
   document.getElementById('syPlImport').onclick = async ()=> {
     const selected = Array.from(document.querySelectorAll('#sySmResults .sy-pl-check:checked'));
-    if (selected.length === 0) { alert('No seleccionaste playlists.'); return; }
+    if (selected.length === 0) { alert('No seleccionaste ninguna playlist para importar.'); return; }
     const payload = selected.map(ch => ({
       source: 'spotify',
       spotifyId: ch.dataset.plid,
       name: ch.dataset.plname,
       creator: userId,
-      isPublic: !!document.querySelector(`#sySmResults .sy-pl-public[data-plid="${ch.dataset.plid}"]`)?.checked,
+      isPublic: true, // Todas se importan como públicas por defecto
       cover: ch.dataset.cover || '',
-      tracks: [],
+      tracks: [], // Se llenarán después
       updatedAt: new Date()
     }));
     await sy_saveImportedPlaylists(payload);
@@ -1856,14 +1789,12 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
 }
 
 async function sy_saveImportedPlaylists(list) {
-  // Prefer Firestore if available
+  // Guardar en Firestore
   try {
-    if (typeof getFirestore === 'function' && window.db) {
-      const { getFirestore, collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const dbi = window.db || getFirestore();
-      const col = collection(dbi, 'playlists');
+    if (window.firebase && db) {
+      const { collection, addDoc, serverTimestamp } = window.firebase;
       for (const pl of list) {
-        await addDoc(col, {
+        await addDoc(collection(db, "playlists"), {
           name: pl.name,
           creator: pl.creator,
           isPublic: pl.isPublic,
@@ -1876,18 +1807,9 @@ async function sy_saveImportedPlaylists(list) {
       }
       return;
     }
-  } catch(e){ console.warn('Firestore no disponible, guardo local.', e); }
-  // Fallback local (session)
-  const key = 'sy_imported_playlists';
-  const prev = JSON.parse(localStorage.getItem(key) || '[]');
-  const next = prev.concat(list);
-  localStorage.setItem(key, JSON.stringify(next));
+  } catch(e){ console.warn('Firestore no disponible, se omitió el guardado.', e); }
 }
 
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
-
-
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
-document.addEventListener('click', (e)=>{ if (e.target.closest('[data-nav]')) setTimeout(sy_initSpotifyImportUI, 50); });
-
-
+document.addEventListener('click', (e)=>{ if (e.target.closest('[data-view="view-playlists"]')) setTimeout(sy_initSpotifyImportUI, 50); });
