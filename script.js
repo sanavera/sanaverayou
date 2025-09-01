@@ -354,18 +354,10 @@ function sy_renderSearchModeSwitch() {
 
   input.parentElement.appendChild(container);
 
-  container.addEventListener('change', (e) => {
-    if (e.target && e.target.name === 'sy-search-mode') {
-      const oldMode = sy_searchMode;
-      sy_setSearchMode(e.target.value);
-      if (oldMode !== sy_searchMode) {
-        // cancel current search if any, clear results and relaunch with same query if present
-        const q = document.getElementById('overlaySearchInput')?.value?.trim() || '';
-        const resultsEl = document.getElementById('results');
-        if (resultsEl) resultsEl.innerHTML = '';
-        if (q) { startSearch(q); }
-      }
-    }
+  container.addEventListener('change', (e) => { 
+    if (e.target && e.target.name === 'sy-search-mode') { 
+      sy_setSearchMode(e.target.value); /* no auto search */ 
+    } 
   });
 }
 
@@ -376,6 +368,23 @@ function sy_toggleSearchModeVisibility(show) {
 }
 
 document.addEventListener('DOMContentLoaded', sy_renderSearchModeSwitch);
+
+/* Click shield to prevent underlying logo/header interactions when search is open */
+function sy_addClickShield() {
+  if (document.getElementById('syClickShield')) return;
+  const shield = document.createElement('div');
+  shield.id = 'syClickShield';
+  shield.style.position = 'fixed';
+  shield.style.inset = '0';
+  shield.style.zIndex = '9998';
+  shield.style.pointerEvents = 'auto';
+  shield.style.background = 'transparent';
+  document.body.appendChild(shield);
+}
+function sy_removeClickShield() {
+  const shield = document.getElementById('syClickShield');
+  if (shield) shield.remove();
+}
 
 /* ========= Nav & Search ========= */
 function switchView(id){
@@ -395,7 +404,7 @@ function switchView(id){
     heroScrollInvalidate();
 }
 $("#bottomNav").addEventListener("click", e=>{ const btn = e.target.closest(".nav-btn"); if(!btn || btn.classList.contains('active')) return; switchView(btn.dataset.view); });
-const searchOverlay = $("#searchOverlay"); const overlayInput  = $("#overlaySearchInput"); function openSearch(){ searchOverlay.classList.add("show"); setTimeout(()=> { overlayInput.focus(); overlayInput.select();  sy_toggleSearchModeVisibility(true); }, 50); } function closeSearch(){ searchOverlay.classList.remove("show");  sy_toggleSearchModeVisibility(false); } const searchFab = $("#searchFab"); if(searchFab) searchFab.addEventListener("click", openSearch); if(searchOverlay) searchOverlay.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); }); if(searchOverlay) searchOverlay.addEventListener("keydown", e => { if (e.key === 'Escape') closeSearch(); });
+const searchOverlay = $("#searchOverlay"); const overlayInput  = $("#overlaySearchInput"); function openSearch(){ sy_addClickShield(); const ov = document.getElementById('searchOverlay'); if (ov){ ov.style.zIndex='9999'; ov.style.pointerEvents='auto';  sy_toggleSearchModeVisibility(true); } searchOverlay.classList.add("show"); setTimeout(()=> { overlayInput.focus(); overlayInput.select(); }, 50); } function closeSearch(){ sy_removeClickShield(); searchOverlay.classList.remove("show");  sy_toggleSearchModeVisibility(false); } const searchFab = $("#searchFab"); if(searchFab) searchFab.addEventListener("click", openSearch); if(searchOverlay) searchOverlay.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); }); if(searchOverlay) searchOverlay.addEventListener("keydown", e => { if (e.key === 'Escape') closeSearch(); });
 if(overlayInput) overlayInput.addEventListener("keydown", async e=>{ if (e.key !== "Enter") return; const q = overlayInput.value.trim(); if (!q) return; closeSearch(); document.body.scrollTop = 0; document.documentElement.scrollTop = 0; const spotifyPlaylistRegex = /https:\/\/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/; const match = q.match(spotifyPlaylistRegex); if (match && match[1]) { switchView("view-search"); await handleSpotifyImport(match[1]); } else { await startSearch(q); } });
 
 /* ========= BÃºsqueda Mixta con Scroll Infinito ========= */
@@ -716,5 +725,4 @@ function renderAllHomePlaylists() { const publicCommunityPlaylists = communityPl
 boot();
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
-
 document.addEventListener('DOMContentLoaded', () => { sy_toggleSearchModeVisibility(false); });
