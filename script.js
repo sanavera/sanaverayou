@@ -1,41 +1,3 @@
-
-/* === Search Mode Switch (Tracks | Playlists) === */
-let sy_searchMode = (sessionStorage.getItem('sy_search_mode') || 'tracks'); // 'tracks' or 'playlists'
-function sy_setSearchMode(mode){
-  sy_searchMode = (mode === 'playlists') ? 'playlists' : 'tracks';
-  try{ sessionStorage.setItem('sy_search_mode', sy_searchMode); }catch(e){}
-  console.log('searchMode set:', sy_searchMode);
-}
-function sy_renderSearchModeSwitch(){
-  const overlay = document.getElementById('searchOverlay');
-  const input = document.getElementById('overlaySearchInput');
-  if(!overlay || !input) return;
-  if(document.getElementById('sySearchModeContainer')) return;
-  const container = document.createElement('div');
-  container.id = 'sySearchModeContainer';
-  container.className = 'sy-search-mode';
-  container.innerHTML = `
-    <label class="sy-mode-pill"><input type="radio" name="sy-mode" value="tracks" ${'tracks'===sy_searchMode?'checked':''}><span>Canciones</span></label>
-    <label class="sy-mode-pill"><input type="radio" name="sy-mode" value="playlists" ${'playlists'===sy_searchMode?'checked':''}><span>Playlists</span></label>
-  `;
-  input.parentElement.appendChild(container);
-  container.addEventListener('change', e=>{ if(e.target && e.target.name==='sy-mode'){ sy_setSearchMode(e.target.value); } });
-}
-document.addEventListener('DOMContentLoaded', sy_renderSearchModeSwitch);
-/* click shield to avoid header/logo clicks under overlay */
-function sy_addClickShield(){
-  if(document.getElementById('syClickShield')) return;
-  const d=document.createElement('div'); d.id='syClickShield';
-  Object.assign(d.style,{position:'fixed',inset:'0',zIndex:'9998',pointerEvents:'auto',background:'transparent'});
-  document.body.appendChild(d);
-}
-function sy_removeClickShield(){ const s=document.getElementById('syClickShield'); if(s) s.remove(); }
-/* helper to fix mojibake like 'ReggaetÃ³n' */
-function sy_fixText(s){
-  if(typeof s!=='string') return s;
-  if(/Ã.|Â./.test(s)){ try{ return decodeURIComponent(escape(s)); }catch(e){ return s; } }
-  return s;
-}
 /* ========= Utils ========= */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -498,14 +460,14 @@ $("#bottomNav").addEventListener("click", e=>{
 /* ========= Búsqueda (overlay) ========= */
 const searchOverlay = $("#searchOverlay");
 const overlayInput  = $("#overlaySearchInput");
-function openSearch(){ sy_addClickShield(); const ov=document.getElementById('searchOverlay'); if(ov){ ov.style.zIndex='9999'; ov.style.pointerEvents='auto'; } const sm=document.getElementById('sySearchModeContainer'); if(sm) sm.style.display=''; 
+function openSearch(){
     searchOverlay.classList.add("show");
     setTimeout(()=> {
         overlayInput.focus();
         overlayInput.select();
     }, 50);
 }
-function closeSearch(){ sy_removeClickShield(); const sm=document.getElementById('sySearchModeContainer'); if(sm) sm.style.display='none';  searchOverlay.classList.remove("show"); }
+function closeSearch(){ searchOverlay.classList.remove("show"); }
 $("#searchFab")?.addEventListener("click", openSearch);
 searchOverlay?.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); });
 overlayInput?.addEventListener("keydown", async e=>{
@@ -533,7 +495,7 @@ overlayInput?.addEventListener("keydown", async e=>{
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
-async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0, modeArg){
+async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
@@ -541,7 +503,7 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   url.searchParams.append('key', apiKey);
   url.searchParams.append('q', query);
   url.searchParams.append('part', 'snippet');
-  url.searchParams.append('type', (modeArg||sy_searchMode)==='playlists' ? 'playlist' : 'video');
+  url.searchParams.append('type', 'video,playlist');
   url.searchParams.append('maxResults', limit);
   if(pageToken) url.searchParams.append('pageToken', pageToken);
   try{
@@ -589,7 +551,7 @@ async function startSearch(query){
 
   try {
     const [ytResult, spResult] = await Promise.all([
-        youtubeSearch(query, '', 30, sy_searchMode),
+        youtubeSearch(query, '', 30),
         searchSpotify(query, 20)
     ]);
 
@@ -1636,3 +1598,248 @@ boot();
 
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
+
+/* ========== Spotify Import UI & Logic (Ayelén) ========== */
+
+/* Config: set this at runtime if you have real credentials */
+// window.SPOTIFY_BASIC = btoa('<client_id>' + ':' + '<client_secret>');
+const SPOTIFY_IMPORT_MAX_TRACKS = 50; // visible hint only; we don't fetch tracks yet here
+
+function sy_initSpotifyImportUI() {
+  const playlistsView = document.querySelector('#view-playlists') || document.querySelector('#playlistsView') || document.body;
+  const grid = document.querySelector('#allPlaylistsContainer');
+  if (!grid || document.getElementById('syBtnImportSpotify')) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'sy-pl-toolbar';
+  const btn = document.createElement('button');
+  btn.id = 'syBtnImportSpotify';
+  btn.className = 'btn accent';
+  btn.type = 'button';
+  btn.innerHTML = `<span class="sy-spotify-icon" aria-hidden="true"></span> Importar desde Spotify`;
+  bar.appendChild(btn);
+  grid.parentElement.insertBefore(bar, grid);
+
+  btn.addEventListener('click', sy_openSpotifyImportModal);
+}
+
+function sy_openSpotifyImportModal() {
+  if (document.getElementById('sySpotifyModal')) return sy_showModal('sySpotifyModal', true);
+
+  const modal = document.createElement('div');
+  modal.id = 'sySpotifyModal';
+  modal.className = 'sy-modal';
+  modal.innerHTML = `
+    <div class="sy-modal__overlay" data-close="1"></div>
+    <div class="sy-modal__card" role="dialog" aria-modal="true" aria-labelledby="sySmTitle">
+      <div class="sy-modal__header">
+        <div class="sy-spotify-icon"></div>
+        <h3 id="sySmTitle">Importar playlists desde Spotify</h3>
+      </div>
+      <div class="sy-modal__body" id="sySmBody">
+        <p class="muted">Ingresá tu usuario de Spotify o pegá el enlace a tu perfil. Solo listas públicas. Límite por lista: ${SPOTIFY_IMPORT_MAX_TRACKS} temas.</p>
+        <label class="sy-field">
+          <span>Usuario o URL de perfil</span>
+          <input id="sySmInput" type="text" placeholder="ej. luchosanavera o https://open.spotify.com/user/..." autocomplete="off">
+        </label>
+        <div class="sy-actions">
+          <button class="btn" id="sySmCancel">Cancelar</button>
+          <button class="btn accent" id="sySmFetch">Importar</button>
+        </div>
+        <div class="sy-spinner" id="sySmSpinner" hidden>Cargando…</div>
+        <div id="sySmResults" class="sy-pl-results" hidden></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', (e)=>{ if (e.target.dataset.close) sy_showModal('sySpotifyModal', false); });
+  document.getElementById('sySmCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
+  document.getElementById('sySmFetch').onclick = sy_fetchSpotifyUserPlaylists;
+  sy_showModal('sySpotifyModal', true);
+  setTimeout(()=> document.getElementById('sySmInput')?.focus(), 60);
+}
+
+function sy_showModal(id, show) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('show', !!show);
+  document.body.classList.toggle('sy-modal-open', !!show);
+}
+
+function sy_parseSpotifyUserId(input) {
+  if (!input) return null;
+  input = input.trim();
+  try {
+    const u = new URL(input);
+    // https://open.spotify.com/user/{id}
+    const parts = u.pathname.split('/').filter(Boolean);
+    const idx = parts.indexOf('user');
+    if (idx !== -1 && parts[idx+1]) return parts[idx+1];
+    // https://open.spotify.com/intl-es/user/{id}
+    const idx2 = parts.indexOf('intl-es');
+    if (idx2 !== -1 && parts[idx2+1] === 'user' && parts[idx2+2]) return parts[idx2+2];
+  } catch(_) {}
+  // plain user_id
+  return input;
+}
+
+async function sy_getSpotifyToken() {
+  if (!window.SPOTIFY_BASIC) throw new Error('Falta configurar SPOTIFY_BASIC');
+  // cache in sessionStorage
+  const cached = sessionStorage.getItem('sy_spotify_token');
+  const exp = Number(sessionStorage.getItem('sy_spotify_token_exp')||0);
+  if (cached && Date.now() < exp) return cached;
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + window.SPOTIFY_BASIC,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: 'grant_type=client_credentials'
+  });
+  if (!res.ok) throw new Error('Token Spotify error ' + res.status);
+  const data = await res.json();
+  const ttl = (data.expires_in || 3600) - 120;
+  sessionStorage.setItem('sy_spotify_token', data.access_token);
+  sessionStorage.setItem('sy_spotify_token_exp', String(Date.now()+ ttl*1000));
+  return data.access_token;
+}
+
+async function sy_fetchSpotifyUserPlaylists() {
+  const input = document.getElementById('sySmInput').value.trim();
+  const userId = sy_parseSpotifyUserId(input);
+  const spinner = document.getElementById('sySmSpinner');
+  const results = document.getElementById('sySmResults');
+  results.hidden = true;
+  results.innerHTML = '';
+  spinner.hidden = false;
+
+  try {
+    const token = await sy_getSpotifyToken();
+    let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
+    const all = [];
+    while (url) {
+      const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token }});
+      if (!r.ok) throw new Error('Spotify ' + r.status);
+      const d = await r.json();
+      for (const it of (d.items||[])) {
+        all.append? all.append(it) : all.push(it);
+      }
+      url = d.next;
+    }
+    if (all.length === 0) {
+      results.innerHTML = `<p class="muted">No se encontraron playlists públicas para <strong>${userId}</strong>.</p>`;
+      results.hidden = false; spinner.hidden = true; return;
+    }
+    sy_renderSpotifyPlaylistsSelection(userId, all);
+  } catch (e) {
+    results.innerHTML = `<div class="sy-error">No se pudo leer Spotify. Configurá SPOTIFY_BASIC o pegá la URL exacta del perfil. ${e.message||e}</div>`;
+    results.hidden = false;
+  } finally {
+    spinner.hidden = true;
+  }
+}
+
+function sy_renderSpotifyPlaylistsSelection(userId, list) {
+  const body = document.getElementById('sySmBody');
+  const results = document.getElementById('sySmResults');
+  results.hidden = false;
+  const total = list.length;
+  const checks = list.map((p, idx) => {
+    const cover = (p.images && p.images[0] && p.images[0].url) || '';
+    const tracks = p.tracks && p.tracks.total || 0;
+    const id = p.id;
+    const name = p.name || 'Playlist sin nombre';
+    return `
+      <label class="sy-pl-row">
+        <input type="checkbox" class="sy-pl-check" data-plid="${id}" data-plname="${String(name).replace(/"/g,'&quot;')}" data-tracks="${tracks}" data-cover="${String(cover).replace(/"/g,'&quot;')}" checked>
+        <img src="${cover}" alt="" onerror="this.style.visibility='hidden'">
+        <div class="sy-pl-meta">
+          <div class="sy-pl-name">${name}</div>
+          <div class="sy-pl-sub">${tracks} temas</div>
+        </div>
+        <label class="sy-switch">
+          <input type="checkbox" class="sy-pl-public" data-plid="${id}" checked>
+          <span>Pública</span>
+        </label>
+      </label>`;
+  }).join('');
+
+  results.innerHTML = `
+    <div class="sy-pl-head">
+      <label class="sy-checkall">
+        <input type="checkbox" id="syPlAll" checked>
+        <span>Seleccionar todo</span>
+      </label>
+      <label class="sy-switch">
+        <input type="checkbox" id="syPlAllPublic" checked>
+        <span>Poner todas en público</span>
+      </label>
+    </div>
+    <div class="sy-pl-list">
+      ${checks}
+    </div>
+    <div class="sy-actions">
+      <button class="btn" id="syPlCancel">Cerrar</button>
+      <button class="btn accent" id="syPlImport">Importar</button>
+    </div>
+  `;
+
+  document.getElementById('syPlCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
+  document.getElementById('syPlAll').onchange = (e)=> {
+    document.querySelectorAll('#sySmResults .sy-pl-check').forEach(ch => ch.checked = e.target.checked);
+  };
+  document.getElementById('syPlAllPublic').onchange = (e)=> {
+    document.querySelectorAll('#sySmResults .sy-pl-public').forEach(ch => ch.checked = e.target.checked);
+  };
+  document.getElementById('syPlImport').onclick = async ()=> {
+    const selected = Array.from(document.querySelectorAll('#sySmResults .sy-pl-check:checked'));
+    if (selected.length === 0) { alert('No seleccionaste playlists.'); return; }
+    const payload = selected.map(ch => ({
+      source: 'spotify',
+      spotifyId: ch.dataset.plid,
+      name: ch.dataset.plname,
+      creator: userId,
+      isPublic: !!document.querySelector(`#sySmResults .sy-pl-public[data-plid="${ch.dataset.plid}"]`)?.checked,
+      cover: ch.dataset.cover || '',
+      tracks: [],
+      updatedAt: new Date()
+    }));
+    await sy_saveImportedPlaylists(payload);
+    sy_showModal('sySpotifyModal', false);
+    try { renderAllHomePlaylists && renderAllHomePlaylists(); } catch(_){}
+    try { updateHomeGridVisibility && updateHomeGridVisibility(); } catch(_){}
+  };
+}
+
+async function sy_saveImportedPlaylists(list) {
+  // Prefer Firestore if available
+  try {
+    if (typeof getFirestore === 'function' && window.db) {
+      const { getFirestore, collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const dbi = window.db || getFirestore();
+      const col = collection(dbi, 'playlists');
+      for (const pl of list) {
+        await addDoc(col, {
+          name: pl.name,
+          creator: pl.creator,
+          isPublic: pl.isPublic,
+          cover: pl.cover || null,
+          source: pl.source,
+          spotifyId: pl.spotifyId,
+          tracks: [],
+          updatedAt: serverTimestamp()
+        });
+      }
+      return;
+    }
+  } catch(e){ console.warn('Firestore no disponible, guardo local.', e); }
+  // Fallback local (session)
+  const key = 'sy_imported_playlists';
+  const prev = JSON.parse(localStorage.getItem(key) || '[]');
+  const next = prev.concat(list);
+  localStorage.setItem(key, JSON.stringify(next));
+}
+
+document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
+
