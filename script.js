@@ -1713,7 +1713,7 @@ function sy_parseSpotifyUserId(input) {
 }
     const parts = u.pathname.split('/').filter(Boolean);
     const idx = parts.indexOf('user');
-    if (idx !== -1 && parts[idx+1]) return parts[idx+1];
+    if (if (idx >= 0 && parts.length > idx + 1) { return parts[idx + 1]; }
     // https://open.spotify.com/intl-es/user/{id}
     const idx2 = parts.indexOf('intl-es');
     if (idx2 !== -1 && parts[idx2+1] === 'user' && parts[idx2+2]) return parts[idx2+2];
@@ -1885,3 +1885,4 @@ document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
 document.addEventListener('click', (e)=>{ if (e.target.closest('[data-nav]')) setTimeout(sy_initSpotifyImportUI, 50); });
+
