@@ -1697,28 +1697,32 @@ function sy_showModal(id, show) {
 function sy_parseSpotifyUserId(input) {
   if (!input) return null;
   input = input.trim();
+  
   try {
     const u = new URL(input);
     const parts = u.pathname.split('/').filter(Boolean);
+    
     // strip optional locale segment like intl-es
     const p = parts[0] && parts[0].startsWith('intl-') ? parts.slice(1) : parts;
+    
     // handle /user/{id}/playlists and /profile/{id}/playlists
     const ixUser = p.indexOf('user');
     const ixProf = p.indexOf('profile');
+    
     if (ixUser !== -1 && p[ixUser+1]) return p[ixUser+1];
     if (ixProf !== -1 && p[ixProf+1]) return p[ixProf+1];
-  } catch(_) {}
-  // fallback plain text (might be a real user_id)
-  return input;
-}
-    const parts = u.pathname.split('/').filter(Boolean);
+    
+    // handle other patterns
     const idx = parts.indexOf('user');
-    if (if (idx >= 0 && parts.length > idx + 1) { return parts[idx + 1]; }
+    if (idx >= 0 && parts.length > idx + 1) { return parts[idx + 1]; }
+    
     // https://open.spotify.com/intl-es/user/{id}
     const idx2 = parts.indexOf('intl-es');
     if (idx2 !== -1 && parts[idx2+1] === 'user' && parts[idx2+2]) return parts[idx2+2];
+    
   } catch(_) {}
-  // plain user_id
+  
+  // fallback plain text (might be a real user_id)
   return input;
 }
 
@@ -1885,4 +1889,5 @@ document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
 document.addEventListener('click', (e)=>{ if (e.target.closest('[data-nav]')) setTimeout(sy_initSpotifyImportUI, 50); });
+
 
