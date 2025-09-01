@@ -30,10 +30,10 @@ function sy_addClickShield(){
   document.body.appendChild(d);
 }
 function sy_removeClickShield(){ const s=document.getElementById('syClickShield'); if(s) s.remove(); }
-/* helper to fix mojibake like 'ReggaetÃƒÂ³n' */
+/* helper to fix mojibake like 'ReggaetÃ³n' */
 function sy_fixText(s){
   if(typeof s!=='string') return s;
-  if(/Ãƒ.|Ã‚./.test(s)){ try{ return decodeURIComponent(escape(s)); }catch(e){ return s; } }
+  if(/Ã.|Â./.test(s)){ try{ return decodeURIComponent(escape(s)); }catch(e){ return s; } }
   return s;
 }
 /* ========= Utils ========= */
@@ -46,7 +46,7 @@ const cleanTitle = t => (t||"")
   .replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"")
   .replace(/\s{2,}/g," ").trim();
 const cleanAuthor = a => (a||"")
-  .replace(/\s*[-â€“â€”]?\s*\(?Topic\)?\b/gi, "")
+  .replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, "")
   .replace(/VEVO/gi, "")
   .replace(/\s{2,}/g, " ")
   .replace(/\s*-\s*$/, "")
@@ -63,7 +63,7 @@ const spotifyLogoSvg = () => `
   <span class="source-logo spotify-logo" title="Spotify">
     <svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
   </span>`;
-// AJUSTE: Creada la funciÃ³n para el nuevo Ã­cono de YouTube Music
+// AJUSTE: Creada la función para el nuevo ícono de YouTube Music
 const youtubeMusicLogoSvg = () => `
   <span class="source-logo ytmusic-logo" title="YouTube Music">
     <svg viewBox="0 0 24 24" fill="currentColor" height="1em" width="1em"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg>
@@ -92,11 +92,11 @@ const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
 
 
-// --- Listas de reproducciÃ³n recomendadas ---
+// --- Listas de reproducción recomendadas ---
 const recommendedPlaylists = {
   p1: {
     ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
-    title: 'MelÃ³dicos en InglÃ©s',
+    title: 'Melódicos en Inglés',
     creator: 'Luis Sanavera',
     data: [],
     isRecommended: true
@@ -117,7 +117,7 @@ ids: [
 'bhyjF3t5XJQ', // Ojitos Hechiceros - Grupo Imagen
 'HHOsoZcJ-TY', // Dario y su grupo Angora - Secretaria
 'eVHIQ4oxjwM', // Dario y su grupo Angora - el rosario de mi madre
-'9jbiAeXZKbw', // Amar Azul - NiÃ±a
+'9jbiAeXZKbw', // Amar Azul - Niña
 'dcy_B7oSIf8', // Amar Azul - Tormenta de Nieve
 'UPnTZCTXHvw', // Grupo Red - No podre olvidarme de ti
 'v2FjIJUQPhU', // Grupo Red - Amor de adolescentes
@@ -127,16 +127,16 @@ ids: [
 'aRLPHz0zsUo', // Tambo Tambo - El Campanero
 'SE3oVXcppVc', // Los Charros - que nos entierren juntos
 'P6W-c8y4j5w', // Los Charros - Me bebi tu recuerdo
-'yBco-h1QPPA', // Los Lamas - Siempre soÃ±ando contigo
+'yBco-h1QPPA', // Los Lamas - Siempre soñando contigo
 'umLyS0-GXLQ', // Los Lamas - que hermosa noche
-'01p-1kMosCI', // Los del Bohio - del vals una mÃ¡s
+'01p-1kMosCI', // Los del Bohio - del vals una más
 'h8emXFUHH0Y', // Los del Bohio - MR robinson
 '098YVg5RmkA', // Gilda - No me arrepiento de este amor
 '7M6WsIKMtKg', // La Nueva Luna - Y ahora te vas
 '2aO4gdfkSc8', // Sombras - La ventanita
-'tJCK6y3gPfU', // RÃ¡faga - Mentirosa
-'1rwXkK3vWpg', // Los Palmeras - El BombÃ³n Asesino
-'rXuhQxo_Ebc', // Leo Mattioli - LlorarÃ¡s mÃ¡s de diez veces
+'tJCK6y3gPfU', // Ráfaga - Mentirosa
+'1rwXkK3vWpg', // Los Palmeras - El Bombón Asesino
+'rXuhQxo_Ebc', // Leo Mattioli - Llorarás más de diez veces
 'gfPmhcIIi90', // Rodrigo - Lo mejor del amor
 'biIRifuGPa4', // Antonio Rios - Nunca me faltes
 'ym3vG_UgLEA', // Damas Gratis - Se te ve la tanga
@@ -152,11 +152,11 @@ ids: [
 'dWOEGMhOm9k', // Commanche - Tonta
 'UGFBEUBEpss', // Volcan - Esa malvada
 '2wGDGtm8dwY', // Gladys La Bomba Tucumana - La pollera amarilla
-'IfMujYwHOOE', // Karicia - QuinceaÃ±era
+'IfMujYwHOOE', // Karicia - Quinceañera
 '9X35iRX27B8', // Los Avilas - te amo en silencio
 'PsLVh10nF2w', // Los Mirlos - La danza de los mirlos
 'SYQ6svFb8_0', // Los mirlos - por dinero por amor
-'9UQSYNvA6NE', // Siete lunas - Loco corazÃ³n
+'9UQSYNvA6NE', // Siete lunas - Loco corazón
 'z-MrnGLyj28', // Grupo Lagrimas - Tu perfume
 'xH_7932NfYU', // Grupo imagen - Pio pio
 'PTqvL19p87c'  // Amar azul - cuentame
@@ -168,43 +168,43 @@ ids: [
 },
   reggaeton: {
     ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'],
-    title: 'Noche de ReggaetÃ³n',
-    creator: 'SebastiÃ¡n Sanavera',
+    title: 'Noche de Reggaetón',
+    creator: 'Sebastián Sanavera',
     data: [],
     isRecommended: true
   },
   reggae: {
     ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', '1ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'],
     title: 'Vibras de Reggae',
-    creator: 'SebastiÃ¡n Sanavera',
+    creator: 'Sebastián Sanavera',
     data: [],
     isRecommended: true
   },
   pop: {
     ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'],
-    title: 'Ã‰xitos Pop',
-    creator: 'SebastiÃ¡n Sanavera',
+    title: 'Éxitos Pop',
+    creator: 'Sebastián Sanavera',
     data: [],
     isRecommended: true
   },
   rock_int: {
     ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'],
     title: 'Himnos del Rock',
-    creator: 'SebastiÃ¡n Sanavera',
+    creator: 'Sebastián Sanavera',
     data: [],
     isRecommended: true
   },
   bachata: {
     ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'],
-    title: 'CorazÃ³n de Bachata',
-    creator: 'SebastiÃ¡n Sanavera',
+    title: 'Corazón de Bachata',
+    creator: 'Sebastián Sanavera',
     data: [],
     isRecommended: true
   },
   international: {
     ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'],
-    title: 'ClÃ¡sicos 70/80/90s',
-    creator: 'SebastiÃ¡n Sanavera',
+    title: 'Clásicos 70/80/90s',
+    creator: 'Sebastián Sanavera',
     data: [],
     isRecommended: true
   }
@@ -321,7 +321,7 @@ async function getSpotifyToken() {
             },
             body: 'grant_type=client_credentials'
         });
-        if (!response.ok) throw new Error('FallÃ³ la autenticaciÃ³n con Spotify');
+        if (!response.ok) throw new Error('Falló la autenticación con Spotify');
         const data = await response.json();
         spotifyToken = {
             value: data.access_token,
@@ -371,7 +371,7 @@ async function searchSpotify(query, limit = 10) {
 
         return { tracks, playlists };
     } catch (e) {
-        console.error("Error en la bÃºsqueda de Spotify:", e);
+        console.error("Error en la búsqueda de Spotify:", e);
         return { tracks: [], playlists: [] };
     }
 }
@@ -455,7 +455,7 @@ async function fetchVideoDetailsByIds(ids) {
             const response = await fetch(url);
             if (!response.ok) {
                 if (response.status === 403) {
-                    console.warn(`API key ${apiKey} 403 â†’ rotando`);
+                    console.warn(`API key ${apiKey} 403 → rotando`);
                     return fetchChunk(chunk, retryCount + 1);
                 }
                 throw new Error(`API error: ${response.status}`);
@@ -495,7 +495,7 @@ $("#bottomNav").addEventListener("click", e=>{
   switchView(btn.dataset.view);
 });
 
-/* ========= BÃºsqueda (overlay) ========= */
+/* ========= Búsqueda (overlay) ========= */
 const searchOverlay = $("#searchOverlay");
 const overlayInput  = $("#overlaySearchInput");
 function openSearch(){ sy_addClickShield(); const ov=document.getElementById('searchOverlay'); if(ov){ ov.style.zIndex='9999'; ov.style.pointerEvents='auto'; } const sm=document.getElementById('sySearchModeContainer'); if(sm) sm.style.display=''; 
@@ -529,7 +529,7 @@ overlayInput?.addEventListener("keydown", async e=>{
     }
 });
 
-/* ========= BÃºsqueda Mixta con Scroll Infinito (CORREGIDO) ========= */
+/* ========= Búsqueda Mixta con Scroll Infinito (CORREGIDO) ========= */
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
@@ -548,7 +548,7 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     const response = await fetch(url);
     if(!response.ok){
       if(response.status===403){
-        console.warn(`API key ${apiKey} 403 â†’ rota`);
+        console.warn(`API key ${apiKey} 403 → rota`);
         return youtubeSearch(query, pageToken, limit, retryCount+1);
       }
       throw new Error(`API error: ${response.status}`);
@@ -605,7 +605,7 @@ async function startSearch(query){
         ...ytResult.items.filter(it => it.type === 'youtube_video')
     ];
 
-    // AJUSTE: Nueva lÃ³gica de ordenamiento multi-nivel
+    // AJUSTE: Nueva lógica de ordenamiento multi-nivel
     combined.sort((a, b) => {
         const aIsPlaylist = a.type.includes('playlist');
         const bIsPlaylist = b.type.includes('playlist');
@@ -634,7 +634,7 @@ async function startSearch(query){
 
   } catch (e) {
     console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la bÃºsqueda.</p></div>`;
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda.</p></div>`;
   } finally {
     paging.loading = false;
   }
@@ -682,12 +682,12 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    // AJUSTE: LÃ³gica de Ã­conos actualizada para "Topic"
+    // AJUSTE: Lógica de íconos actualizada para "Topic"
     if (it.source === 'spotify') {
       logo = spotifyLogoSvg();
     } else { // Source es YouTube
       if (it.isTopic) {
-        // Es "Topic", se elige un Ã­cono al azar entre Spotify y YouTube Music
+        // Es "Topic", se elige un ícono al azar entre Spotify y YouTube Music
         logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
       } else {
         // Es un video normal de YouTube
@@ -771,7 +771,7 @@ async function playSpotifyTrack(track) {
         playCurrent(true);
         switchView('view-player');
     } else {
-        alert("No se pudo encontrar un video para esta canciÃ³n.");
+        alert("No se pudo encontrar un video para esta canción.");
     }
 }
 
@@ -781,7 +781,7 @@ async function handleSpotifyImport(playlistId) {
     updateHomeGridVisibility();
     try {
         const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
-        if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) throw new Error("No se pudo obtener la playlist o estÃ¡ vacÃ­a.");
+        if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) throw new Error("No se pudo obtener la playlist o está vacía.");
         const youtubeQueue = (await Promise.all(spotifyPlaylist.tracks.map(findYoutubeEquivalent))).filter(Boolean);
         if (youtubeQueue.length > 0) {
             resultsContainer.innerHTML = "";
@@ -835,11 +835,11 @@ async function handlePlaylistResultClick(playlistId, playlistTitle) {
         switchView('view-player');
         playCurrent(true);
     } else {
-        alert("Esta lista de reproducciÃ³n estÃ¡ vacÃ­a o es privada.");
+        alert("Esta lista de reproducción está vacía o es privada.");
     }
   } catch (e) {
     console.error("No se pudo cargar la playlist:", e);
-    alert("No se pudo cargar la lista de reproducciÃ³n.");
+    alert("No se pudo cargar la lista de reproducción.");
   }
 }
 
@@ -954,7 +954,7 @@ async function openPlaylistOptionsMenu(pl) {
         const newName = prompt("Nuevo nombre para la playlist:", pl.name);
         if (newName === null || newName.trim() === "") return;
 
-        const newCreator = prompt("Nuevo nombre de creador (mÃ¡x 20 caracteres):", pl.creator);
+        const newCreator = prompt("Nuevo nombre de creador (máx 20 caracteres):", pl.creator);
         if (newCreator === null || newCreator.trim() === "") return;
 
         try {
@@ -970,9 +970,9 @@ async function openPlaylistOptionsMenu(pl) {
       }
       if (act === "delete") {
         openActionSheet({
-            title: `Â¿Eliminar "${pl.name}"?`,
+            title: `¿Eliminar "${pl.name}"?`,
             actions: [
-                {id: "confirm_delete", label: "SÃ­, eliminar", danger: true},
+                {id: "confirm_delete", label: "Sí, eliminar", danger: true},
                 {id: "cancel", label: "Cancelar", ghost: true}
             ],
             onAction: async (confirmAct) => {
@@ -1016,7 +1016,7 @@ function renderPlaylists() {
             <div class="pl-overlay">
                 <div class="pl-meta">
                     <div class="pl-title">${pl.name}</div>
-                    <div class="pl-creator">por ${pl.creator || 'AnÃ³nimo'}</div>
+                    <div class="pl-creator">por ${pl.creator || 'Anónimo'}</div>
                     <div class="pl-subtitle">${pl.tracks.length} temas</div>
                 </div>
                 <div class="pl-privacy-toggle">
@@ -1024,7 +1024,7 @@ function renderPlaylists() {
                         <input type="checkbox" ${pl.isPublic ? 'checked' : ''}>
                         <span class="slider"></span>
                     </label>
-                    <span>PÃºblica</span>
+                    <span>Pública</span>
                 </div>
             </div>
             <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
@@ -1104,7 +1104,7 @@ async function openPlaylistSheet(track){
       try {
         await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
         sheet.classList.remove("show");
-      } catch(e) { console.error("Error agregando canciÃ³n: ", e); alert("No se pudo agregar la canciÃ³n."); }
+      } catch(e) { console.error("Error agregando canción: ", e); alert("No se pudo agregar la canción."); }
     };
     list.appendChild(btn);
   });
@@ -1121,14 +1121,14 @@ async function openPlaylistSheet(track){
         addMyPlaylistId(docRef.id);
         $("#plNewNameFromSong").value = "";
         sheet.classList.remove("show");
-    } catch (e) { console.error("Error creando playlist desde canciÃ³n: ", e); alert("Hubo un error al crear la playlist."); }
+    } catch (e) { console.error("Error creando playlist desde canción: ", e); alert("Hubo un error al crear la playlist."); }
   };
 
   $("#plCancel").onclick = ()=> sheet.classList.remove("show");
   sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
 }
 
-/* ========= YouTube / reproducciÃ³n ========= */
+/* ========= YouTube / reproducción ========= */
 function updateUIOnTrackChange() {
   updateHero(currentTrack);
   updateMiniNow();
@@ -1142,9 +1142,9 @@ function updateHero(track){
   const favHero = $("#favHero");
   const npHero  = $("#npHero");
   if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "â€”");
+  $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "—");
   if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "ElegÃ­ una canciÃ³n");
+  $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
 
   let plName = "";
   if (queueType === 'playlist' && viewingPlaylistId) {
@@ -1154,7 +1154,7 @@ function updateHero(track){
     plName = currentQueueTitle;
   }
 
-  $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` â€¢ ${plName}` : ""}` : (plName || "â€”"));
+  $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—"));
 }
 function setQueue(srcArr, type, idx){
   let finalSrc = srcArr;
@@ -1215,7 +1215,7 @@ async function removeFromPlaylist(plId, trackId){
   const { doc, updateDoc, serverTimestamp } = window.firebase;
   const plRef = doc(db, "playlists", plId);
   const updatedTracks = pl.tracks.filter(t => t.id !== trackId);
-  try { await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() }); } catch (e) { console.error("Error quitando canciÃ³n: ", e); alert("No se pudo quitar la canciÃ³n."); }
+  try { await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() }); } catch (e) { console.error("Error quitando canción: ", e); alert("No se pudo quitar la canción."); }
 }
 
 /* Mini reproductor */
@@ -1388,11 +1388,11 @@ function renderQueue(queueItems, title) {
 
 async function saveCurrentQueueAsPlaylist() {
     if (!queue || queue.length === 0) {
-        alert("No hay una lista de reproducciÃ³n vÃ¡lida para guardar."); return;
+        alert("No hay una lista de reproducción válida para guardar."); return;
     }
     let creator = localStorage.getItem('sy_creator_name');
     if (!creator) {
-        creator = prompt("Para guardar, ingresÃ¡ tu nombre de creador:")?.trim();
+        creator = prompt("Para guardar, ingresá tu nombre de creador:")?.trim();
         if (!creator) return;
         localStorage.setItem('sy_creator_name', creator);
     }
@@ -1402,7 +1402,7 @@ async function saveCurrentQueueAsPlaylist() {
         const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), { name: currentQueueTitle, creator, tracks: queue, updatedAt: serverTimestamp(), isPublic: true });
         addMyPlaylistId(docRef.id);
-        if (btn) { btn.textContent = 'Guardada âœ”'; }
+        if (btn) { btn.textContent = 'Guardada ✔'; }
     } catch (e) {
         console.error("Error guardando la playlist: ", e); alert("Hubo un error al guardar la playlist.");
         if (btn) { btn.disabled = false; btn.textContent = 'Guardar Lista'; }
@@ -1419,7 +1419,7 @@ function showPlaylistInPlayer(plId){
 }
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
-/* ========= MenÃº tres puntitos global (MEJORADO) ========= */
+/* ========= Menú tres puntitos global (MEJORADO) ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
     if (!btn) return;
@@ -1440,7 +1440,7 @@ document.addEventListener("click", async (e) => {
         if (sourceTrack.type === 'spotify_track') {
             const ytEquivalent = await findYoutubeEquivalent(sourceTrack);
             if (!ytEquivalent) {
-                alert("No se pudo encontrar esta canciÃ³n en YouTube para agregarla.");
+                alert("No se pudo encontrar esta canción en YouTube para agregarla.");
                 return;
             }
             track = ytEquivalent;
@@ -1499,7 +1499,7 @@ function refreshIndicators(){
 }
 
 
-/* ========= ReproducciÃ³n en segundo plano ========= */
+/* ========= Reproducción en segundo plano ========= */
 document.addEventListener("visibilitychange", ()=>{
   if(!YT_READY || !currentTrack) return;
   if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
@@ -1551,7 +1551,7 @@ window.addEventListener("scroll", heroScrollInvalidate, { passive:true }); windo
 let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if(!('mediaSession' in navigator)||!track)return;
-  try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'â€”',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){}
+  try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){}
   if(!mediaSessionHandlersSet){
     mediaSessionHandlersSet=true;
     const s=fn=>()=>{try{fn()}catch(e){}};
