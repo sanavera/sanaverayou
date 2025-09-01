@@ -49,7 +49,7 @@ function assignCovers(itemsToProcess, coverMap) {
         }
         return it;
     });
-    console.log(`artwork attach: spotify=${spotifyCoversApplied}, youtube=${itemsToProcess.length - spotifyCoversApplied}`);
+    // console.log(`artwork attach: spotify=${spotifyCoversApplied}, youtube=${itemsToProcess.length - spotifyCoversApplied}`);
     return processedItems;
 }
 
@@ -262,24 +262,24 @@ $("#bottomNav").addEventListener("click", e=>{ const btn = e.target.closest(".na
 const searchOverlay = $("#searchOverlay"); const overlayInput  = $("#overlaySearchInput"); function openSearch(){ searchOverlay.classList.add("show"); setTimeout(()=> { overlayInput.focus(); overlayInput.select(); }, 50); } function closeSearch(){ searchOverlay.classList.remove("show"); } const searchFab = $("#searchFab"); if(searchFab) searchFab.addEventListener("click", openSearch); if(searchOverlay) searchOverlay.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); }); if(searchOverlay) searchOverlay.addEventListener("keydown", e => { if (e.key === 'Escape') closeSearch(); });
 if(overlayInput) overlayInput.addEventListener("keydown", async e=>{ if (e.key !== "Enter") return; const q = overlayInput.value.trim(); if (!q) return; closeSearch(); document.body.scrollTop = 0; document.documentElement.scrollTop = 0; await startSearch(q); });
 
-function createAndInsertSearchSwitch() {
-    const searchInputContainer = overlayInput.parentElement;
-    if (!searchInputContainer || $('.search-mode-switch')) return;
+function ensureSearchModeSwitch() {
+    if ($('#sy-search-mode-switch')) return;
+    const searchCard = $('.search-card');
+    if (!searchCard) return;
 
     const switchContainer = document.createElement('div');
+    switchContainer.id = 'sy-search-mode-switch';
     switchContainer.className = 'search-mode-switch';
     switchContainer.innerHTML = `
         <button class="switch-option" data-mode="tracks">Canciones</button>
         <button class="switch-option" data-mode="playlists">Playlists</button>
     `;
-
-    searchInputContainer.parentNode.insertBefore(switchContainer, searchInputContainer.nextSibling);
+    searchCard.appendChild(switchContainer);
 
     const updateSwitchUI = () => {
-        const currentActive = switchContainer.querySelector('.active');
-        if(currentActive) currentActive.classList.remove('active');
-        const newActive = switchContainer.querySelector(`[data-mode="${searchMode}"]`);
-        if(newActive) newActive.classList.add('active');
+        $$('#sy-search-mode-switch .switch-option').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === searchMode);
+        });
     };
     
     updateSwitchUI();
@@ -287,13 +287,12 @@ function createAndInsertSearchSwitch() {
     switchContainer.addEventListener('click', (e) => {
         const button = e.target.closest('.switch-option');
         if (!button || button.dataset.mode === searchMode) return;
-
         searchMode = button.dataset.mode;
         sessionStorage.setItem('sy_search_mode', searchMode);
         updateSwitchUI();
-        
         const query = overlayInput.value.trim();
         if (query) {
+            paging.loading = false;
             startSearch(query);
         }
     });
@@ -304,47 +303,54 @@ function createAndInsertSearchSwitch() {
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", lastToken: null, loading:false, hasMore:true, page: 1 };
 
-async function searchTracksScrape(query, page = 1) {
-    if (page > 1) {
-        // Jina.ai no soporta paginación de forma nativa a través de parámetros de URL simples
-        return { items: [], hasMore: false, nextPage: page };
-    }
+async function searchTracksScrape(query) {
     const url = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Jina fetch failed: ${response.status}`);
         const text = await response.text();
+        
         const results = [];
+        let discardedCount = 0;
         const lines = text.split('\n');
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            const match = line.match(/\[(.*?)\]\((https:\/\/www\.youtube\.com\/watch\?v=(.*?))\)/);
-            if (match) {
-                const titleOriginal = match[1].trim();
-                const videoId = match[3];
-                let authorOriginal = "Unknown Artist";
-                if (i + 1 < lines.length && lines[i + 1].toLowerCase().startsWith('by ')) {
-                    authorOriginal = lines[i + 1].substring(3).trim();
-                }
+            const linkMatch = line.match(/\[(.*?)\]\((https:\/\/www\.youtube\.com\/watch\?.*?)\)/);
 
-                if (videoId && titleOriginal && !titleOriginal.toLowerCase().includes('playlist')) {
+            if (linkMatch && linkMatch[2]) {
+                const url = linkMatch[2];
+                const videoIdMatch = url.match(/v=([A-Za-z0-9_-]{11})/);
+
+                if (videoIdMatch && videoIdMatch[1]) {
+                    const videoId = videoIdMatch[1];
+                    const titleOriginal = linkMatch[1].trim();
+                    let authorOriginal = "YouTube";
+
+                    if (i + 1 < lines.length && lines[i + 1].toLowerCase().startsWith('by ')) {
+                        authorOriginal = lines[i + 1].substring(3).trim();
+                    }
+
                     results.push({
                         source: 'youtube', type: 'youtube_video', id: videoId,
                         title: titleOriginal, titleOriginal,
                         author: authorOriginal, authorOriginal,
-                        channelId: null, // El scraper no provee el Channel ID
+                        channelId: null, // Scraper doesn't provide this
                         description: '',
                         thumb: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                         isTopic: sy_isTopic(titleOriginal, authorOriginal, '')
                     });
+                } else {
+                    discardedCount++;
                 }
             }
         }
-        console.log(`tracks scrape items=${results.length}`);
-        return { items: results, hasMore: false, nextPage: page + 1 };
+        
+        console.log(`tracks scrape items=${results.length}, descartados=${discardedCount}`);
+        return { items: results, hasMore: false };
     } catch (error) {
         console.error('Error scraping tracks:', error);
-        return { items: [], hasMore: false, nextPage: page };
+        return { items: [], hasMore: false };
     }
 }
 
@@ -402,7 +408,7 @@ async function startSearch(query){
   }
   switchView("view-search");
   paging = { query, pageToken: null, lastToken: null, loading: true, hasMore: true, page: 1 };
-  items = []; sy_seenIds.clear(); spotifyCoverMap.clear();
+  items = []; sy_seenIds.clear();
   
   const resultsEl = $("#results");
   if(resultsEl) resultsEl.innerHTML = `<div class="loading-indicator" role="status" aria-live="polite"><h3>Buscando...</h3></div>`;
@@ -413,8 +419,7 @@ async function startSearch(query){
   try {
     let searchResult;
     if (searchMode === 'tracks') {
-        searchResult = await searchTracksScrape(query, 1);
-        paging.page = searchResult.nextPage;
+        searchResult = await searchTracksScrape(query);
         paging.hasMore = searchResult.hasMore;
     } else { // 'playlists' mode
         searchResult = await youtubePlaylistSearch(query, '', 30);
@@ -440,7 +445,7 @@ async function startSearch(query){
         return; 
     }
     appendResults(itemsToRender);
-    sy_searchCache = { query, items, pageToken: paging.pageToken, page: paging.page, hasMore: paging.hasMore, timestamp: Date.now(), mode: searchMode };
+    sy_searchCache = { query, items, pageToken: paging.pageToken, hasMore: paging.hasMore, timestamp: Date.now(), mode: searchMode };
   } catch (e) { 
       console.error('Search failed:', e); 
       if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator" aria-live="polite"><p>Error en la búsqueda.</p></div>`;
@@ -451,28 +456,22 @@ async function startSearch(query){
 
 async function loadNextPage(){
   if(paging.loading || !paging.hasMore || !paging.query) return;
+
+  if (searchMode === 'tracks') {
+    // Scraper doesn't support pagination, so we stop here.
+    return;
+  }
+  
   if (searchMode === 'playlists' && paging.pageToken === paging.lastToken) return;
   
   paging.loading = true;
-  
-  if (searchMode === 'playlists') {
-    paging.lastToken = paging.pageToken;
-    console.log(`next playlists token=${paging.pageToken}`);
-  } else { // tracks mode
-    console.log(`next tracks page=${paging.page}`);
-  }
+  paging.lastToken = paging.pageToken;
+  console.log(`next playlists token=${paging.pageToken}`);
 
   try{
-    let result;
-    if (searchMode === 'tracks') {
-        result = await searchTracksScrape(paging.query, paging.page);
-        paging.page = result.nextPage;
-        paging.hasMore = result.hasMore;
-    } else { // playlists mode
-        result = await youtubePlaylistSearch(paging.query, paging.pageToken, BATCH_SIZE);
-        paging.pageToken = result.nextPageToken;
-        paging.hasMore = !!result.nextPageToken;
-    }
+    const result = await youtubePlaylistSearch(paging.query, paging.pageToken, BATCH_SIZE);
+    paging.pageToken = result.nextPageToken;
+    paging.hasMore = !!result.nextPageToken;
     
     if(result.items.length === 0){ paging.hasMore = false; return; }
 
@@ -489,7 +488,7 @@ async function loadNextPage(){
 
     appendResults(itemsToRender);
     items.push(...itemsToRender);
-    if(sy_searchCache) { Object.assign(sy_searchCache, { items, pageToken: paging.pageToken, page: paging.page, hasMore: paging.hasMore }); }
+    if(sy_searchCache) { Object.assign(sy_searchCache, { items, pageToken: paging.pageToken, hasMore: paging.hasMore }); }
   }catch(e){ 
       console.error('Failed loading next page:', e);
       paging.hasMore = false;
@@ -516,7 +515,7 @@ function appendResults(chunk) {
         let indicator = '';
         if (it.type.includes('playlist')) { itemEl.classList.add("playlist-result-item"); if (it.source === 'spotify') itemEl.classList.add("spotify-playlist-result-item"); indicator = '<div class="playlist-indicator">LISTA</div>'; }
         const thumbUrl = it.portadaFija || it.thumb;
-        itemEl.innerHTML = ` <div class="thumb-wrap"><img class="thumb" loading="lazy" decoding="async" src="${thumbUrl}" alt="" width="56" height="56">${indicator} ${!it.type.includes('playlist') ? `<button class="card-play" title="Play/Pause" aria-label="Play/Pause" aria-pressed="false"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : ''} </div> <div class="meta"> <div class="title-line">${logo}<span class="title-text">${it.displaySong}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div> <div class="subtitle">${it.displayArtist}</div> </div> <div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`;
+        itemEl.innerHTML = ` <div class="thumb-wrap"><img class="thumb" loading="lazy" decoding="async" src="${thumbUrl}" alt="" width="56" height="56" onerror="this.onerror=null; this.src='https://i.ytimg.com/vi/${it.id}/sddefault.jpg'">${indicator} ${!it.type.includes('playlist') ? `<button class="card-play" title="Play/Pause" aria-label="Play/Pause" aria-pressed="false"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : ''} </div> <div class="meta"> <div class="title-line">${logo}<span class="title-text">${it.displaySong}</span><span class="eq" aria-hidden="true"><span></span><span></span><span></span></span></div> <div class="subtitle">${it.displayArtist}</div> </div> <div class="actions"><button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button></div>`;
         itemEl.addEventListener("click", (e) => handleResultClick(e, it));
         let pressTimer; itemEl.addEventListener('touchstart', (e) => { if (e.target.closest(".more, .card-play")) return; pressTimer = setTimeout(() => { e.preventDefault(); const moreButton = itemEl.querySelector(".more"); if (moreButton) moreButton.click(); }, 500); }, { passive: true }); itemEl.addEventListener('touchend', () => clearTimeout(pressTimer)); itemEl.addEventListener('touchmove', () => clearTimeout(pressTimer));
         fragment.appendChild(itemEl);
@@ -537,19 +536,17 @@ async function handleSpotifyImport(playlistId) {
         const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
         if (!spotifyPlaylist || spotifyPlaylist.tracks.length === 0) throw new Error("No se pudo obtener la playlist o está vacía.");
         
-        // Build cover map before finding equivalents
         spotifyCoverMap = buildSpotifyCoverMap(spotifyPlaylist.tracks);
 
         const youtubeQueueRaw = (await sy_promisePool(8, spotifyPlaylist.tracks, findYoutubeEquivalent)).filter(Boolean);
         
         const youtubeQueue = youtubeQueueRaw.map(track => {
-            // Assign cover from the pre-built map
             const key = `${sy_normalize(track.authorOriginal)}-${sy_normalize(track.titleOriginal)}`;
             const spotifyCover = spotifyCoverMap.get(key);
             if (spotifyCover) {
                 track.thumb = spotifyCover;
             }
-            return fixTrackCover(track); // fixTrackCover now handles setting portadaFija
+            return fixTrackCover(track);
         });
 
         if (youtubeQueue.length > 0) {
@@ -576,13 +573,14 @@ async function findYoutubeEquivalent(track) {
         if(details[0]) return { ...details[0], originalId: track.id, thumb: track.thumb, authorOriginal: track.authorOriginal, titleOriginal: track.titleOriginal }; 
     } 
     const searchQuery = `${track.author} - ${track.title}`; 
-    const { items: scrapedItems } = await searchTracksScrape(searchQuery, 1);
+    const { items: scrapedItems } = await searchTracksScrape(searchQuery);
     const ytTrack = scrapedItems.length > 0 ? scrapedItems[0] : null;
 
     if (ytTrack) {
         sy_sp2yt_cache.set(track.id, ytTrack.id); 
+        return { ...ytTrack, originalId: track.id, thumb: track.thumb || ytTrack.thumb, authorOriginal: track.authorOriginal, titleOriginal: track.titleOriginal };
     }
-    return ytTrack ? { ...ytTrack, originalId: track.id, thumb: track.thumb || ytTrack.thumb, authorOriginal: track.authorOriginal, titleOriginal: track.titleOriginal } : null; 
+    return null; 
 }
 async function fetchPlaylistItems(playlistId, retryCount = 0) {
     if (retryCount >= YOUTUBE_API_KEYS.length) { console.error(`API keys failed for playlist ${playlistId}`); return []; }
@@ -712,7 +710,7 @@ function updateMediaSession(track){ if(!('mediaSession' in navigator)||!track)re
 function canUseAndroidBridge(){ try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; } }
 function updateAndroidNotification(){ if (!canUseAndroidBridge()) return; const isPlaying = getPlaybackState() === 'playing'; if (!currentTrack) { AndroidBridge.stopNotification(); return; } AndroidBridge.updateNotification( currentTrack.displaySong || '', currentTrack.displayArtist || '', currentTrack.portadaFija || currentTrack.thumb || '', isPlaying ); }
 window.handleNativeControl = function(c){ const a=String(c||'').toLowerCase(); if(a==='action_play'){if(YT_READY&&ytPlayer)ytPlayer.playVideo();return} if(a==='action_pause'){if(YT_READY&&ytPlayer)ytPlayer.pauseVideo();return} if(a==='action_next'){next();return} if(a==='action_prev'){prev();return} };
-async function boot(){ initTheme(); const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" }; const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"); const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"); window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc }; const app = initializeApp(firebaseConfig); db = getFirestore(app); onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => { communityPlaylists = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })); renderPlaylists(); renderAllHomePlaylists(); if (viewingPlaylistId && queueType === 'playlist') { const updatedPlaylist = communityPlaylists.find(p => p.id === viewingPlaylistId); if(updatedPlaylist){ const currentId=currentTrack ? currentTrack.id:null; renderQueue(updatedPlaylist.tracks,updatedPlaylist.name); setQueue(updatedPlaylist.tracks,'playlist',qIdx); const newIdx=updatedPlaylist.tracks.findIndex(t=>t.id===currentId); if(newIdx!==-1){qIdx=newIdx}else{qIdx=Math.min(qIdx,updatedPlaylist.tracks.length-1);if(updatedPlaylist.tracks.length===0){currentTrack=null;ytPlayer.stopVideo()}else{currentTrack=queue[qIdx]} updateUIOnTrackChange()} }else{hideQueuePanel();if(queueType==='playlist'){currentTrack=null;queue=null;ytPlayer.stopVideo();updateUIOnTrackChange()}} } }); const playlistKeys = Object.keys(recommendedPlaylists); const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids)); const results = await Promise.all(fetchPromises); playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; }); renderAllHomePlaylists(); updateHomeGridVisibility(); loadFavs(); renderFavs(); loadYTApi(); createAndInsertSearchSwitch(); const savedState = loadPlayerState(); if (savedState) restorePlayerState(savedState); heroScrollInvalidate(); document.title = "SanaveraYou Pro"; }
+async function boot(){ initTheme(); const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" }; const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"); const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"); window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc }; const app = initializeApp(firebaseConfig); db = getFirestore(app); onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => { communityPlaylists = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })); renderPlaylists(); renderAllHomePlaylists(); if (viewingPlaylistId && queueType === 'playlist') { const updatedPlaylist = communityPlaylists.find(p => p.id === viewingPlaylistId); if(updatedPlaylist){ const currentId=currentTrack ? currentTrack.id:null; renderQueue(updatedPlaylist.tracks,updatedPlaylist.name); setQueue(updatedPlaylist.tracks,'playlist',qIdx); const newIdx=updatedPlaylist.tracks.findIndex(t=>t.id===currentId); if(newIdx!==-1){qIdx=newIdx}else{qIdx=Math.min(qIdx,updatedPlaylist.tracks.length-1);if(updatedPlaylist.tracks.length===0){currentTrack=null;ytPlayer.stopVideo()}else{currentTrack=queue[qIdx]} updateUIOnTrackChange()} }else{hideQueuePanel();if(queueType==='playlist'){currentTrack=null;queue=null;ytPlayer.stopVideo();updateUIOnTrackChange()}} } }); const playlistKeys = Object.keys(recommendedPlaylists); const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids)); const results = await Promise.all(fetchPromises); playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; }); renderAllHomePlaylists(); updateHomeGridVisibility(); loadFavs(); renderFavs(); loadYTApi(); ensureSearchModeSwitch(); const savedState = loadPlayerState(); if (savedState) restorePlayerState(savedState); heroScrollInvalidate(); document.title = "SanaveraYou Pro"; }
 function renderAllHomePlaylists() { const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && p.tracks && p.tracks.length > 0); const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ]; allPlaylists.sort((a, b) => { const dateA = a.updatedAt && a.updatedAt.toDate ? a.updatedAt.toDate() : new Date(0); const dateB = b.updatedAt && b.updatedAt.toDate ? b.updatedAt.toDate() : new Date(0); return dateB - dateA; }); const container = $("#allPlaylistsContainer"); if(container) container.innerHTML = ""; allPlaylists.forEach(p => renderPlaylistCard(p)); }
 boot();
 window.addEventListener('beforeunload', savePlayerState);
