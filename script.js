@@ -25,7 +25,6 @@ const spotifyLogoSvg = () => `
   <span class="source-logo spotify-logo" title="Spotify">
     <svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
   </span>`;
-// AJUSTE: Creada la función para el nuevo ícono de YouTube Music
 const youtubeMusicLogoSvg = () => `
   <span class="source-logo ytmusic-logo" title="YouTube Music">
     <svg viewBox="0 0 24 24" fill="currentColor" height="1em" width="1em"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg>
@@ -1551,8 +1550,8 @@ async function boot(){
 
   const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
-  const { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
-  window.firebase = { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
+  const { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  window.firebase = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc };
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
 
@@ -1599,9 +1598,7 @@ boot();
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 
-/* ========== Spotify Import UI & Logic (CORREGIDO) ========== */
-const SPOTIFY_IMPORT_MAX_TRACKS = 50; 
-
+/* ========== Spotify Import UI & Logic (CORREGIDO Y MEJORADO) ========== */
 function sy_initSpotifyImportUI() {
   const playlistsView = document.getElementById('view-playlists');
   if (!playlistsView) return;
@@ -1700,7 +1697,7 @@ async function sy_fetchSpotifyUserPlaylists() {
   }
 
   try {
-    const token = await getSpotifyToken(); // Usamos la función de token global
+    const token = await getSpotifyToken(); 
     let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
     const all = [];
     while (url) {
@@ -1760,7 +1757,7 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
     </div>
     <div class="sy-actions">
       <button class="btn" id="syPlCancel">Cerrar</button>
-      <button class="btn accent" id="syPlImport">Importar Seleccionadas</button>
+      <button class="btn accent" id="syPlImport">Importar / Actualizar</button>
     </div>
   `;
 
@@ -1769,46 +1766,129 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
     document.querySelectorAll('#sySmResults .sy-pl-check').forEach(ch => ch.checked = e.target.checked);
   };
   document.getElementById('syPlImport').onclick = async ()=> {
+    const btn = document.getElementById('syPlImport');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+
     const selected = Array.from(document.querySelectorAll('#sySmResults .sy-pl-check:checked'));
-    if (selected.length === 0) { alert('No seleccionaste ninguna playlist para importar.'); return; }
+    if (selected.length === 0) { 
+      alert('No seleccionaste ninguna playlist para importar.');
+      btn.disabled = false;
+      btn.textContent = 'Importar / Actualizar';
+      return; 
+    }
     const payload = selected.map(ch => ({
-      source: 'spotify',
       spotifyId: ch.dataset.plid,
       name: ch.dataset.plname,
       creator: userId,
-      isPublic: true, // Todas se importan como públicas por defecto
       cover: ch.dataset.cover || '',
-      tracks: [], // Se llenarán después
-      updatedAt: new Date()
     }));
-    await sy_saveImportedPlaylists(payload);
-    sy_showModal('sySpotifyModal', false);
-    try { renderAllHomePlaylists && renderAllHomePlaylists(); } catch(_){}
-    try { updateHomeGridVisibility && updateHomeGridVisibility(); } catch(_){}
+    await sy_processAndSavePlaylists(payload, results);
   };
 }
 
-async function sy_saveImportedPlaylists(list) {
-  // Guardar en Firestore
-  try {
-    if (window.firebase && db) {
-      const { collection, addDoc, serverTimestamp } = window.firebase;
-      for (const pl of list) {
-        await addDoc(collection(db, "playlists"), {
-          name: pl.name,
-          creator: pl.creator,
-          isPublic: pl.isPublic,
-          cover: pl.cover || null,
-          source: pl.source,
-          spotifyId: pl.spotifyId,
-          tracks: [],
-          updatedAt: serverTimestamp()
-        });
-      }
-      return;
+// **NUEVA FUNCIÓN MEJORADA**
+async function fetchAllSpotifyPlaylistTracks(playlistId) {
+    const token = await getSpotifyToken();
+    if (!token) return [];
+
+    let allTracks = [];
+    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+
+    while (url) {
+        try {
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('No se pudo obtener las canciones de la playlist');
+            const data = await response.json();
+            
+            const tracks = data.items.map(({ track }) => track ? {
+                source: 'spotify',
+                type: 'spotify_track',
+                id: track.id,
+                title: track.name,
+                author: track.artists.map(a => a.name).join(', '),
+                thumb: track.album.images?.[0]?.url || ''
+            } : null).filter(Boolean);
+            
+            allTracks = allTracks.concat(tracks);
+            url = data.next; // URL para la siguiente página, o null si no hay más
+        } catch (e) {
+            console.error("Error buscando canciones de playlist de Spotify:", e);
+            url = null; // Detener en caso de error
+        }
     }
-  } catch(e){ console.warn('Firestore no disponible, se omitió el guardado.', e); }
+    return allTracks;
 }
+
+// **NUEVA FUNCIÓN MEJORADA PARA GUARDAR Y ACTUALIZAR**
+async function sy_processAndSavePlaylists(list, resultsContainer) {
+    if (!window.firebase || !db) {
+        resultsContainer.innerHTML = '<div class="sy-error">Error: La base de datos no está disponible.</div>';
+        return;
+    }
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
+    const col = collection(db, 'playlists');
+    let importedCount = 0;
+    let updatedCount = 0;
+
+    const originalButtonText = 'Importar / Actualizar';
+    const importButton = document.getElementById('syPlImport');
+
+    try {
+        for (let i = 0; i < list.length; i++) {
+            const pl = list[i];
+            importButton.textContent = `Procesando ${i + 1}/${list.length}...`;
+
+            // 1. Obtener todas las canciones de la playlist de Spotify
+            const spotifyTracks = await fetchAllSpotifyPlaylistTracks(pl.spotifyId);
+            if(spotifyTracks.length === 0) continue; // Omitir playlists vacías
+
+            // 2. Convertir canciones a su equivalente de YouTube
+            const youtubeTracks = (await Promise.all(spotifyTracks.map(findYoutubeEquivalent))).filter(Boolean);
+
+            // 3. Buscar si la playlist ya existe en Firebase
+            const q = query(col, where("spotifyId", "==", pl.spotifyId));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                // 4a. Si no existe, crearla
+                await addDoc(col, {
+                    name: pl.name,
+                    creator: pl.creator,
+                    isPublic: true,
+                    cover: pl.cover || null,
+                    source: 'spotify',
+                    spotifyId: pl.spotifyId,
+                    tracks: youtubeTracks,
+                    updatedAt: serverTimestamp()
+                });
+                importedCount++;
+            } else {
+                // 4b. Si existe, actualizarla
+                const existingDocRef = doc(db, 'playlists', snapshot.docs[0].id);
+                await updateDoc(existingDocRef, {
+                    name: pl.name, // Actualizar nombre por si cambió
+                    tracks: youtubeTracks, // Reemplazar con la nueva lista de canciones
+                    updatedAt: serverTimestamp()
+                });
+                updatedCount++;
+            }
+        }
+        
+        resultsContainer.innerHTML = `<div class="sy-success">¡Proceso completado!<br>${importedCount} playlists importadas.<br>${updatedCount} playlists actualizadas.</div>`;
+        setTimeout(() => sy_showModal('sySpotifyModal', false), 2500);
+
+    } catch (e) {
+        console.error("Error masivo al importar/actualizar playlists: ", e);
+        resultsContainer.innerHTML = `<div class="sy-error">Ocurrió un error durante el proceso. Intenta de nuevo.</div>`;
+    } finally {
+      if (importButton) {
+        importButton.disabled = false;
+        importButton.textContent = originalButtonText;
+      }
+    }
+}
+
 
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
