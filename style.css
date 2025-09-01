@@ -1,7 +1,7 @@
 /* ================== THEME TOKENS (Dark por defecto) ================== */
 :root{
   /* superficies y texto */
-  --bg:#0809c; --bg-secondary:#0d0e12;
+  --bg:#08090c; --bg-secondary:#0d0e12;
   --surface:#1a1c24; --surface-hover:#20222b; --surface-elevated:#242731;
   --border:#2d3142; --border-subtle:#1e2029;
   --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b;
@@ -717,114 +717,15 @@ html, body { background-color: var(--bg); }
   border-left: 3px solid #1DB954;
 }
 
-/* ================== Search Mode Switch (NUEVO) ================== */
-.search-mode-switch {
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
-  background-color: var(--surface);
-  border-radius: 99px; /* Pill shape */
-  padding: 4px;
-  border: 1px solid var(--border);
-  max-width: 240px;
-  margin-left: auto;
-  margin-right: auto;
-}
+/* === Search Mode Switch (pills) === */
+.sy-search-mode{ display:flex; gap:.5rem; margin-top:.5rem; }
+.sy-mode-pill{ display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .6rem; background:var(--chip-bg, rgba(255,255,255,.06)); border-radius:999px; user-select:none; cursor:pointer; }
+.sy-mode-pill input{ appearance:none; width:0; height:0; position:absolute; }
+.sy-mode-pill span{ font-size:.9rem; opacity:.9; }
+.sy-mode-pill:has(input:checked){ background:var(--accent, #e74c3c); color:#fff; }
+#syClickShield{ touch-action:none; }
 
-.switch-option {
-  flex: 1;
-  padding: 8px 16px;
-  border: none;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  border-radius: 99px; /* Pill shape */
-  transition: all 0.2s ease-in-out;
-  white-space: nowrap;
-}
-
-.switch-option.active {
-  background-color: var(--accent);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
-}
-
-html[data-theme="light"] .search-mode-switch {
-    background-color: var(--bg-secondary);
-    border-color: var(--border);
-}
-
-html[data-theme="light"] .switch-option.active {
-    color: #ffffff;
-}
-
-/* ================== Search Mode Switch (AyelÃ©n) ================== */
-/* Este bloque estiliza el switch inyectado por script.js con id #sySearchModeContainer.
-   Mantiene la estÃ©tica de pill/segmented-control del tema actual. */
-#sySearchModeContainer.sy-search-mode{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  gap:6px;
-  margin-top:12px;
-  padding:4px;
-  background: var(--surface);
-  border:1px solid var(--border);
-  border-radius:999px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.18);
-  max-width: 280px;
-  margin-left:auto;
-  margin-right:auto;
-}
-html[data-theme="light"] #sySearchModeContainer.sy-search-mode{
-  background: var(--bg-secondary);
-  border-color: var(--border);
-  box-shadow: 0 6px 18px rgba(0,0,0,.08);
-}
-#sySearchModeContainer .sy-mode-pill{
-  position:relative;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:999px;
-  overflow:hidden;
-}
-#sySearchModeContainer .sy-mode-pill input{
-  position:absolute;
-  inset:0;
-  opacity:0;
-  width:100%;
-  height:100%;
-  margin:0;
-  cursor:pointer;
-}
-#sySearchModeContainer .sy-mode-pill span{
-  display:inline-block;
-  padding:8px 16px;
-  border-radius:999px;
-  color:var(--text-secondary);
-  font-weight:700;
-  font-size:13px;
-  letter-spacing:.2px;
-  transition: var(--fast);
-  user-select:none;
-  min-width:112px;
-  text-align:center;
-}
-#sySearchModeContainer .sy-mode-pill:hover span{
-  color:var(--nav-ink-hover);
-  transform: translateY(-1px);
-}
-#sySearchModeContainer .sy-mode-pill input:checked + span{
-  background: var(--accent);
-  color:#fff;
-  box-shadow: 0 4px 14px rgba(239,68,68,.35);
-  transform: none;
-}
-/* Soporte de enfoque accesible */
-#sySearchModeContainer .sy-mode-pill input:focus-visible + span{
-  outline: 3px solid rgba(239,68,68,.35);
-  outline-offset: 2px;
-}
+/* dark theme fixes */
+:root{ --app-dark-bg:#0f1218; --app-dark-surface:#121826; }
+body.dark, body.theme-dark{ background: var(--app-dark-bg) !important; }
+.hero, .player-hero, .player-header, .sticky-hero{ background: var(--app-dark-bg); }
