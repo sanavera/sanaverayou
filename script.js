@@ -1606,10 +1606,12 @@ window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) A
 const SPOTIFY_IMPORT_MAX_TRACKS = 50; // visible hint only; we don't fetch tracks yet here
 
 function sy_initSpotifyImportUI() {
-  const playlistsView = document.querySelector('#view-playlists') || document.querySelector('#playlistsView') || document.body;
-  const grid = document.querySelector('#allPlaylistsContainer');
-  if (!grid || document.getElementById('syBtnImportSpotify')) return;
-
+  const playlistsView = document.querySelector('#playlistsView, #view-playlists, [data-view=\"playlists\"]');
+  if (!playlistsView) return; // only when playlists view exists in DOM
+  // the grid/list container must be inside playlists view
+  const grid = playlistsView.querySelector('#allPlaylistsContainer, .playlists-grid, .grid-playlists');
+  if (!grid) return;
+  if (playlistsView.querySelector('#syBtnImportSpotify')) return;
   const bar = document.createElement('div');
   bar.className = 'sy-pl-toolbar';
   const btn = document.createElement('button');
@@ -1618,7 +1620,8 @@ function sy_initSpotifyImportUI() {
   btn.type = 'button';
   btn.innerHTML = `<span class="sy-spotify-icon" aria-hidden="true"></span> Importar desde Spotify`;
   bar.appendChild(btn);
-  grid.parentElement.insertBefore(bar, grid);
+  playlistsView.insertBefore(bar, grid);
+  btn.addEventListener('click', sy_openSpotifyImportModal);
 
   btn.addEventListener('click', sy_openSpotifyImportModal);
 }
@@ -1646,15 +1649,24 @@ function sy_openSpotifyImportModal() {
           <button class="btn" id="sySmCancel">Cancelar</button>
           <button class="btn accent" id="sySmFetch">Importar</button>
         </div>
+        <div class="sy-cred" id="sySmCred" hidden>
+          <p class="muted">Sin credenciales. Ingresá client_id y client_secret para probar:</p>
+          <label class="sy-field"><span>client_id</span><input id="sySmCid" type="text" autocomplete="off"></label>
+          <label class="sy-field"><span>client_secret</span><input id="sySmSec" type="password" autocomplete="off"></label>
+          <div class="sy-actions"><button class="btn" id="sySmSetCred">Guardar y reintentar</button></div>
+        </div>
         <div class="sy-spinner" id="sySmSpinner" hidden>Cargando…</div>
         <div id="sySmResults" class="sy-pl-results" hidden></div>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+  // if no creds, show inline credential helper
+  if (!window.SPOTIFY_BASIC) { document.getElementById('sySmCred').hidden = false; }
   modal.addEventListener('click', (e)=>{ if (e.target.dataset.close) sy_showModal('sySpotifyModal', false); });
   document.getElementById('sySmCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
   document.getElementById('sySmFetch').onclick = sy_fetchSpotifyUserPlaylists;
+  const credBtn = document.getElementById('sySmSetCred'); if (credBtn){ credBtn.onclick = ()=>{ const cid = document.getElementById('sySmCid').value.trim(); const sec = document.getElementById('sySmSec').value.trim(); if (!cid || !sec){ alert('Completá ambos campos'); return; } try { window.SPOTIFY_BASIC = btoa(cid + ':' + sec); document.getElementById('sySmCred').hidden = true; alert('Credenciales guardadas. Volvé a tocar Importar.'); } catch(e){ alert('No se pudo guardar.'); } }; }
   sy_showModal('sySpotifyModal', true);
   setTimeout(()=> document.getElementById('sySmInput')?.focus(), 60);
 }
@@ -1733,7 +1745,7 @@ async function sy_fetchSpotifyUserPlaylists() {
     }
     sy_renderSpotifyPlaylistsSelection(userId, all);
   } catch (e) {
-    results.innerHTML = `<div class="sy-error">No se pudo leer Spotify. Configurá SPOTIFY_BASIC o pegá la URL exacta del perfil. ${e.message||e}</div>`;
+    results.innerHTML = `<div class=\"sy-error\">No se pudo leer Spotify. Cargá las credenciales abajo y reintentá. ${e.message||e}</div>`;
     results.hidden = false;
   } finally {
     spinner.hidden = true;
@@ -1843,3 +1855,6 @@ async function sy_saveImportedPlaylists(list) {
 
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 
+
+window.addEventListener('hashchange', sy_initSpotifyImportUI);
+document.addEventListener('click', (e)=>{ if (e.target.closest('[data-nav]')) setTimeout(sy_initSpotifyImportUI, 50); });
