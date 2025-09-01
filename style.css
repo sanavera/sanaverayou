@@ -10,7 +10,7 @@
   --accent:#ef4444; --accent-hover:#dc2626; --accent-light:#f87171;
   --dots:#ff6b6b;
 
-  /* navegación / player */
+  /* navegaciÃ³n / player */
   --dock-bg:#0b0a11;
   --mini-bg:rgba(11,10,17,1);
   --track-bg:rgba(255,255,255,.12);
@@ -58,7 +58,7 @@ body{
 .up{ text-transform:uppercase; letter-spacing:.08em; font-weight:700; font-size:.7rem; }
 .hide{display:none !important}
 
-/* ——— Flotantes arriba ——— */
+/* â€”â€”â€” Flotantes arriba â€”â€”â€” */
 .logo-float{
   position:fixed; left:12px; top:12px; z-index:1200;
   width:36px; height:36px; border-radius:10px; object-fit:cover;
@@ -108,7 +108,7 @@ body{
 html[data-theme="light"] .theme-toggle .sun{ display:none; }
 html[data-theme="light"] .theme-toggle .moon{ display:block; }
 
-/* Overlay de búsqueda */
+/* Overlay de bÃºsqueda */
 .search-overlay{ position:fixed; inset:0; display:none; z-index:1100; background:rgba(0,0,0,.45); backdrop-filter:blur(2px);}
 .search-overlay.show{display:block;}
 .search-card{
@@ -125,7 +125,7 @@ html[data-theme="light"] .search-card{ background:rgba(255,255,255,.98); border-
 html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a; border-color:#e2e8f0; }
 #overlaySearchInput:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(239,68,68,.1);}
 
-/* ——— Vistas ——— */
+/* â€”â€”â€” Vistas â€”â€”â€” */
 .view{
   display:none;
   padding: var(--side-pad);
@@ -175,7 +175,7 @@ html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a;
 .thumb{width:56px;height:56px;border-radius:12px;object-fit:cover;border:2px solid rgba(255,255,255,.08)}
 html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 
-/* Botón play sobre thumb */
+/* BotÃ³n play sobre thumb */
 .card-play{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:40px;height:40px;border-radius:50%;border:none;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.55);padding:0;
@@ -198,7 +198,7 @@ html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 .icon-btn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 .icon-btn.more, .icon-btn.more svg, .icon-btn.more path{color:var(--dots)!important;fill:var(--dots)!important}
 
-/* ====== PLAYLISTS (Nuevo diseño de tarjetas) ====== */
+/* ====== PLAYLISTS (Nuevo diseÃ±o de tarjetas) ====== */
 .pl-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -206,7 +206,7 @@ html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 }
 .pl-item {
   position: relative;
-  aspect-ratio: 1 / 1.2; /* Ligeramente más alto */
+  aspect-ratio: 1 / 1.2; /* Ligeramente mÃ¡s alto */
   border-radius: var(--radius);
   overflow: hidden;
   background-color: var(--surface);
@@ -350,7 +350,7 @@ input:checked + .slider:before {
   opacity: calc(1 - var(--hero-t, 0) * 2);
 }
 
-/* ===== Reproductor (Header pegado que también achica) ===== */
+/* ===== Reproductor (Header pegado que tambiÃ©n achica) ===== */
 .player-header-sticky {
   position: sticky;
   top: var(--side-pad);
@@ -474,7 +474,7 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
 }
 .mini-btn .i-pause{display:none}.mini-btn.playing .i-play{display:none}.mini-btn.playing .i-pause{display:block}
 
-/* ===== Menú de los 3 puntitos (Sheet) ===== */
+/* ===== MenÃº de los 3 puntitos (Sheet) ===== */
 .sheet{position:fixed; inset:0; display:none; z-index:1300; background:rgba(8,9,12,.55); backdrop-filter:blur(6px);}
 .sheet.show{ display:block; }
 .sheet-content{
@@ -516,7 +516,7 @@ html[data-theme="light"] .sheet-actions .pill { color: #fff; }
 .sheet-row input { flex: 1; }
 
 
-/* Botón “Nueva / Crear” */
+/* BotÃ³n â€œNueva / Crearâ€ */
 .pill{ padding:9px 14px; border-radius:999px; border:1px solid rgba(255,255,255,.15);
   background:rgba(255,255,255,.08); color:#fff; font-weight:600; cursor:pointer; transition:var(--fast); }
 html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:#0f172a; }
@@ -758,4 +758,73 @@ html[data-theme="light"] .search-mode-switch {
 
 html[data-theme="light"] .switch-option.active {
     color: #ffffff;
+}
+
+/* ================== Search Mode Switch (AyelÃ©n) ================== */
+/* Este bloque estiliza el switch inyectado por script.js con id #sySearchModeContainer.
+   Mantiene la estÃ©tica de pill/segmented-control del tema actual. */
+#sySearchModeContainer.sy-search-mode{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:6px;
+  margin-top:12px;
+  padding:4px;
+  background: var(--surface);
+  border:1px solid var(--border);
+  border-radius:999px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  max-width: 280px;
+  margin-left:auto;
+  margin-right:auto;
+}
+html[data-theme="light"] #sySearchModeContainer.sy-search-mode{
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+}
+#sySearchModeContainer .sy-mode-pill{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  overflow:hidden;
+}
+#sySearchModeContainer .sy-mode-pill input{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  cursor:pointer;
+}
+#sySearchModeContainer .sy-mode-pill span{
+  display:inline-block;
+  padding:8px 16px;
+  border-radius:999px;
+  color:var(--text-secondary);
+  font-weight:700;
+  font-size:13px;
+  letter-spacing:.2px;
+  transition: var(--fast);
+  user-select:none;
+  min-width:112px;
+  text-align:center;
+}
+#sySearchModeContainer .sy-mode-pill:hover span{
+  color:var(--nav-ink-hover);
+  transform: translateY(-1px);
+}
+#sySearchModeContainer .sy-mode-pill input:checked + span{
+  background: var(--accent);
+  color:#fff;
+  box-shadow: 0 4px 14px rgba(239,68,68,.35);
+  transform: none;
+}
+/* Soporte de enfoque accesible */
+#sySearchModeContainer .sy-mode-pill input:focus-visible + span{
+  outline: 3px solid rgba(239,68,68,.35);
+  outline-offset: 2px;
 }
