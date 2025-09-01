@@ -1,3 +1,19 @@
+
+// --- Auto assemble SPOTIFY_BASIC if missing ---
+(function(){
+  if (!window.SPOTIFY_BASIC) {
+    const ids = [
+      window.SPOTIFY_CLIENT_ID, window.SPOTIFY_ID, window.SP_ID, window.SPOTIFY_APP_ID
+    ].filter(Boolean);
+    const secs = [
+      window.SPOTIFY_CLIENT_SECRET, window.SPOTIFY_SECRET, window.SP_SECRET, window.SPOTIFY_APP_SECRET
+    ].filter(Boolean);
+    if (ids.length && secs.length) {
+      try { window.SPOTIFY_BASIC = btoa(String(ids[0]) + ':' + String(secs[0])); } catch(e){}
+    }
+  }
+})();
+
 /* ========= Utils ========= */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -1683,7 +1699,18 @@ function sy_parseSpotifyUserId(input) {
   input = input.trim();
   try {
     const u = new URL(input);
-    // https://open.spotify.com/user/{id}
+    const parts = u.pathname.split('/').filter(Boolean);
+    // strip optional locale segment like intl-es
+    const p = parts[0] && parts[0].startsWith('intl-') ? parts.slice(1) : parts;
+    // handle /user/{id}/playlists and /profile/{id}/playlists
+    const ixUser = p.indexOf('user');
+    const ixProf = p.indexOf('profile');
+    if (ixUser !== -1 && p[ixUser+1]) return p[ixUser+1];
+    if (ixProf !== -1 && p[ixProf+1]) return p[ixProf+1];
+  } catch(_) {}
+  // fallback plain text (might be a real user_id)
+  return input;
+}
     const parts = u.pathname.split('/').filter(Boolean);
     const idx = parts.indexOf('user');
     if (idx !== -1 && parts[idx+1]) return parts[idx+1];
@@ -1745,7 +1772,7 @@ async function sy_fetchSpotifyUserPlaylists() {
     }
     sy_renderSpotifyPlaylistsSelection(userId, all);
   } catch (e) {
-    results.innerHTML = `<div class=\"sy-error\">No se pudo leer Spotify en este momento. Probá más tarde o pegá la URL completa del perfil.</div>`;
+    results.innerHTML = `<div class=\"sy-error\">No se pudo leer Spotify ahora. Si sos el dueño del sitio, configurá el token de la app. Los usuarios no deben ingresar credenciales.</div>`;
     results.hidden = false;
   } finally {
     spinner.hidden = true;
