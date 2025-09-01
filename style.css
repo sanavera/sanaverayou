@@ -653,46 +653,23 @@ html, body { background-color: var(--bg); }
   position: relative;
 }
 
-/* ====== Rótulo LISTA mejorado ====== */
-@keyframes pulse-badge {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2);
-  }
-  70% {
-    transform: scale(1.05);
-    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
-  }
-}
-
 .playlist-indicator {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
-  background-color: var(--accent);
+  bottom: 4px;
+  right: 4px;
+  background-color: rgba(8, 9, 12, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   color: white;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   z-index: 2;
-  border: none;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-  animation: pulse-badge 2s infinite ease-out;
-  transform-origin: bottom right;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
-
-html[data-theme="light"] .playlist-indicator {
-    color: white;
-    background: var(--accent-hover);
-}
-
 
 /* ====== Spotify Loading Indicator ====== */
 .loading-indicator {
@@ -738,4 +715,42 @@ html[data-theme="light"] .playlist-indicator {
 
 .spotify-playlist-result-item {
   border-left: 3px solid #1DB954;
+}
+
+/* ================== Search Mode Switch (NUEVO) ================== */
+.search-mode-switch {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  background-color: var(--surface);
+  border-radius: 99px; /* Pill shape */
+  padding: 4px;
+  border: 1px solid var(--border);
+  max-width: 240px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.switch-option {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 99px; /* Pill shape */
+  transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+}
+
+.switch-option.active {
+  background-color: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+html[data-theme="light"] .switch-option.active {
+    color: #ffffff; /* Mantener texto blanco sobre el color de acento en modo claro */
 }
