@@ -1,7 +1,7 @@
 /* ================== THEME TOKENS (Dark por defecto) ================== */
 :root{
   /* superficies y texto */
-  --bg:#08090c; --bg-secondary:#0d0e12;
+  --bg:#0809c; --bg-secondary:#0d0e12;
   --surface:#1a1c24; --surface-hover:#20222b; --surface-elevated:#242731;
   --border:#2d3142; --border-subtle:#1e2029;
   --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b;
@@ -751,6 +751,11 @@ html, body { background-color: var(--bg); }
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
+html[data-theme="light"] .search-mode-switch {
+    background-color: var(--bg-secondary);
+    border-color: var(--border);
+}
+
 html[data-theme="light"] .switch-option.active {
-    color: #ffffff; /* Mantener texto blanco sobre el color de acento en modo claro */
+    color: #ffffff;
 }
