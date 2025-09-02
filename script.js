@@ -429,7 +429,7 @@ async function fetchVideoDetailsByIds(ids) {
                 thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || ""
             }));
         } catch (e) {
-            console.error('YouTube API fetch chunk failed:', e);
+            console.error('YouTube API fetch chunk failed, retrying with next key:', e);
             return fetchChunk(chunk, retryCount + 1);
         }
     };
@@ -497,6 +497,7 @@ let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if(retryCount >= MAX_RETRIES) throw new Error('Todas las API keys de YouTube han fallado.');
+  
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   const apiKey = getRotatedApiKey();
   url.searchParams.append('key', apiKey);
@@ -505,14 +506,17 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
   url.searchParams.append('type', 'video,playlist');
   url.searchParams.append('maxResults', limit);
   if(pageToken) url.searchParams.append('pageToken', pageToken);
-  try{
+
+  try {
     const response = await fetch(url);
-    if(!response.ok){
-      if(response.status===403){
-        console.warn(`API key ${apiKey} 403 → rota`);
-        return youtubeSearch(query, pageToken, limit, retryCount+1);
+    if (!response.ok) {
+      if (response.status === 403) {
+        console.warn(`API key ${apiKey} (403) está agotada o es inválida, rotando...`);
+      } else {
+        console.warn(`Error de red/servidor (${response.status}), reintentando con otra key...`);
       }
-      throw new Error(`API error: ${response.status}`);
+      // Para 403 u otros errores, siempre reintentamos
+      return youtubeSearch(query, pageToken, limit, retryCount + 1);
     }
     const data = await response.json();
     const resultItems = data.items.map(item => {
@@ -533,9 +537,10 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
         return null;
     }).filter(Boolean);
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
-  }catch(e){
-    console.error('YouTube API search failed:', e);
-    return { items: [], hasMore:false, nextPageToken: null };
+  } catch (e) {
+    console.error(`Fallo en fetch para la búsqueda en YouTube, reintentando con otra key:`, e);
+    // Ante cualquier error de fetch, reintentamos
+    return youtubeSearch(query, pageToken, limit, retryCount + 1);
   }
 }
 
@@ -757,9 +762,14 @@ async function handleSpotifyImport(playlistId) {
 async function findYoutubeEquivalent(track) {
     if (!track || !track.title) return null;
     const searchQuery = `${track.author} - ${track.title}`;
-    const searchResult = await youtubeSearch(searchQuery, '', 1);
-    const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
-    return ytTrack ? { ...ytTrack, originalId: track.id, thumb: ytTrack.thumb || track.thumb } : null;
+    try {
+        const searchResult = await youtubeSearch(searchQuery, '', 1);
+        const ytTrack = searchResult.items.find(item => item.type === 'youtube_video');
+        return ytTrack ? { ...ytTrack, originalId: track.id, thumb: ytTrack.thumb || track.thumb } : null;
+    } catch (error) {
+        console.error(`Búsqueda en YouTube falló para "${searchQuery}":`, error);
+        return null; // Devuelve null si la búsqueda falla después de todos los reintentos
+    }
 }
 
 async function fetchPlaylistItems(playlistId, retryCount = 0) {
@@ -779,7 +789,7 @@ async function fetchPlaylistItems(playlistId, retryCount = 0) {
         }
         const data = await response.json();
         return data.items.map(item => ({ id: item.snippet.resourceId.videoId, title: cleanTitle(item.snippet.title), author: cleanAuthor(item.snippet.videoOwnerChannelTitle || item.snippet.channelTitle), thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "" })).filter(track => track.id);
-    } catch (e) { console.error('Fallo al buscar items de la playlist:', e); return fetchPlaylistItems(playlistId, retryCount + 1); }
+    } catch (e) { console.error('Fallo al buscar items de la playlist, reintentando:', e); return fetchPlaylistItems(playlistId, retryCount + 1); }
 }
 
 async function handlePlaylistResultClick(playlistId, playlistTitle) {
@@ -1407,7 +1417,10 @@ async function showPlaylistInPlayer(plId) {
                     const { doc, updateDoc } = window.firebase;
                     const plRef = doc(db, "playlists", pl.id);
                     await updateDoc(plRef, { tracks: youtubeTracks });
-                    tracksToPlay = youtubeTracks; // Usamos las recién encontradas
+                    // No es necesario re-asignar 'tracksToPlay' aquí.
+                    // El listener de onSnapshot actualizará 'communityPlaylists', y la UI se refrescará.
+                    // Por ahora, podemos proceder con las que acabamos de encontrar.
+                    tracksToPlay = youtubeTracks; 
                 } else {
                     throw new Error("No se encontraron equivalentes en YouTube para esta lista.");
                 }
@@ -1417,6 +1430,8 @@ async function showPlaylistInPlayer(plId) {
         } catch (e) {
             alert(`Error: ${e.message}`);
             console.error(e);
+            // Restaurar panel y volver.
+            renderQueue([], pl.name); 
             switchView('view-playlists');
             return;
         }
@@ -1429,7 +1444,7 @@ async function showPlaylistInPlayer(plId) {
 
     viewingPlaylistId = pl.id;
     setQueue(tracksToPlay, 'playlist', 0);
-    renderQueue(tracksToPlay, pl.name); // Esto restaurará el panel y mostrará las canciones
+    renderQueue(tracksToPlay, pl.name);
     playCurrent(true);
 }
 
@@ -1641,8 +1656,14 @@ function renderAllHomePlaylists() {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     container.innerHTML = "";
-    // **CORRECCIÓN: Mostrar solo las playlists recomendadas en el inicio**
-    const allPlaylists = Object.values(recommendedPlaylists).filter(p => p.data.length > 0);
+    // **CORRECCIÓN: Mostrar recomendadas Y todas las públicas de la comunidad**
+    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && (p.tracks?.length > 0 || p.spotifyTracks?.length > 0));
+    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
+    allPlaylists.sort((a, b) => { 
+        const dateA = a.updatedAt?.toDate() || new Date(0); 
+        const dateB = b.updatedAt?.toDate() || new Date(0); 
+        return dateB - dateA; 
+    });
     allPlaylists.forEach(p => renderPlaylistCard(p));
 }
 
@@ -1912,7 +1933,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                     tracks: [], 
                     updatedAt: serverTimestamp()
                 });
-                addMyPlaylistId(docId); // **LA CORRECCIÓN CLAVE**
+                addMyPlaylistId(docId);
                 updatedCount++;
             }
         }
