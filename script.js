@@ -30,10 +30,10 @@ const youtubeMusicLogoSvg = () => `
     <svg viewBox="0 0 24 24" fill="currentColor" height="1em" width="1em"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg>
   </span>`;
 
-/* ========= Estado ========= */
+/* ========= State ========= */
 let items = [];
 let favs  = [];
-let communityPlaylists = []; // Playlists de la comunidad (Firebase)
+let communityPlaylists = []; // Community playlists (Firebase)
 let queue = null;
 let queueType = null;
 let qIdx = -1;
@@ -45,16 +45,16 @@ let isShuffle = false;
 let repeatMode = 'none'; // 'none', 'one', 'all'
 
 let ytPlayer = null, YT_READY = false, timer = null;
-let db; // Instancia de Firestore
+let db; // Firestore instance
 let resolverJobUnsubscribe = null; // Unsubscriber for the job listener
 
-// --- Credenciales y Estado de Spotify ---
+// --- Spotify Credentials & State ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
 const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
 
 
-// --- Listas de reproducción recomendadas ---
+// --- Recommended Playlists ---
 const recommendedPlaylists = {
   p1: {
     ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
@@ -172,7 +172,7 @@ ids: [
   }
 };
 
-/* ========= Persistencia de Estado ========= */
+/* ========= State Persistence ========= */
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 function getPlaybackState(){
   if(!YT_READY || !ytPlayer) return "none";
@@ -240,7 +240,7 @@ function restorePlayerState(state) {
   else window.addEventListener('yt-ready', restore, { once: true });
 }
 
-/* ========= Tema ========= */
+/* ========= Theme ========= */
 const THEME_KEY = "sy_theme_v1";
 function applyTheme(theme){
   document.documentElement.setAttribute("data-theme", theme);
@@ -268,7 +268,7 @@ function initTheme(){
   });
 }
 
-/* ========= API Spotify ========= */
+/* ========= Spotify API ========= */
 async function getSpotifyToken() {
     if (spotifyToken.value && Date.now() < spotifyToken.expires) {
         return spotifyToken.value;
@@ -370,7 +370,7 @@ async function fetchSpotifyPlaylist(playlistId) {
     }
 }
 
-/* ========= API YouTube ========= */
+/* ========= YouTube API ========= */
 const YOUTUBE_API_KEYS = [
   "AIzaSyCLKvqx3vv4SYBrci4ewe3TbeWJ-wL2BsY",
   "AIzaSyB9CSgnqFP5xBuYil8zUuZ0nWGQMHBk_44",
@@ -441,7 +441,8 @@ async function fetchVideoDetailsByIds(ids) {
 
 
 let searchAbort = null;
-let currentSearchType = 'all'; // 'all', 'video', 'playlist'
+// MEJORA: El tipo de búsqueda por defecto es 'video' para ahorrar llamadas a la API.
+let currentSearchType = 'video';
 
 /* ========= Nav ========= */
 function switchView(id){
@@ -463,11 +464,13 @@ $("#bottomNav").addEventListener("click", e=>{
   switchView(btn.dataset.view);
 });
 
-/* ========= Búsqueda (overlay) ========= */
+/* ========= Search (overlay) ========= */
 const searchOverlay = $("#searchOverlay");
 const overlayInput  = $("#overlaySearchInput");
 function openSearch(){
     searchOverlay.classList.add("show");
+    // MEJORA: Al abrir la búsqueda, se muestran los filtros.
+    $('#search-filters')?.classList.remove('hide');
     setTimeout(()=> {
         overlayInput.focus();
         overlayInput.select();
@@ -489,7 +492,20 @@ overlayInput?.addEventListener("keydown", async e=>{
     await startSearch(q);
 });
 
-/* ========= Búsqueda Mixta con Scroll Infinito ========= */
+// MEJORA: Al enfocar el campo de búsqueda principal, se muestran los filtros.
+overlayInput?.addEventListener('focus', () => {
+    const searchView = $('#view-search');
+    // Movemos los filtros al overlay temporalmente si no estamos en la vista de búsqueda
+    if (searchView && !searchView.classList.contains('active')) {
+        const filters = $('#search-filters');
+        if (filters) {
+            searchOverlay.querySelector('.search-bar-container').appendChild(filters);
+            filters.classList.remove('hide');
+        }
+    }
+});
+
+/* ========= Search Logic with Infinite Scroll ========= */
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
@@ -500,9 +516,10 @@ function setupSearchFilters() {
     const filters = document.createElement('div');
     filters.id = 'search-filters';
     filters.className = 'search-filters-container hide';
+    // CORRECCIÓN: Se eliminó el filtro "Todo" para forzar una selección y evitar dobles llamadas a la API.
+    // La búsqueda por defecto es "Canciones".
     filters.innerHTML = `
-        <button class="pill active" data-type="all">Todo</button>
-        <button class="pill" data-type="video">Canciones</button>
+        <button class="pill active" data-type="video">Canciones</button>
         <button class="pill" data-type="playlist">Playlists</button>
     `;
     
@@ -516,16 +533,21 @@ function setupSearchFilters() {
         btn.classList.add('active');
         currentSearchType = btn.dataset.type;
         
-        // CORRECCIÓN: No iniciar búsqueda al cambiar filtro, solo limpiar
+        // Al cambiar filtro, reiniciamos la paginación y limpiamos resultados para la próxima búsqueda.
         paging = { query: paging.query, pageToken: null, loading: false, hasMore: true };
         items = [];
         const resultsEl = $("#results");
         if (resultsEl) resultsEl.innerHTML = '';
+        
+        // Si hay una consulta activa, se vuelve a buscar con el nuevo filtro.
+        if (paging.query) {
+            startSearch(paging.query);
+        }
     });
 }
 
 
-async function youtubeSearch(query, pageToken = '', type = 'video,playlist', limit = BATCH_SIZE, retryCount = 0){
+async function youtubeSearch(query, pageToken = '', type = 'video', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
   if(retryCount >= MAX_RETRIES) throw new Error('All YouTube API keys have failed.');
   
@@ -581,30 +603,26 @@ async function startSearch(query){
   const resultsEl = $("#results");
   if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
   updateHomeGridVisibility();
-  $('#search-filters')?.classList.remove('hide');
+  
+  // MEJORA: Nos aseguramos que los filtros vuelvan a la vista de búsqueda si fueron movidos.
+  const filters = $('#search-filters');
+  if (filters && filters.parentElement !== $('#view-search')) {
+      $('#view-search').prepend(filters);
+  }
+  filters?.classList.remove('hide');
 
   try {
-    let combined = [];
-    let spResult = { tracks: [], playlists: [] };
+    let searchResults = [];
     let ytResult = { items: [], nextPageToken: null, hasMore: false };
 
-    if (currentSearchType === 'all') {
-        [ytResult, spResult] = await Promise.all([
-            youtubeSearch(query, '', 'video,playlist', 30),
-            searchSpotify(query, 'track,playlist', 20)
-        ]);
-        combined = [...spResult.playlists, ...ytResult.items, ...spResult.tracks];
-    } else if (currentSearchType === 'video') {
-        // CORRECCIÓN: Búsqueda de canciones usa scraping via Spotify, no YouTube API
-        spResult = await searchSpotify(query, 'track', 40);
-        combined = spResult.tracks;
-        paging.hasMore = false; // No hay paginación para este modo
+    // CORRECCIÓN: La búsqueda se hace solo a la API de YouTube, según el tipo seleccionado.
+    // Esto evita la doble consulta y ahorra cuota de la API.
+    if (currentSearchType === 'video') {
+        ytResult = await youtubeSearch(query, '', 'video', 40);
+        searchResults = ytResult.items;
     } else if (currentSearchType === 'playlist') {
-        [ytResult, spResult] = await Promise.all([
-            youtubeSearch(query, '', 'playlist', 30),
-            searchSpotify(query, 'playlist', 20)
-        ]);
-        combined = [...spResult.playlists, ...ytResult.items];
+        ytResult = await youtubeSearch(query, '', 'playlist', 40);
+        searchResults = ytResult.items;
     }
     
     if (searchAbort.signal.aborted) return;
@@ -612,22 +630,14 @@ async function startSearch(query){
     paging.pageToken = ytResult.nextPageToken;
     paging.hasMore = !!ytResult.nextPageToken;
 
-    combined.sort((a, b) => {
-        const aIsPlaylist = a.type.includes('playlist');
-        const bIsPlaylist = b.type.includes('playlist');
-        if (aIsPlaylist && !bIsPlaylist) return -1;
-        if (!aIsPlaylist && bIsPlaylist) return 1;
-        return 0;
-    });
-
     if (resultsEl) resultsEl.innerHTML = "";
 
-    if (combined.length === 0 && !paging.hasMore) {
+    if (searchResults.length === 0 && !paging.hasMore) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
         return;
     }
 
-    items = dedupeById(combined);
+    items = dedupeById(searchResults);
     appendResults(items);
 
   } catch (e) {
@@ -648,15 +658,11 @@ function dedupeById(arr){
 }
 
 async function loadNextPage(){
-  if(paging.loading || !paging.hasMore || !paging.query || !paging.pageToken || currentSearchType === 'video') return;
+  if(paging.loading || !paging.hasMore || !paging.query || !paging.pageToken) return;
   paging.loading = true;
   
-  let ytType = 'video';
-  if (currentSearchType === 'all') ytType = 'video,playlist';
-  if (currentSearchType === 'playlist') ytType = 'playlist';
-
   try{
-    const result = await youtubeSearch(paging.query, paging.pageToken, ytType, BATCH_SIZE);
+    const result = await youtubeSearch(paging.query, paging.pageToken, currentSearchType, BATCH_SIZE);
     if(result.items.length === 0){
         paging.hasMore = false;
         return;
@@ -674,7 +680,7 @@ async function loadNextPage(){
   }
 }
 
-/* ========= Render resultados ========= */
+/* ========= Render results ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
@@ -873,7 +879,7 @@ function updateHomeGridVisibility(){
   home.classList.toggle("hide", !shouldShow);
 }
 
-/* ========= Favoritos ========= */
+/* ========= Favorites ========= */
 const LS_FAVS = "sanayera_favs_v1";
 function loadFavs(){ try{ favs = JSON.parse(localStorage.getItem(LS_FAVS)||"[]"); }catch{ favs=[]; } }
 function saveFavs(){ localStorage.setItem(LS_FAVS, JSON.stringify(favs)); }
@@ -1114,21 +1120,27 @@ $("#createPlConfirm").onclick = async () => {
 };
 
 /* ========= Sheets & Toasts ========= */
-function showToast(message, isError = false) {
+function showToast(message, isError = false, duration = 3000) {
     let toast = document.getElementById('sy-toast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'sy-toast';
-        document.body.appendChild(toast);
+    if (toast) { // Remove existing toast to prevent overlap
+        toast.remove();
     }
+    
+    toast = document.createElement('div');
+    toast.id = 'sy-toast';
+    document.body.appendChild(toast);
+    
     toast.textContent = message;
     toast.className = 'show';
     if(isError) toast.classList.add('error');
     
+    // CORRECCIÓN: El timeout ahora elimina el elemento, evitando que un toast fallido quede "pegado".
     setTimeout(() => {
-        toast.className = toast.className.replace('show', '');
-    }, 3000);
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 500); // Remove from DOM after transition
+    }, duration);
 }
+
 
 function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
   const sheet = $("#menuSheet"); if(!sheet) return;
@@ -1199,7 +1211,7 @@ async function openPlaylistSheet(track){
   sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
 }
 
-/* ========= YouTube / reproducción ========= */
+/* ========= YouTube / Player Logic ========= */
 function updateUIOnTrackChange() {
   updateHero(currentTrack);
   updateMiniNow();
@@ -1319,7 +1331,7 @@ async function removeFromPlaylist(plId, trackId){
   }
 }
 
-/* Mini reproductor */
+/* Mini player */
 function updateMiniNow(){
   const has = !!currentTrack;
   const dock = $("#seekDock");
@@ -1417,7 +1429,7 @@ function updateControlStates() {
 $("#btnShuffle")?.addEventListener("click", toggleShuffle);
 $("#btnRepeat")?.addEventListener("click", cycleRepeat);
 
-/* ========= Cola (Player) ========= */
+/* ========= Queue (Player) ========= */
 function renderQueue(queueItems, title) {
     const panel = $("#queuePanel");
     currentQueueTitle = title;
@@ -1513,15 +1525,18 @@ async function showPlaylistInPlayer(plId) {
     viewingPlaylistId = pl.id;
     switchView('view-player');
 
+    // CORRECCIÓN: La lógica de importación se activa aquí, cuando el usuario intenta ver la playlist.
+    // No se usa la API de YouTube, sino el scraping a través del "resolverJob".
     if (pl.source === 'spotify' && pl.status !== 'resolved') {
         const tracksToShow = (pl.tracks?.length > 0 && pl.tracks.some(t => t)) ? pl.tracks.map((t, i) => t || { ...pl.spotifyTracks[i], id: null, thumb: pl.spotifyTracks[i].thumb || pl.cover }) : pl.spotifyTracks.map(st => ({...st, thumb: st.thumb || pl.cover, id: null}));
         renderQueue(tracksToShow, pl.name);
         
         if (pl.status !== 'resolving') {
-            startResolverJob(plId);
+            startResolverJob(pl.id); // Inicia el proceso de scraping en segundo plano
         } else {
             console.log("Job is already running for this playlist. Attaching listener.");
             const { doc, onSnapshot } = window.firebase;
+            if(!pl.resolverJobId) return; // Safety check
             const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
             if (resolverJobUnsubscribe) resolverJobUnsubscribe();
             resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
@@ -1539,12 +1554,12 @@ async function showPlaylistInPlayer(plId) {
     const tracksToPlay = (pl.tracks || []).filter(t => t && t.id);
     if (!tracksToPlay || tracksToPlay.length === 0) {
         if (pl.source === 'spotify') {
-             showToast(`Playlist "${pl.name}" aún no tiene canciones importadas.`, true);
-             startResolverJob(pl.id); // Offer to start job
+             showToast(`La playlist "${pl.name}" aún no tiene canciones importadas. Iniciando...`, false);
+             startResolverJob(pl.id); // Inicia el job si está vacía.
         } else {
              showToast(`La playlist "${pl.name}" está vacía.`, true);
         }
-        switchView('view-playlists');
+        // No cambiamos de vista para que el usuario vea el progreso de importación.
         return;
     }
 
@@ -1564,7 +1579,7 @@ function hideQueuePanel(){
     renderPlaylists(); 
 }
 
-/* ========= Menú tres puntitos global ========= */
+/* ========= Global Three-dot Menu ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
     if (!btn) return;
@@ -1623,7 +1638,7 @@ document.addEventListener("click", async (e) => {
 });
 
 
-/* ========= Indicadores ========= */
+/* ========= Indicators ========= */
 function refreshIndicators(){
   const isPlaying = getPlaybackState() === 'playing';
   const curId = currentTrack?.id || "";
@@ -1641,7 +1656,7 @@ function refreshIndicators(){
 }
 
 
-/* ========= Reproducción en segundo plano ========= */
+/* ========= Background Playback ========= */
 document.addEventListener("visibilitychange", ()=>{
   if(!YT_READY || !currentTrack) return;
   if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
@@ -1682,7 +1697,7 @@ if (sentinel){
   io.observe(sentinel);
 }
 
-/* ========= HERO shrink con rAF ========= */
+/* ========= HERO shrink with rAF ========= */
 let rafPending = false; let lastScrollY = 0; let targetT = 0, currentT = 0; const EPS = 0.001; const DIST = 200;
 function applyHeroT(t){ const tSnap=Math.round(t*1000)/1000; const a=document.querySelector(".view.active"); if(!a)return; const fav=a.querySelector("#favHero, .fav-hero"); const np=a.querySelector("#npHero, .np-hero, .player-header-sticky"); if(fav)fav.style.setProperty("--hero-t", tSnap); if(np)np.style.setProperty("--hero-t",tSnap); }
 function heroScrollTickRaf(){ rafPending=false; const a=document.querySelector(".view.active"); if(!a){applyHeroT(0);return;} const vT=a.getBoundingClientRect().top+window.scrollY; const y=Math.max(0,lastScrollY - vT); targetT=Math.min(1,y/DIST); currentT+=(targetT-currentT)*0.25; if(Math.abs(targetT-currentT)<EPS)currentT=targetT; applyHeroT(currentT); if(Math.abs(targetT-currentT)>=EPS){requestAnimationFrame(heroScrollTickRaf);rafPending=true;} }
@@ -1787,7 +1802,6 @@ function renderAllHomePlaylists() {
     if (!container) return;
     container.innerHTML = "";
     
-    // CORRECCIÓN: Lógica de filtro para incluir playlists nativas públicas con canciones
     const publicCommunityPlaylists = communityPlaylists.filter(p => 
         p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0))
     );
@@ -1826,24 +1840,17 @@ function getTrackKey(artist, title) {
     return `${normalize(artist)}|${normalize(title)}`;
 }
 
-// CORRECCIÓN: Función para rotar proxies de scraping
-function buildScrapeUrl(query, useHttps = false) {
-    const protocol = useHttps ? 'https' : 'http';
-    return `https://r.jina.ai/${protocol}://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+function buildScrapeUrl(query) {
+    // Using a reliable scraping proxy
+    return `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
 async function fetchScrape(query) {
-    const primaryUrl = buildScrapeUrl(query, false);
+    const url = buildScrapeUrl(query);
     try {
-        const response = await fetch(primaryUrl);
+        const response = await fetch(url);
         if (!response.ok) {
-            console.warn(`Primary scrape URL failed with status ${response.status}. Trying secondary.`);
-            const secondaryUrl = buildScrapeUrl(query, true);
-            const secondaryResponse = await fetch(secondaryUrl);
-            if (!secondaryResponse.ok) {
-                throw new Error(`Secondary scrape URL also failed with status ${secondaryResponse.status}.`);
-            }
-            return secondaryResponse;
+           throw new Error(`Scraping failed with status ${response.status}.`);
         }
         return response;
     } catch (error) {
@@ -1906,15 +1913,14 @@ async function startResolverJob(playlistId) {
         }
     } else {
         jobData = {
-            playlistRef: plRef.path,
+            playlistId: playlistId,
             status: 'queued',
             total: playlist.spotifyTracks.length,
-            done: 0, // Tracks processed
+            done: 0, 
             nextIndex: 0,
             errors: [],
             lastUpdated: serverTimestamp()
         };
-        // We use resolvedCount from playlist doc as the source of truth for resolved tracks
         await setDoc(jobRef, jobData);
     }
     
@@ -1938,75 +1944,80 @@ async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
     const plRef = doc(db, "playlists", playlistId);
     
-    const jobDoc = await getDoc(jobRef);
-    if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
-        console.log("Job stopped or cancelled.");
-        return;
-    }
-    
-    const plDoc = await getDoc(plRef);
-    if (!plDoc.exists()) return;
-
-    const playlist = plDoc.data();
-    const job = jobDoc.data();
-    const { nextIndex, total } = job;
-    const BATCH_SIZE = 3;
-
-    if (nextIndex >= total) {
-        // CORRECCIÓN: Lógica de finalización
-        const finalStatus = playlist.resolvedCount === total ? 'resolved' : 'partial';
-        await updateDoc(plRef, { status: finalStatus });
-        await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
-        const message = finalStatus === 'resolved' 
-            ? `Importación completa: ${playlist.name}`
-            : `Importación incompleta: ${playlist.resolvedCount} de ${total} resueltos.`;
-        showToast(message, finalStatus === 'partial');
-        return;
-    }
-
-    const tracksToProcess = playlist.spotifyTracks.slice(nextIndex, nextIndex + BATCH_SIZE);
-    const promises = tracksToProcess.map(track => resolveTrack(track));
-    const results = await Promise.all(promises);
-
-    const currentPlDoc = await getDoc(plRef);
-    const currentPlaylist = currentPlDoc.data();
-    let updatedTracks = [...(currentPlaylist.tracks || [])];
-    if (updatedTracks.length === 0 || updatedTracks.every(t => t === null)) {
-         updatedTracks = Array(total).fill(null).map((_, i) => ({ ...playlist.spotifyTracks[i], id: null }));
-    }
-
-    let resolvedInBatch = 0;
-    let errorsInBatch = [];
-
-    results.forEach((result, i) => {
-        const originalIndex = nextIndex + i;
-        if (result.videoId) {
-            updatedTracks[originalIndex] = {
-                ...playlist.spotifyTracks[originalIndex],
-                id: result.videoId,
-                thumb: `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-                source: 'youtube'
-            };
-            resolvedInBatch++;
-        } else if (result.error) {
-            errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+    try {
+        const jobDoc = await getDoc(jobRef);
+        if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
+            console.log("Job stopped or cancelled.");
+            return;
         }
-    });
-    
-    const newResolvedCount = (currentPlaylist.resolvedCount || 0) + resolvedInBatch;
-    const newNextIndex = nextIndex + tracksToProcess.length;
+        
+        const plDoc = await getDoc(plRef);
+        if (!plDoc.exists()) return;
 
-    const jobUpdatePayload = { 
-        done: newNextIndex,
-        nextIndex: newNextIndex, 
-        lastUpdated: serverTimestamp(),
-        errors: [...(job.errors || []), ...errorsInBatch]
-    };
+        const playlist = plDoc.data();
+        const job = jobDoc.data();
+        const { nextIndex, total } = job;
+        const BATCH_SIZE = 3;
 
-    await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
-    await updateDoc(jobRef, jobUpdatePayload);
+        if (nextIndex >= total) {
+            const finalStatus = playlist.resolvedCount === total ? 'resolved' : 'partial';
+            await updateDoc(plRef, { status: finalStatus });
+            await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
+            const message = finalStatus === 'resolved' 
+                ? `Importación completa: ${playlist.name}`
+                : `Importación incompleta: ${playlist.resolvedCount} de ${total} resueltos.`;
+            showToast(message, finalStatus === 'partial');
+            return;
+        }
 
-    setTimeout(() => runJobBatch(playlistId, jobRef), 500);
+        const tracksToProcess = playlist.spotifyTracks.slice(nextIndex, nextIndex + BATCH_SIZE);
+        const promises = tracksToProcess.map(track => resolveTrack(track));
+        const results = await Promise.all(promises);
+
+        const currentPlDoc = await getDoc(plRef);
+        const currentPlaylist = currentPlDoc.data();
+        let updatedTracks = [...(currentPlaylist.tracks || Array(total).fill(null))];
+
+        let resolvedInBatch = 0;
+        let errorsInBatch = [];
+
+        results.forEach((result, i) => {
+            const originalIndex = nextIndex + i;
+            if (result.videoId) {
+                updatedTracks[originalIndex] = {
+                    ...playlist.spotifyTracks[originalIndex],
+                    id: result.videoId,
+                    thumb: `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
+                    source: 'youtube'
+                };
+                resolvedInBatch++;
+            } else if (result.error) {
+                errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+            }
+        });
+        
+        const newResolvedCount = (currentPlaylist.resolvedCount || 0) + resolvedInBatch;
+        const newNextIndex = nextIndex + tracksToProcess.length;
+
+        const jobUpdatePayload = { 
+            done: newNextIndex,
+            nextIndex: newNextIndex, 
+            lastUpdated: serverTimestamp(),
+            errors: [...(job.errors || []), ...errorsInBatch]
+        };
+
+        await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
+        await updateDoc(jobRef, jobUpdatePayload);
+
+        setTimeout(() => runJobBatch(playlistId, jobRef), 500);
+    } catch (e) {
+        // CORRECCIÓN: Se agrega manejo de errores para que el proceso no quede "colgado".
+        // Si hay un error, el cartel de notificación se cerrará.
+        console.error("Error in job batch:", e);
+        const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
+        await updateDoc(jobRef, { status: 'error', error_message: e.message, lastUpdated: serverTimestamp() });
+        showToast("Ocurrió un error durante la importación.", true);
+    }
 }
 
 
@@ -2030,7 +2041,7 @@ async function cancelResolverJob() {
 /* ========== Resolver Mini Modal ========== */
 function updateResolverModal(job) {
     let modal = document.getElementById('resolver-modal');
-    if (!job || !['running', 'paused'].includes(job.status)) {
+    if (!job || !['running', 'queued'].includes(job.status)) {
         hideResolverModal();
         return;
     }
@@ -2052,18 +2063,19 @@ function updateResolverModal(job) {
         modal.querySelector('.resolver-cancel').onclick = cancelResolverJob;
     }
 
-    const pl = communityPlaylists.find(p => p.resolverJobId === job.id);
+    const pl = communityPlaylists.find(p => p.id === job.playlistId);
     const resolved = pl ? pl.resolvedCount : 0;
-    const progress = (job.done / job.total) * 100;
+    const progress = (job.total > 0) ? (resolved / job.total) * 100 : 0;
     
     modal.querySelector('.resolver-progress').style.width = `${progress}%`;
     modal.querySelector('.resolver-counter').textContent = `${resolved} / ${job.total}`;
+    modal.style.display = 'flex'; // Make sure it's visible
 }
 
 function hideResolverModal() {
     const modal = document.getElementById('resolver-modal');
     if (modal) {
-        modal.remove();
+        modal.style.display = 'none'; // Hide it
     }
     if (resolverJobUnsubscribe) {
         resolverJobUnsubscribe();
@@ -2071,7 +2083,7 @@ function hideResolverModal() {
     }
 }
 
-/* ========== Spotify Import UI & Logic (Optimizado) ========== */
+/* ========== Spotify Import UI & Logic (Optimized) ========== */
 function sy_initSpotifyImportUI() {
   const playlistsView = document.getElementById('view-playlists');
   if (!playlistsView) return;
@@ -2346,7 +2358,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                         resolvedCount++;
                         return oldTracksByKey.get(key);
                     }
-                    return { ...st, id: null };
+                    return null; // Keep unresolved as null
                 });
 
                 await updateDoc(existingDocRef, {
