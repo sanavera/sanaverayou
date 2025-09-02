@@ -1291,24 +1291,29 @@ $("#btnRepeat")?.addEventListener("click", cycleRepeat);
 function renderQueue(queueItems, title) {
     const panel = $("#queuePanel");
     currentQueueTitle = title;
-    panel && panel.classList.remove("hide");
+    
+    if(!panel) return;
+    panel.classList.remove("hide");
+    
+    // Restaurar estructura HTML base del panel
+    panel.innerHTML = `
+      <div class="section-head">
+        <h3 id="queueTitle"></h3>
+      </div>
+      <ul id="queueList"></ul>
+    `;
 
     const header = panel.querySelector(".section-head");
-    if (header) {
-        let saveBtn = header.querySelector('#btnSavePlaylist');
-        if (saveBtn) saveBtn.remove();
-
-        const titleEl = header.querySelector('#queueTitle');
-        if (titleEl) titleEl.textContent = title;
-
-        if ((queueType === 'youtube_playlist' || queueType === 'spotify_playlist') && queue?.length > 0) {
-            saveBtn = document.createElement('button');
-            saveBtn.id = 'btnSavePlaylist';
-            saveBtn.className = 'pill';
-            saveBtn.textContent = 'Guardar Lista';
-            saveBtn.onclick = saveCurrentQueueAsPlaylist;
-            header.appendChild(saveBtn);
-        }
+    const titleEl = header.querySelector('#queueTitle');
+    if (titleEl) titleEl.textContent = title;
+    
+    if ((queueType === 'youtube_playlist' || queueType === 'spotify_playlist') && queue?.length > 0) {
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'btnSavePlaylist';
+        saveBtn.className = 'pill';
+        saveBtn.textContent = 'Guardar Lista';
+        saveBtn.onclick = saveCurrentQueueAsPlaylist;
+        header.appendChild(saveBtn);
     }
 
     const ul = $("#queueList");
@@ -1387,11 +1392,11 @@ async function showPlaylistInPlayer(plId) {
 
     let tracksToPlay = pl.tracks;
 
+    // Lógica de conversión a YouTube solo cuando sea necesario
     if (pl.source === 'spotify' && (!pl.tracks || pl.tracks.length === 0)) {
-        const playerView = $('#view-player');
         const queuePanel = $('#queuePanel');
-        queuePanel.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones en YouTube...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
         switchView('view-player');
+        queuePanel.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones en YouTube...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
 
         try {
             const spotifyTracks = pl.spotifyTracks || [];
@@ -1402,28 +1407,29 @@ async function showPlaylistInPlayer(plId) {
                     const { doc, updateDoc } = window.firebase;
                     const plRef = doc(db, "playlists", pl.id);
                     await updateDoc(plRef, { tracks: youtubeTracks });
-                    tracksToPlay = youtubeTracks;
+                    tracksToPlay = youtubeTracks; // Usamos las recién encontradas
                 } else {
-                    throw new Error("No se encontraron equivalentes en YouTube.");
+                    throw new Error("No se encontraron equivalentes en YouTube para esta lista.");
                 }
+            } else {
+                 throw new Error("La lista de Spotify no tiene canciones para buscar.");
             }
         } catch (e) {
-            alert(`No se pudieron encontrar las canciones para "${pl.name}" en YouTube.`);
+            alert(`Error: ${e.message}`);
             console.error(e);
-            switchView('view-playlists'); // Volver a la lista
+            switchView('view-playlists');
             return;
         }
     }
 
     if (!tracksToPlay || tracksToPlay.length === 0) {
-        alert(`La playlist "${pl.name}" está vacía.`);
+        alert(`La playlist "${pl.name}" está vacía o no se pudieron encontrar las canciones.`);
         return;
     }
 
     viewingPlaylistId = pl.id;
     setQueue(tracksToPlay, 'playlist', 0);
-    renderQueue(tracksToPlay, pl.name);
-    switchView('view-player');
+    renderQueue(tracksToPlay, pl.name); // Esto restaurará el panel y mostrará las canciones
     playCurrent(true);
 }
 
@@ -1632,11 +1638,11 @@ async function boot(){
 }
 
 function renderAllHomePlaylists() {
-    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && (p.tracks?.length > 0 || p.spotifyTracks?.length > 0));
-    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
-    allPlaylists.sort((a, b) => { const dateA = a.updatedAt?.toDate() || new Date(0); const dateB = b.updatedAt?.toDate() || new Date(0); return dateB - dateA; });
     const container = $("#allPlaylistsContainer");
-    if(container) container.innerHTML = "";
+    if (!container) return;
+    container.innerHTML = "";
+    // **CORRECCIÓN: Mostrar solo las playlists recomendadas en el inicio**
+    const allPlaylists = Object.values(recommendedPlaylists).filter(p => p.data.length > 0);
     allPlaylists.forEach(p => renderPlaylistCard(p));
 }
 
@@ -1903,7 +1909,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                 await updateDoc(existingDocRef, {
                     name: pl.name,
                     spotifyTracks: spotifyTracks,
-                    tracks: [], // Vaciamos los tracks de youtube para forzar la actualización la próxima vez que se abra
+                    tracks: [], 
                     updatedAt: serverTimestamp()
                 });
                 addMyPlaylistId(docId); // **LA CORRECCIÓN CLAVE**
