@@ -25,7 +25,6 @@ const spotifyLogoSvg = () => `
   <span class="source-logo spotify-logo" title="Spotify">
     <svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg>
   </span>`;
-// AJUSTE: Creada la función para el nuevo ícono de YouTube Music
 const youtubeMusicLogoSvg = () => `
   <span class="source-logo ytmusic-logo" title="YouTube Music">
     <svg viewBox="0 0 24 24" fill="currentColor" height="1em" width="1em"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg>
@@ -442,7 +441,7 @@ overlayInput?.addEventListener("keydown", async e=>{
     }
 });
 
-/* ========= Búsqueda Mixta con Scroll Infinito (CORREGIDO) ========= */
+/* ========= Búsqueda Mixta con Scroll Infinito ========= */
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
@@ -488,67 +487,48 @@ const q = encodeURIComponent(query);
 
 }
 
-async function startSearch(query){
-  if(searchAbort) searchAbort.abort();
-  searchAbort = new AbortController();
-  paging = { query, pageToken: null, loading: true, hasMore: true };
-  items = [];
-  const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
-  updateHomeGridVisibility();
+async function startSearch(query) {
+    if (searchAbort) searchAbort.abort();
+    searchAbort = new AbortController();
+    paging = { query, pageToken: null, loading: true, hasMore: true };
+    items = [];
+    const resultsEl = $("#results");
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
+    updateHomeGridVisibility();
 
-  try {
-    const [ytResult, spResult] = await Promise.all([
-        youtubeSearch(query, '', 30),
-        searchSpotify(query, 20)
-    ]);
+    try {
+        // AJUSTE: Se eliminó la búsqueda simultánea en Spotify que causaba el fallo.
+        // Ahora, la aplicación busca resultados únicamente en YouTube para garantizar estabilidad.
+        const ytResult = await youtubeSearch(query, '', 50);
 
-    if (searchAbort.signal.aborted) return;
+        if (searchAbort.signal.aborted) return;
 
-    paging.pageToken = ytResult.nextPageToken;
-    paging.hasMore = !!ytResult.nextPageToken;
+        // La paginación y los resultados ahora dependen exclusivamente de YouTube.
+        paging.pageToken = ytResult.nextPageToken;
+        paging.hasMore = !!ytResult.nextPageToken;
 
-    let combined = [
-        ...spResult.playlists,
-        ...ytResult.items.filter(it => it.type === 'youtube_playlist'),
-        ...spResult.tracks,
-        ...ytResult.items.filter(it => it.type === 'youtube_video')
-    ];
+        let combined = ytResult.items;
 
-    // AJUSTE: Nueva lógica de ordenamiento multi-nivel
-    combined.sort((a, b) => {
-        const aIsPlaylist = a.type.includes('playlist');
-        const bIsPlaylist = b.type.includes('playlist');
-        const aIsTopic = a.isTopic;
-        const bIsTopic = b.isTopic;
+        // Se eliminó la lógica de ordenamiento compleja que dependía de Spotify.
 
-        if (aIsPlaylist && !bIsPlaylist) return -1; // Playlists primero
-        if (!aIsPlaylist && bIsPlaylist) return 1;
+        if (resultsEl) resultsEl.innerHTML = "";
 
-        if (!aIsPlaylist && !bIsPlaylist) { // Si ambos son tracks
-            if (aIsTopic && !bIsTopic) return -1; // Topics antes que no-topics
-            if (!aIsTopic && bIsTopic) return 1;
+        if (combined.length === 0 && !paging.hasMore) {
+            if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
+            return;
         }
-        return 0; // Mantener orden si son iguales
-    });
 
-    if (resultsEl) resultsEl.innerHTML = "";
+        items = dedupeById(combined);
+        appendResults(items);
 
-    if (combined.length === 0 && !paging.hasMore) {
-        if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
-        return;
+    } catch (e) {
+        console.error('Search failed:', e);
+        if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Inténtalo de nuevo.</p></div>`;
+    } finally {
+        paging.loading = false;
     }
-
-    items = dedupeById(combined);
-    appendResults(items);
-
-  } catch (e) {
-    console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda.</p></div>`;
-  } finally {
-    paging.loading = false;
-  }
 }
+
 
 function dedupeById(arr){
   const seen = new Set(items.map(i => i.id));
@@ -580,7 +560,7 @@ async function loadNextPage(){
   }
 }
 
-/* ========= Render resultados (CORREGIDO) ========= */
+/* ========= Render resultados ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
@@ -592,15 +572,12 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    // AJUSTE: Lógica de íconos actualizada para "Topic"
     if (it.source === 'spotify') {
       logo = spotifyLogoSvg();
-    } else { // Source es YouTube
+    } else { 
       if (it.isTopic) {
-        // Es "Topic", se elige un ícono al azar entre Spotify y YouTube Music
         logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
       } else {
-        // Es un video normal de YouTube
         logo = youtubeLogoSvg();
       }
     }
@@ -1334,7 +1311,7 @@ function showPlaylistInPlayer(plId){
 }
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
-/* ========= Menú tres puntitos global (MEJORADO) ========= */
+/* ========= Menú tres puntitos global ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
     if (!btn) return;
