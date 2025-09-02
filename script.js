@@ -135,7 +135,7 @@ ids: [
     isRecommended: true
   },
   reggae: {
-    ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', '1ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'],
+    ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', 'ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'],
     title: 'Vibras de Reggae',
     creator: 'Sebastián Sanavera',
     data: [],
@@ -163,7 +163,7 @@ ids: [
     isRecommended: true
   },
   international: {
-    ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkADj0TPrJA', '0-EF60neguk'],
+    ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkAD0TPrJA', '0-EF60neguk'],
     title: 'Clásicos 70/80/90s',
     creator: 'Sebastián Sanavera',
     data: [],
@@ -643,15 +643,12 @@ function appendResults(chunk){
     let indicator = '';
     let logo = '';
 
-    // AJUSTE: Lógica de íconos actualizada para "Topic"
     if (it.source === 'spotify') {
       logo = spotifyLogoSvg();
-    } else { // Source es YouTube
+    } else { 
       if (it.isTopic) {
-        // Es "Topic", se elige un ícono al azar entre Spotify y YouTube Music
         logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
       } else {
-        // Es un video normal de YouTube
         logo = youtubeLogoSvg();
       }
     }
@@ -970,7 +967,12 @@ function renderPlaylists() {
         const card = document.createElement("article");
         card.className="pl-item";
         card.dataset.plId = pl.id;
-        const cover = pl.tracks[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
+        const cover = pl.cover || pl.tracks[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
+
+        let trackCount = pl.tracks?.length || 0;
+        if (pl.source === 'spotify' && trackCount === 0 && pl.spotifyTracks) {
+            trackCount = pl.spotifyTracks.length;
+        }
 
         card.innerHTML = `
             <img class="pl-thumb-bg" src="${cover}" alt="">
@@ -978,7 +980,7 @@ function renderPlaylists() {
                 <div class="pl-meta">
                     <div class="pl-title">${pl.name}</div>
                     <div class="pl-creator">por ${pl.creator || 'Anónimo'}</div>
-                    <div class="pl-subtitle">${pl.tracks.length} temas</div>
+                    <div class="pl-subtitle">${trackCount} temas</div>
                 </div>
                 <div class="pl-privacy-toggle">
                     <label class="switch">
@@ -999,10 +1001,9 @@ function renderPlaylists() {
             handlePrivacyToggle(pl.id, e.target.checked);
         });
 
-        card.addEventListener("click", (e) => {
+        card.addEventListener("click", async (e) => {
             if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return;
-            showPlaylistInPlayer(pl.id);
-            switchView("view-player");
+            await showPlaylistInPlayer(pl.id);
         });
 
         card.classList.toggle("is-playing", viewingPlaylistId === pl.id && queueType === 'playlist');
@@ -1371,13 +1372,56 @@ async function saveCurrentQueueAsPlaylist() {
 }
 
 
-function showPlaylistInPlayer(plId){
-  const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
-  viewingPlaylistId = plId;
-  queueType = 'playlist';
-  setQueue(pl.tracks, 'playlist', qIdx > -1 ? qIdx : 0);
-  renderQueue(pl.tracks, pl.name);
+async function showPlaylistInPlayer(plId) {
+    const pl = communityPlaylists.find(p => p.id === plId);
+    if (!pl) return;
+
+    let tracksToPlay = pl.tracks;
+
+    // Lógica de conversión a YouTube solo cuando sea necesario
+    if (pl.source === 'spotify' && (!pl.tracks || pl.tracks.length === 0)) {
+        const playerView = $('#view-player');
+        const originalContent = playerView.innerHTML;
+        playerView.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones en YouTube...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
+        switchView('view-player');
+
+        try {
+            const spotifyTracks = pl.spotifyTracks || [];
+            if (spotifyTracks.length > 0) {
+                const youtubeTracks = (await Promise.all(spotifyTracks.map(findYoutubeEquivalent))).filter(Boolean);
+                
+                if (youtubeTracks.length > 0) {
+                    const { doc, updateDoc } = window.firebase;
+                    const plRef = doc(db, "playlists", pl.id);
+                    await updateDoc(plRef, { tracks: youtubeTracks });
+                    tracksToPlay = youtubeTracks;
+                } else {
+                    throw new Error("No se encontraron equivalentes en YouTube.");
+                }
+            }
+        } catch (e) {
+            playerView.innerHTML = originalContent;
+            alert(`No se pudieron encontrar las canciones para "${pl.name}" en YouTube.`);
+            console.error(e);
+            switchView('view-playlists'); // Volver a la lista
+            return;
+        } finally {
+            playerView.innerHTML = originalContent; // Restaurar la vista del reproductor
+        }
+    }
+
+    if (!tracksToPlay || tracksToPlay.length === 0) {
+        alert(`La playlist "${pl.name}" está vacía.`);
+        return;
+    }
+
+    viewingPlaylistId = pl.id;
+    setQueue(tracksToPlay, 'playlist', 0);
+    renderQueue(tracksToPlay, pl.name);
+    switchView('view-player');
+    playCurrent(true);
 }
+
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
 /* ========= Menú tres puntitos global (MEJORADO) ========= */
@@ -1585,7 +1629,7 @@ async function boot(){
 }
 
 function renderAllHomePlaylists() {
-    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && p.tracks && p.tracks.length > 0);
+    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && (p.tracks?.length > 0 || p.spotifyTracks?.length > 0));
     const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
     allPlaylists.sort((a, b) => { const dateA = a.updatedAt?.toDate() || new Date(0); const dateB = b.updatedAt?.toDate() || new Date(0); return dateB - dateA; });
     const container = $("#allPlaylistsContainer");
@@ -1598,7 +1642,7 @@ boot();
 window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 
-/* ========== Spotify Import UI & Logic (CORREGIDO Y MEJORADO) ========== */
+/* ========== Spotify Import UI & Logic (Optimizado) ========== */
 function sy_initSpotifyImportUI() {
   const playlistsView = document.getElementById('view-playlists');
   if (!playlistsView) return;
@@ -1787,40 +1831,33 @@ function sy_renderSpotifyPlaylistsSelection(userId, list) {
   };
 }
 
-// **NUEVA FUNCIÓN MEJORADA**
 async function fetchAllSpotifyPlaylistTracks(playlistId) {
     const token = await getSpotifyToken();
     if (!token) return [];
-
     let allTracks = [];
     let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
-
     while (url) {
         try {
             const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener las canciones de la playlist');
             const data = await response.json();
-            
             const tracks = data.items.map(({ track }) => track ? {
                 source: 'spotify',
-                type: 'spotify_track',
                 id: track.id,
                 title: track.name,
                 author: track.artists.map(a => a.name).join(', '),
                 thumb: track.album.images?.[0]?.url || ''
             } : null).filter(Boolean);
-            
             allTracks = allTracks.concat(tracks);
-            url = data.next; // URL para la siguiente página, o null si no hay más
+            url = data.next;
         } catch (e) {
             console.error("Error buscando canciones de playlist de Spotify:", e);
-            url = null; // Detener en caso de error
+            url = null;
         }
     }
     return allTracks;
 }
 
-// **NUEVA FUNCIÓN MEJORADA PARA GUARDAR Y ACTUALIZAR**
 async function sy_processAndSavePlaylists(list, resultsContainer) {
     if (!window.firebase || !db) {
         resultsContainer.innerHTML = '<div class="sy-error">Error: La base de datos no está disponible.</div>';
@@ -1830,8 +1867,6 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
     const col = collection(db, 'playlists');
     let importedCount = 0;
     let updatedCount = 0;
-
-    const originalButtonText = 'Importar / Actualizar';
     const importButton = document.getElementById('syPlImport');
 
     try {
@@ -1839,36 +1874,31 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
             const pl = list[i];
             importButton.textContent = `Procesando ${i + 1}/${list.length}...`;
 
-            // 1. Obtener todas las canciones de la playlist de Spotify
             const spotifyTracks = await fetchAllSpotifyPlaylistTracks(pl.spotifyId);
-            if(spotifyTracks.length === 0) continue; // Omitir playlists vacías
+            if(spotifyTracks.length === 0) continue;
 
-            // 2. Convertir canciones a su equivalente de YouTube
-            const youtubeTracks = (await Promise.all(spotifyTracks.map(findYoutubeEquivalent))).filter(Boolean);
-
-            // 3. Buscar si la playlist ya existe en Firebase
             const q = query(col, where("spotifyId", "==", pl.spotifyId));
             const snapshot = await getDocs(q);
 
             if (snapshot.empty) {
-                // 4a. Si no existe, crearla
-                await addDoc(col, {
+                const docRef = await addDoc(col, {
                     name: pl.name,
                     creator: pl.creator,
-                    isPublic: true,
+                    isPublic: false, // Por defecto en privado
                     cover: pl.cover || null,
                     source: 'spotify',
                     spotifyId: pl.spotifyId,
-                    tracks: youtubeTracks,
+                    spotifyTracks: spotifyTracks, // Guardamos datos de Spotify
+                    tracks: [], // Datos de YouTube se llenarán después
                     updatedAt: serverTimestamp()
                 });
+                addMyPlaylistId(docRef.id);
                 importedCount++;
             } else {
-                // 4b. Si existe, actualizarla
                 const existingDocRef = doc(db, 'playlists', snapshot.docs[0].id);
                 await updateDoc(existingDocRef, {
-                    name: pl.name, // Actualizar nombre por si cambió
-                    tracks: youtubeTracks, // Reemplazar con la nueva lista de canciones
+                    name: pl.name,
+                    spotifyTracks: spotifyTracks,
                     updatedAt: serverTimestamp()
                 });
                 updatedCount++;
@@ -1884,11 +1914,10 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
     } finally {
       if (importButton) {
         importButton.disabled = false;
-        importButton.textContent = originalButtonText;
+        importButton.textContent = 'Importar / Actualizar';
       }
     }
 }
-
 
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
