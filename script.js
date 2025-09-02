@@ -492,7 +492,6 @@ overlayInput?.addEventListener("keydown", async e=>{
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
-// CORRECCIÓN: Los filtros de búsqueda ahora se crean y se añaden directamente al overlay de búsqueda.
 function setupSearchFilters() {
     const searchContainer = searchOverlay.querySelector('.search-bar-container');
     if (!searchContainer || $('#search-filters')) return;
@@ -515,7 +514,6 @@ function setupSearchFilters() {
         btn.classList.add('active');
         currentSearchType = btn.dataset.type;
         
-        // Si ya hay una búsqueda en pantalla, la rehace con el nuevo filtro.
         const currentQuery = paging.query;
         if(currentQuery && $("#view-search").classList.contains('active')) {
             startSearch(currentQuery);
@@ -557,7 +555,7 @@ async function youtubeSearch(query, pageToken = '', type = 'video', limit = BATC
         return { items: [], nextPageToken: null, hasMore: false };
     }
     const resultItems = data.items.map(item => {
-        if (!item.id) return null; // Ignorar resultados sin ID
+        if (!item.id) return null;
         const isTopic = /topic/i.test(item.snippet.channelTitle);
         const baseItem = {
             source: 'youtube',
@@ -591,8 +589,6 @@ async function startSearch(query){
   updateHomeGridVisibility();
 
   try {
-    // CORRECCIÓN: La búsqueda ahora solo usa la API de YouTube y el tipo de búsqueda
-    // ('video' o 'playlist') está controlado por la variable global 'currentSearchType'.
     const searchResult = await youtubeSearch(query, '', currentSearchType, 40);
     
     if (searchAbort.signal.aborted) return;
@@ -810,19 +806,17 @@ function renderPlaylistCard(playlist) {
     if (trackCount === 0) return;
 
     let covers;
-    // CORRECCIÓN: Ahora las playlists recomendadas usan sus thumbnails de forma diferida.
     if (playlist.isRecommended && playlist.data && playlist.data.length > 0) {
         covers = playlist.data.slice(0, 4).map(track => track && track.thumb).filter(Boolean);
     } else if (!playlist.isRecommended) {
         covers = (playlist.tracks || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
     } else {
-        covers = []; // Aún no cargado
+        covers = [];
     }
     
     if (covers.length === 0 && playlist.cover) {
         covers.push(playlist.cover);
     }
-    // Muestra un placeholder genérico si no hay covers.
     while (covers.length < 4) covers.push("https://i.imgur.com/gCa3j5g.png");
     
     const logo = playlist.isRecommended ? youtubeLogoSvg() : (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
@@ -836,17 +830,14 @@ function renderPlaylistCard(playlist) {
             <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
         </div>`;
     
-    // CORRECCIÓN: La carga de datos para playlists recomendadas ahora es bajo demanda.
     card.onclick = async () => {
         if (playlist.isRecommended) {
-            // Si los datos no están cargados, los busca.
             if (!playlist.data || playlist.data.length === 0) {
                 showToast(`Cargando "${playlist.title}"...`);
                 try {
                     const tracks = await fetchVideoDetailsByIds(playlist.ids);
                     if (tracks.length === 0) throw new Error("No tracks found");
-                    playlist.data = tracks; // Guarda en caché para futuras vistas.
-                    // Vuelve a renderizar esta tarjeta con las nuevas imágenes
+                    playlist.data = tracks;
                     renderAllHomePlaylists();
                 } catch (e) {
                     showToast("Error al cargar la playlist recomendada.", true);
@@ -1769,8 +1760,6 @@ async function boot(){
     renderAllHomePlaylists();
   });
 
-  // CORRECCIÓN: Se elimina la precarga de playlists recomendadas para evitar errores de API al inicio.
-  // Ahora se cargarán cuando el usuario haga clic en ellas.
   renderAllHomePlaylists();
   updateHomeGridVisibility();
 
@@ -1848,9 +1837,10 @@ async function fetchScrape(query) {
 async function resolveTrack(track) {
     const trackKey = getTrackKey(track.author, track.title);
     if (trackCache.has(trackKey)) {
+        console.log(`Cache HIT for: ${track.title}`);
         return { videoId: trackCache.get(trackKey), error: null };
     }
-
+    console.log(`Cache MISS for: ${track.title}. Scraping...`);
     const query = `${track.author} ${track.title}`;
     try {
         const response = await fetchScrape(query);
@@ -1863,8 +1853,10 @@ async function resolveTrack(track) {
             trackCache.set(trackKey, bestId);
             return { videoId: bestId, error: null };
         }
+        console.warn(`No videoId found in page for query: ${query}`);
         return { videoId: null, error: "No videoId found in page" };
     } catch (e) {
+        console.error(`Error during scraping for query ${query}:`, e);
         return { videoId: null, error: e.message };
     }
 }
@@ -1880,38 +1872,20 @@ async function startResolverJob(playlistId) {
     }
     const playlist = { id: plDoc.id, ...plDoc.data() };
 
-    let jobId = playlist.resolverJobId;
-    if (!jobId) {
-        jobId = `job_${playlistId}_${Date.now()}`;
-        await updateDoc(plRef, { resolverJobId: jobId });
-    }
+    let jobId = playlist.resolverJobId || `job_${playlistId}_${Date.now()}`;
+    await updateDoc(plRef, { resolverJobId: jobId, status: 'resolving' });
 
     const jobRef = doc(db, "resolverJobs", jobId);
-    let jobData;
-    const jobDoc = await getDoc(jobRef);
-
-    if (jobDoc.exists()) {
-        jobData = jobDoc.data();
-        if (jobData.status === 'running') {
-            console.log("Job already running, attaching listener.");
-        }
-    } 
-    
-    // Siempre crea o resetea el job para empezar de cero o continuar.
-    jobData = {
+    const jobData = {
         playlistId: playlistId,
-        status: 'queued',
+        status: 'running',
         total: playlist.spotifyTracks.length,
-        done: 0, 
         nextIndex: 0,
         errors: [],
         lastUpdated: serverTimestamp()
     };
     await setDoc(jobRef, jobData);
     
-    await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
-    await updateDoc(plRef, { status: 'resolving' });
-
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
         const job = doc.data();
@@ -1928,6 +1902,7 @@ async function startResolverJob(playlistId) {
     runJobBatch(playlistId, jobRef);
 }
 
+// CORRECCIÓN: Lógica de scraping totalmente secuencial y robusta.
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
     
@@ -1937,76 +1912,83 @@ async function runJobBatch(playlistId, jobRef) {
             console.log("Job stopped or cancelled.");
             return;
         }
-        
+
+        const job = jobDoc.data();
+        const { nextIndex, total } = job;
+
+        if (nextIndex >= total) {
+            const plRef = doc(db, "playlists", playlistId);
+            const plDoc = await getDoc(plRef);
+            const playlist = plDoc.data();
+            const finalStatus = (playlist.resolvedCount || 0) === total ? 'resolved' : 'partial';
+            
+            await updateDoc(plRef, { status: finalStatus });
+            await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
+            
+            const message = finalStatus === 'resolved' 
+                ? `Importación completa: ${playlist.name}`
+                : `Importación incompleta: ${playlist.resolvedCount} de ${total} resueltos.`;
+            showToast(message, finalStatus === 'partial');
+            console.log(`Job for playlist ${playlistId} finished with status: ${finalStatus}`);
+            return;
+        }
+
         const plRef = doc(db, "playlists", playlistId);
         const plDoc = await getDoc(plRef);
         if (!plDoc.exists()) return;
 
         const playlist = plDoc.data();
-        const job = jobDoc.data();
-        const { nextIndex, total } = job;
-        const BATCH_SIZE = 3;
+        const trackToProcess = playlist.spotifyTracks[nextIndex];
+        
+        console.log(`Processing track ${nextIndex + 1}/${total}: ${trackToProcess.title}`);
 
-        if (nextIndex >= total) {
-            const finalStatus = (playlist.resolvedCount || 0) === total ? 'resolved' : 'partial';
-            await updateDoc(plRef, { status: finalStatus });
-            await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
-            const message = finalStatus === 'resolved' 
-                ? `Importación completa: ${playlist.name}`
-                : `Importación incompleta: ${playlist.resolvedCount} de ${total} resueltos.`;
-            showToast(message, finalStatus === 'partial');
-            return;
-        }
-
-        const tracksToProcess = playlist.spotifyTracks.slice(nextIndex, nextIndex + BATCH_SIZE);
-        const promises = tracksToProcess.map(track => resolveTrack(track));
-        const results = await Promise.all(promises);
-
+        const result = await resolveTrack(trackToProcess);
+        
         const currentPlDoc = await getDoc(plRef);
         const currentPlaylist = currentPlDoc.data();
         let updatedTracks = [...(currentPlaylist.tracks || Array(total).fill(null))];
+        let newResolvedCount = currentPlaylist.resolvedCount || 0;
+        let errorsInJob = job.errors || [];
 
-        let resolvedInBatch = 0;
-        let errorsInBatch = [];
-
-        results.forEach((result, i) => {
-            const originalIndex = nextIndex + i;
-            if (result.videoId) {
-                updatedTracks[originalIndex] = {
-                    ...playlist.spotifyTracks[originalIndex],
-                    id: result.videoId,
-                    thumb: `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-                    source: 'youtube'
-                };
-                resolvedInBatch++;
-            } else if (result.error) {
-                errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+        if (result.videoId) {
+            if (updatedTracks[nextIndex] === null || !updatedTracks[nextIndex].id) {
+                 newResolvedCount++;
             }
+            updatedTracks[nextIndex] = {
+                ...trackToProcess,
+                id: result.videoId,
+                thumb: `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
+                source: 'youtube'
+            };
+            console.log(`SUCCESS: Found videoId ${result.videoId} for ${trackToProcess.title}`);
+        } else {
+            errorsInJob.push(`Track ${nextIndex} (${trackToProcess.title}): ${result.error}`);
+            console.error(`FAILED: Could not resolve track ${trackToProcess.title}. Reason: ${result.error}`);
+        }
+        
+        await updateDoc(plRef, {
+            tracks: updatedTracks,
+            resolvedCount: newResolvedCount
+        });
+
+        await updateDoc(jobRef, {
+            nextIndex: nextIndex + 1,
+            errors: errorsInJob,
+            lastUpdated: serverTimestamp()
         });
         
-        const newResolvedCount = (currentPlaylist.resolvedCount || 0) + resolvedInBatch;
-        const newNextIndex = nextIndex + tracksToProcess.length;
+        // Pausa antes del siguiente para ser amable con el servidor de scraping
+        setTimeout(() => runJobBatch(playlistId, jobRef), 400);
 
-        const jobUpdatePayload = { 
-            done: newNextIndex,
-            nextIndex: newNextIndex, 
-            lastUpdated: serverTimestamp(),
-            errors: [...(job.errors || []), ...errorsInBatch]
-        };
-
-        await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
-        await updateDoc(jobRef, jobUpdatePayload);
-
-        setTimeout(() => runJobBatch(playlistId, jobRef), 500);
     } catch (e) {
-        console.error("Error in job batch:", e);
+        console.error("Critical error in job batch:", e);
         const pl = communityPlaylists.find(p => p.id === playlistId);
         if (pl && pl.resolverJobId) {
              const failedJobRef = doc(db, "resolverJobs", pl.resolverJobId);
              await updateDoc(failedJobRef, { status: 'error', error_message: e.message, lastUpdated: serverTimestamp() });
         }
-        showToast("Ocurrió un error durante la importación.", true);
-        hideResolverModal(); // Ensure modal closes on error
+        showToast("Ocurrió un error crítico durante la importación.", true);
+        hideResolverModal();
     }
 }
 
@@ -2054,8 +2036,8 @@ function updateResolverModal(job) {
     }
 
     const pl = communityPlaylists.find(p => p.id === job.playlistId);
-    const resolved = pl ? pl.resolvedCount : 0;
-    const progress = (job.total > 0) ? (resolved / job.total) * 100 : 0;
+    const resolved = pl ? pl.resolvedCount : job.nextIndex;
+    const progress = (job.total > 0) ? (job.nextIndex / job.total) * 100 : 0;
     
     modal.querySelector('.resolver-progress').style.width = `${progress}%`;
     modal.querySelector('.resolver-counter').textContent = `${resolved} / ${job.total}`;
@@ -2321,7 +2303,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                     spotifyId: pl.spotifyId,
                     spotifyTracks: spotifyTracks,
                     trackCount: spotifyTracks.length,
-                    tracks: Array(spotifyTracks.length).fill(null), // Initialize with nulls
+                    tracks: Array(spotifyTracks.length).fill(null),
                     status: 'unresolved',
                     resolvedCount: 0,
                     updatedAt: serverTimestamp(),
