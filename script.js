@@ -490,7 +490,7 @@ overlayInput?.addEventListener("keydown", async e=>{
     }
 });
 
-/* ========= Búsqueda Mixta con Scroll Infinito (CORREGIDO) ========= */
+/* ========= Búsqueda Mixta con Scroll Infinito ========= */
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
@@ -566,21 +566,20 @@ async function startSearch(query){
         ...ytResult.items.filter(it => it.type === 'youtube_video')
     ];
 
-    // AJUSTE: Nueva lógica de ordenamiento multi-nivel
     combined.sort((a, b) => {
         const aIsPlaylist = a.type.includes('playlist');
         const bIsPlaylist = b.type.includes('playlist');
         const aIsTopic = a.isTopic;
         const bIsTopic = b.isTopic;
 
-        if (aIsPlaylist && !bIsPlaylist) return -1; // Playlists primero
+        if (aIsPlaylist && !bIsPlaylist) return -1;
         if (!aIsPlaylist && bIsPlaylist) return 1;
 
-        if (!aIsPlaylist && !bIsPlaylist) { // Si ambos son tracks
-            if (aIsTopic && !bIsTopic) return -1; // Topics antes que no-topics
+        if (!aIsPlaylist && !bIsPlaylist) {
+            if (aIsTopic && !bIsTopic) return -1;
             if (!aIsTopic && bIsTopic) return 1;
         }
-        return 0; // Mantener orden si son iguales
+        return 0;
     });
 
     if (resultsEl) resultsEl.innerHTML = "";
@@ -631,7 +630,7 @@ async function loadNextPage(){
   }
 }
 
-/* ========= Render resultados (CORREGIDO) ========= */
+/* ========= Render resultados ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
@@ -805,10 +804,19 @@ async function handlePlaylistResultClick(playlistId, playlistTitle) {
 function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
-    const tracks = playlist.isRecommended ? playlist.data : playlist.tracks;
-    if (!tracks || tracks.length === 0) return;
-    const covers = tracks.slice(0, 4).map(track => track.thumb).filter(Boolean);
+    const tracks = playlist.isRecommended ? playlist.data : (playlist.tracks || []);
+    let trackCount = tracks.length;
+    if (playlist.source === 'spotify' && trackCount === 0 && playlist.spotifyTracks) {
+        trackCount = playlist.spotifyTracks.length;
+    }
+    if (trackCount === 0) return;
+
+    let covers = tracks.slice(0, 4).map(track => track.thumb).filter(Boolean);
+    if (covers.length === 0 && playlist.cover) {
+        covers.push(playlist.cover);
+    }
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    
     const logo = playlist.isRecommended ? youtubeLogoSvg() : spotifyLogoSvg();
     const card = document.createElement("article");
     card.className = "playlist-card";
@@ -819,15 +827,16 @@ function renderPlaylistCard(playlist) {
             <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
             <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
         </div>`;
-    card.onclick = () => {
-        const queueTracks = playlist.isRecommended ? playlist.data : playlist.tracks;
-        const queueId = playlist.isRecommended ? null : playlist.id;
-        const queueTitle = playlist.isRecommended ? playlist.title : playlist.name;
-        setQueue(queueTracks, playlist.isRecommended ? 'recommended' : 'playlist', 0);
-        viewingPlaylistId = queueId;
-        renderQueue(queueTracks, queueTitle);
-        switchView('view-player');
-        playCurrent(true);
+    card.onclick = async () => {
+        if (playlist.isRecommended) {
+            setQueue(playlist.data, 'recommended', 0);
+            viewingPlaylistId = null;
+            renderQueue(playlist.data, playlist.title);
+            switchView('view-player');
+            playCurrent(true);
+        } else {
+             await showPlaylistInPlayer(playlist.id);
+        }
     };
     container.appendChild(card);
 }
@@ -1378,11 +1387,10 @@ async function showPlaylistInPlayer(plId) {
 
     let tracksToPlay = pl.tracks;
 
-    // Lógica de conversión a YouTube solo cuando sea necesario
     if (pl.source === 'spotify' && (!pl.tracks || pl.tracks.length === 0)) {
         const playerView = $('#view-player');
-        const originalContent = playerView.innerHTML;
-        playerView.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones en YouTube...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
+        const queuePanel = $('#queuePanel');
+        queuePanel.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones en YouTube...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
         switchView('view-player');
 
         try {
@@ -1400,13 +1408,10 @@ async function showPlaylistInPlayer(plId) {
                 }
             }
         } catch (e) {
-            playerView.innerHTML = originalContent;
             alert(`No se pudieron encontrar las canciones para "${pl.name}" en YouTube.`);
             console.error(e);
             switchView('view-playlists'); // Volver a la lista
             return;
-        } finally {
-            playerView.innerHTML = originalContent; // Restaurar la vista del reproductor
         }
     }
 
@@ -1424,7 +1429,7 @@ async function showPlaylistInPlayer(plId) {
 
 function hideQueuePanel(){ $("#queuePanel")?.classList.add("hide"); $("#queueList") && ($("#queueList").innerHTML=""); viewingPlaylistId=null; renderPlaylists(); }
 
-/* ========= Menú tres puntitos global (MEJORADO) ========= */
+/* ========= Menú tres puntitos global ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
     if (!btn) return;
@@ -1438,9 +1443,7 @@ document.addEventListener("click", async (e) => {
     if (itemEl.classList.contains("result-item")) {
         const itemId = itemEl.dataset.itemId;
         const sourceTrack = items.find(x => x.id === itemId);
-        if (!sourceTrack) return;
-
-        if (sourceTrack.type.includes('playlist')) return;
+        if (!sourceTrack || sourceTrack.type.includes('playlist')) return;
 
         if (sourceTrack.type === 'spotify_track') {
             const ytEquivalent = await findYoutubeEquivalent(sourceTrack);
@@ -1884,23 +1887,26 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                 const docRef = await addDoc(col, {
                     name: pl.name,
                     creator: pl.creator,
-                    isPublic: false, // Por defecto en privado
+                    isPublic: false,
                     cover: pl.cover || null,
                     source: 'spotify',
                     spotifyId: pl.spotifyId,
-                    spotifyTracks: spotifyTracks, // Guardamos datos de Spotify
-                    tracks: [], // Datos de YouTube se llenarán después
+                    spotifyTracks: spotifyTracks,
+                    tracks: [],
                     updatedAt: serverTimestamp()
                 });
                 addMyPlaylistId(docRef.id);
                 importedCount++;
             } else {
-                const existingDocRef = doc(db, 'playlists', snapshot.docs[0].id);
+                const docId = snapshot.docs[0].id;
+                const existingDocRef = doc(db, 'playlists', docId);
                 await updateDoc(existingDocRef, {
                     name: pl.name,
                     spotifyTracks: spotifyTracks,
+                    tracks: [], // Vaciamos los tracks de youtube para forzar la actualización la próxima vez que se abra
                     updatedAt: serverTimestamp()
                 });
+                addMyPlaylistId(docId); // **LA CORRECCIÓN CLAVE**
                 updatedCount++;
             }
         }
@@ -1918,6 +1924,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
       }
     }
 }
+
 
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
