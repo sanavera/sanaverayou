@@ -373,67 +373,83 @@ async function fetchSpotifyPlaylist(playlistId) {
 /* ========= Lógica de Scraping de YouTube (Reemplazo de API) ========= */
 const uniq = a => [...new Set(a)];
 
-async function fetchMetadataForId(id) {
-    try {
-        const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`);
-        if (!response.ok) throw new Error(`noembed.com failed with status ${response.status}`);
-        const meta = await response.json();
-        if (meta.error) throw new Error(meta.error);
-        return {
-            id,
-            title: cleanTitle(meta.title || `Video ${id}`),
-            author: cleanAuthor(meta.author_name || "YouTube"),
-            thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`)
-        };
-    } catch (e) {
-        console.error(`Failed to fetch metadata for ${id}:`, e);
-        return {
-            id,
-            title: `Video ${id}`,
-            author: "YouTube",
-            thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
-        };
+// Función de reintento para peticiones fetch
+async function withRetry(fn, retries = 2, delay = 300) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            if (i === retries) {
+                 console.error("Scraping failed after all retries.", e);
+                 throw e;
+            }
+            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
+            await new Promise(res => setTimeout(res, delay));
+        }
     }
 }
 
-async function searchYoutubeByScrape(query, limit = 20) {
-    try {
+// Función unificada y robusta para scraping, basada en bot.html
+async function scrapeYoutube(query, limit = 5) {
+    return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const html = await fetch(endpoint).then(r => r.text());
-        const videoIdRegex = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
-        const ids = uniq(Array.from(html.matchAll(videoIdRegex)).map(m => m[1])).slice(0, limit);
+        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
+            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
+            return r.text();
+        });
+
+        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
         if (!ids.length) return [];
-        const results = await Promise.all(ids.map(id => fetchMetadataForId(id)));
-        return results.map(item => ({
-            ...item,
-            source: 'youtube',
-            type: 'youtube_video',
-            isTopic: /topic/i.test(item.author)
-        }));
-    } catch (e) {
-        console.error("YouTube scraping search failed:", e);
-        return [];
-    }
+        
+        const metadataPromises = ids.map(id => 
+            fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+                .then(r => r.json())
+                .then(meta => {
+                    if (meta.error) return null;
+                    return {
+                        id,
+                        title: cleanTitle(meta.title || `Video ${id}`),
+                        thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                        author: cleanAuthor(meta.author_name || "YouTube"),
+                        source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
+                    };
+                })
+                .catch(() => ({ // Fallback si noembed falla
+                    id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                    author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
+                }))
+        );
+        
+        return (await Promise.all(metadataPromises)).filter(Boolean);
+    });
 }
+
 
 async function fetchVideoDetailsByIds(ids) {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return [];
-    const results = await Promise.all(uniqueIds.map(id => fetchMetadataForId(id)));
-    return results.filter(Boolean);
+    
+    const metadataPromises = uniqueIds.map(id => 
+        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+            .then(r => r.json())
+            .then(meta => {
+                if (meta.error) return null;
+                return {
+                    id,
+                    title: cleanTitle(meta.title || `Video ${id}`),
+                    thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                    author: cleanAuthor(meta.author_name || "YouTube"),
+                };
+            })
+            .catch(() => ({
+                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, author: "YouTube"
+            }))
+    );
+    return (await Promise.all(metadataPromises)).filter(Boolean);
 }
 
 let searchAbort = null;
 let currentSearchType = 'all';
-
-async function youtubeSearch(query, pageToken = '', type = 'video', limit = 20) {
-    if (type.includes('playlist')) {
-        return { items: [], nextPageToken: null, hasMore: false };
-    }
-    const results = await searchYoutubeByScrape(query, limit);
-    return { items: results, nextPageToken: null, hasMore: false };
-}
-
 
 /* ========= Nav ========= */
 function switchView(id){
@@ -482,7 +498,6 @@ overlayInput?.addEventListener("keydown", async e=>{
 });
 
 /* ========= Búsqueda Mixta con Scroll Infinito ========= */
-const BATCH_SIZE = 20;
 let paging = { query:"", loading:false, hasMore:false }; // Paging is disabled with scraping
 
 function setupSearchFilters() {
@@ -527,29 +542,19 @@ async function startSearch(query){
 
   try {
     let combined = [];
-    
     const promises = [];
+    
     if (currentSearchType === 'all' || currentSearchType === 'video') {
-        promises.push(youtubeSearch(query, '', 'video', currentSearchType === 'all' ? 20 : 40));
+        promises.push(scrapeYoutube(query, currentSearchType === 'all' ? 20 : 40));
     }
     if (currentSearchType === 'all' || currentSearchType === 'playlist') {
-        promises.push(searchSpotify(query, 'playlist', 20));
+        promises.push(searchSpotify(query, 'playlist', 20).then(r => r.playlists));
     }
 
     const results = await Promise.all(promises);
-    
     if (searchAbort.signal.aborted) return;
-
-    const ytResult = results.find(r => Array.isArray(r.items)) || { items: [] };
-    const spResult = results.find(r => Array.isArray(r.playlists)) || { playlists: [] };
-
-    if (currentSearchType === 'all') {
-        combined = [...spResult.playlists, ...ytResult.items];
-    } else if (currentSearchType === 'video') {
-        combined = ytResult.items;
-    } else if (currentSearchType === 'playlist') {
-        combined = spResult.playlists;
-    }
+    
+    combined = results.flat();
     
     combined.sort((a, b) => {
         const aIsPlaylist = a.type.includes('playlist');
@@ -571,7 +576,7 @@ async function startSearch(query){
 
   } catch (e) {
     console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda.</p></div>`;
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
   } finally {
     paging.loading = false;
   }
@@ -1704,32 +1709,6 @@ function getTrackKey(artist, title) {
     return `${normalize(artist)}|${normalize(title)}`;
 }
 
-function buildScrapeUrl(query, useHttps = false) {
-    const protocol = useHttps ? 'https' : 'http';
-    return `https://r.jina.ai/${protocol}://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-}
-
-async function fetchScrape(query) {
-    const primaryUrl = buildScrapeUrl(query, false);
-    try {
-        const response = await fetch(primaryUrl);
-        if (!response.ok) {
-            console.warn(`Primary scrape URL failed with status ${response.status}. Trying secondary.`);
-            const secondaryUrl = buildScrapeUrl(query, true);
-            const secondaryResponse = await fetch(secondaryUrl);
-            if (!secondaryResponse.ok) {
-                throw new Error(`Secondary scrape URL also failed with status ${secondaryResponse.status}.`);
-            }
-            return secondaryResponse;
-        }
-        return response;
-    } catch (error) {
-        console.error("Scraping fetch failed for query:", query, error);
-        throw error;
-    }
-}
-
-
 async function resolveTrack(track) {
     const trackKey = getTrackKey(track.author, track.title);
     if (trackCache.has(trackKey)) {
@@ -1738,17 +1717,13 @@ async function resolveTrack(track) {
 
     const query = `${track.author} ${track.title}`;
     try {
-        const response = await fetchScrape(query);
-        const html = await response.text();
-        const videoIdRegex = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
-        const match = videoIdRegex.exec(html);
-        
-        if (match && match[1]) {
-            const bestId = match[1];
-            trackCache.set(trackKey, bestId);
-            return { videoId: bestId, error: null };
+        const results = await scrapeYoutube(query, 1);
+        if (results && results[0] && results[0].id) {
+            const videoId = results[0].id;
+            trackCache.set(trackKey, videoId);
+            return { videoId: videoId, error: null };
         }
-        return { videoId: null, error: "No videoId found in page" };
+        return { videoId: null, error: "No video found via scraping" };
     } catch (e) {
         return { videoId: null, error: e.message };
     }
@@ -1786,7 +1761,7 @@ async function startResolverJob(playlistId) {
             playlistRef: plRef.path,
             status: 'queued',
             total: playlist.spotifyTracks.length,
-            done: 0, // Tracks processed
+            done: 0,
             nextIndex: 0,
             errors: [],
             lastUpdated: serverTimestamp()
@@ -1826,7 +1801,7 @@ async function runJobBatch(playlistId, jobRef) {
     const playlist = plDoc.data();
     const job = jobDoc.data();
     const { nextIndex, total } = job;
-    const BATCH_SIZE = 3;
+    const BATCH_SIZE = 5; // Increased batch size for faster multi-scraping
 
     if (nextIndex >= total) {
         const finalStatus = playlist.resolvedCount === total ? 'resolved' : 'partial';
@@ -1846,8 +1821,8 @@ async function runJobBatch(playlistId, jobRef) {
     const currentPlDoc = await getDoc(plRef);
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || [])];
-    if (updatedTracks.length === 0 || updatedTracks.every(t => t === null)) {
-         updatedTracks = Array(total).fill(null).map((_, i) => ({ ...playlist.spotifyTracks[i], id: null }));
+    if (updatedTracks.length < total) {
+         updatedTracks = Array(total).fill(null);
     }
 
     let resolvedInBatch = 0;
@@ -1881,7 +1856,7 @@ async function runJobBatch(playlistId, jobRef) {
     await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
     await updateDoc(jobRef, jobUpdatePayload);
 
-    setTimeout(() => runJobBatch(playlistId, jobRef), 500);
+    setTimeout(() => runJobBatch(playlistId, jobRef), 800); // Increased delay to be safer
 }
 
 
@@ -1927,12 +1902,14 @@ function updateResolverModal(job) {
         modal.querySelector('.resolver-cancel').onclick = cancelResolverJob;
     }
 
-    const pl = communityPlaylists.find(p => p.resolverJobId === job.id);
+    const pl = communityPlaylists.find(p => p.resolverJobId === job.id || p.resolverJobId === job.playlistRef.split('/').pop());
     const resolved = pl ? pl.resolvedCount : 0;
-    const progress = (job.done / job.total) * 100;
+    const total = job.total || pl?.trackCount || 0;
+    if (total === 0) return;
+    const progress = (resolved / total) * 100;
     
     modal.querySelector('.resolver-progress').style.width = `${progress}%`;
-    modal.querySelector('.resolver-counter').textContent = `${resolved} / ${job.total}`;
+    modal.querySelector('.resolver-counter').textContent = `${resolved} / ${total}`;
 }
 
 function hideResolverModal() {
