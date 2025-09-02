@@ -515,7 +515,6 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
       } else {
         console.warn(`Error de red/servidor (${response.status}), reintentando con otra key...`);
       }
-      // Para 403 u otros errores, siempre reintentamos
       return youtubeSearch(query, pageToken, limit, retryCount + 1);
     }
     const data = await response.json();
@@ -539,7 +538,6 @@ async function youtubeSearch(query, pageToken = '', limit = BATCH_SIZE, retryCou
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
   } catch (e) {
     console.error(`Fallo en fetch para la búsqueda en YouTube, reintentando con otra key:`, e);
-    // Ante cualquier error de fetch, reintentamos
     return youtubeSearch(query, pageToken, limit, retryCount + 1);
   }
 }
@@ -768,7 +766,7 @@ async function findYoutubeEquivalent(track) {
         return ytTrack ? { ...ytTrack, originalId: track.id, thumb: ytTrack.thumb || track.thumb } : null;
     } catch (error) {
         console.error(`Búsqueda en YouTube falló para "${searchQuery}":`, error);
-        return null; // Devuelve null si la búsqueda falla después de todos los reintentos
+        return null; 
     }
 }
 
@@ -1402,25 +1400,34 @@ async function showPlaylistInPlayer(plId) {
 
     let tracksToPlay = pl.tracks;
 
-    // Lógica de conversión a YouTube solo cuando sea necesario
     if (pl.source === 'spotify' && (!pl.tracks || pl.tracks.length === 0)) {
         const queuePanel = $('#queuePanel');
         switchView('view-player');
-        queuePanel.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones en YouTube...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
+        queuePanel.innerHTML = `<div class="loading-indicator fullscreen"><h3>Buscando canciones...</h3><p>Esto puede tardar unos segundos y solo se hará una vez.</p></div>`;
+        const loadingP = queuePanel.querySelector('.loading-indicator p');
 
         try {
             const spotifyTracks = pl.spotifyTracks || [];
             if (spotifyTracks.length > 0) {
-                const youtubeTracks = (await Promise.all(spotifyTracks.map(findYoutubeEquivalent))).filter(Boolean);
+                
+                const youtubeTracks = [];
+                for (let i = 0; i < spotifyTracks.length; i++) {
+                    const track = spotifyTracks[i];
+                    if (loadingP) loadingP.textContent = `Buscando "${track.title}" (${i + 1}/${spotifyTracks.length})...`;
+                    
+                    const ytEquivalent = await findYoutubeEquivalent(track);
+                    if (ytEquivalent) {
+                        youtubeTracks.push(ytEquivalent);
+                    }
+                    // Pausa para no saturar la API
+                    await new Promise(resolve => setTimeout(resolve, 200)); 
+                }
                 
                 if (youtubeTracks.length > 0) {
                     const { doc, updateDoc } = window.firebase;
                     const plRef = doc(db, "playlists", pl.id);
                     await updateDoc(plRef, { tracks: youtubeTracks });
-                    // No es necesario re-asignar 'tracksToPlay' aquí.
-                    // El listener de onSnapshot actualizará 'communityPlaylists', y la UI se refrescará.
-                    // Por ahora, podemos proceder con las que acabamos de encontrar.
-                    tracksToPlay = youtubeTracks; 
+                    tracksToPlay = youtubeTracks;
                 } else {
                     throw new Error("No se encontraron equivalentes en YouTube para esta lista.");
                 }
@@ -1430,8 +1437,6 @@ async function showPlaylistInPlayer(plId) {
         } catch (e) {
             alert(`Error: ${e.message}`);
             console.error(e);
-            // Restaurar panel y volver.
-            renderQueue([], pl.name); 
             switchView('view-playlists');
             return;
         }
@@ -1656,7 +1661,6 @@ function renderAllHomePlaylists() {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     container.innerHTML = "";
-    // **CORRECCIÓN: Mostrar recomendadas Y todas las públicas de la comunidad**
     const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && (p.tracks?.length > 0 || p.spotifyTracks?.length > 0));
     const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
     allPlaylists.sort((a, b) => { 
