@@ -204,6 +204,7 @@ function loadPlayerState() {
   if (!savedState) return null;
   try {
     const state = JSON.parse(savedState);
+    // Expire state after 2 hours
     if (Date.now() - (state.timestamp || 0) > 2 * 60 * 60 * 1000) {
       localStorage.removeItem(PLAYER_STATE_KEY);
       return null;
@@ -389,7 +390,7 @@ async function withRetry(fn, retries = 2, delay = 300) {
     }
 }
 
-// Función unificada y robusta para scraping, basada en bot.html
+// Función unificada y robusta para scraping
 async function scrapeYoutube(query, limit = 5) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
@@ -697,6 +698,7 @@ async function findYoutubeEquivalent(track) {
     const { videoId } = await resolveTrack(track);
     if (!videoId) return null;
 
+    // Se mantiene la metadata original de Spotify
     return {
         id: videoId,
         title: track.title,
@@ -1340,6 +1342,7 @@ function renderQueue(queueItems, title) {
     if (!isUserPlaylist && queueType !== 'spotify_playlist_unresolved') viewingPlaylistId = null;
 
     (queueItems || []).forEach((t, i) => {
+        if (!t) return; // Skip null/undefined items in sparse arrays
         const li = document.createElement("li");
         li.className = "queue-item";
         li.dataset.trackId = t.id || `spotify_${t.spotifyId}`;
@@ -1352,7 +1355,7 @@ function renderQueue(queueItems, title) {
         <button class="card-play" title="Play" aria-label="Play">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>` : `<div class="pending-indicator">Pendiente</div>`}
+        </button>` : `<div class="pending-indicator">Buscando...</div>`}
       </div>
       <div class="meta">
         <div class="title-line">
@@ -1377,6 +1380,7 @@ function renderQueue(queueItems, title) {
         if(playBtn) {
             playBtn.onclick = (e) => {
                 e.stopPropagation();
+                 if(currentTrack?.id === t.id){ togglePlay(); return; }
                 const resolvedQueue = queueItems.filter(item => item && item.id);
                 const resolvedIndex = resolvedQueue.findIndex(item => item.id === t.id);
                 if (resolvedIndex === -1) return;
@@ -1398,7 +1402,7 @@ async function showPlaylistInPlayer(plId) {
     switchView('view-player');
 
     if (pl.source === 'spotify' && pl.status !== 'resolved') {
-        const tracksToShow = (pl.tracks?.length > 0 && pl.tracks.some(t => t)) ? pl.tracks.map((t, i) => t || { ...pl.spotifyTracks[i], id: null, thumb: pl.spotifyTracks[i].thumb || pl.cover }) : pl.spotifyTracks.map(st => ({...st, thumb: st.thumb || pl.cover, id: null}));
+        const tracksToShow = (pl.tracks?.length > 0 && pl.tracks.some(t => t)) ? pl.tracks.map((t, i) => t || { ...(pl.spotifyTracks[i] || {}), id: null, thumb: pl.spotifyTracks[i]?.thumb || pl.cover }) : (pl.spotifyTracks || []).map(st => ({...st, thumb: st.thumb || pl.cover, id: null}));
         renderQueue(tracksToShow, pl.name);
         
         if (pl.status !== 'resolving') {
@@ -1406,11 +1410,12 @@ async function showPlaylistInPlayer(plId) {
         } else {
             console.log("Job is already running for this playlist. Attaching listener.");
             const { doc, onSnapshot } = window.firebase;
+            if (!pl.resolverJobId) { console.error("Playlist is resolving but has no job ID"); return; }
             const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
             if (resolverJobUnsubscribe) resolverJobUnsubscribe();
             resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
-                const job = doc.data();
-                if (!job) return;
+                if (!doc.exists()) { hideResolverModal(); return; }
+                const job = {id: doc.id, ...doc.data()};
                 updateResolverModal(job);
                 if (['canceled', 'done', 'error'].includes(job.status)) {
                     hideResolverModal();
@@ -1424,11 +1429,10 @@ async function showPlaylistInPlayer(plId) {
     if (!tracksToPlay || tracksToPlay.length === 0) {
         if (pl.source === 'spotify') {
              showToast(`Playlist "${pl.name}" aún no tiene canciones importadas.`, true);
-             startResolverJob(pl.id); // Offer to start job
+             startResolverJob(pl.id);
         } else {
              showToast(`La playlist "${pl.name}" está vacía.`, true);
         }
-        switchView('view-playlists');
         return;
     }
 
@@ -1627,19 +1631,20 @@ async function boot(){
 
     communityPlaylists.forEach(newPl => {
         const oldPl = oldPlaylists.get(newPl.id);
-        if (oldPl && newPl.updatedAt > oldPl.updatedAt) {
-            if (viewingPlaylistId === newPl.id) {
-                const tracksToShow = newPl.status === 'resolved' ? newPl.tracks : 
-                    (newPl.tracks?.length > 0 ? newPl.tracks.map((t, i) => t || { ...newPl.spotifyTracks[i], id: null }) : newPl.spotifyTracks.map(st => ({...st, id: null})));
-                renderQueue(tracksToShow, newPl.name);
-                
-                const currentTrackId = currentTrack?.id;
-                if(currentTrackId) {
-                    const newQueue = tracksToShow.filter(t => t && t.id);
-                    const newIdx = newQueue.findIndex(t => t.id === currentTrackId);
-                    if(newIdx !== -1) {
-                        setQueue(newQueue, 'playlist', newIdx);
-                    }
+        const playlistWasUpdated = !oldPl || newPl.updatedAt > oldPl.updatedAt;
+
+        if (playlistWasUpdated && viewingPlaylistId === newPl.id) {
+            const tracksToShow = newPl.status === 'resolved' ? newPl.tracks : 
+                ((newPl.tracks || []).length > 0 ? newPl.tracks.map((t, i) => t || { ...(newPl.spotifyTracks[i] || {}), id: null }) : (newPl.spotifyTracks || []).map(st => ({...st, id: null})));
+            
+            renderQueue(tracksToShow, newPl.name);
+            
+            const currentTrackId = currentTrack?.id;
+            if(currentTrackId) {
+                const newQueue = (tracksToShow || []).filter(t => t && t.id);
+                const newIdx = newQueue.findIndex(t => t.id === currentTrackId);
+                if(newIdx !== -1) {
+                    setQueue(newQueue, 'playlist', newIdx);
                 }
             }
         }
@@ -1687,6 +1692,7 @@ function renderAllHomePlaylists() {
 boot();
 
 window.addEventListener('beforeunload', savePlayerState);
+window.addEventListener('pagehide', savePlayerState); // For mobile
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 
 /* ========== Spotify Import & Resolver Logic ========== */
@@ -1760,8 +1766,9 @@ async function startResolverJob(playlistId) {
         jobData = {
             playlistRef: plRef.path,
             status: 'queued',
-            total: playlist.spotifyTracks.length,
+            total: (playlist.spotifyTracks || []).length,
             done: 0,
+            resolved: 0,
             nextIndex: 0,
             errors: [],
             lastUpdated: serverTimestamp()
@@ -1774,8 +1781,8 @@ async function startResolverJob(playlistId) {
 
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
-        const job = doc.data();
-        if (!job) return;
+        if (!doc.exists()) { hideResolverModal(); return; }
+        const job = {id: doc.id, ...doc.data()};
         updateResolverModal(job);
         if (['canceled', 'done', 'error'].includes(job.status)) {
             hideResolverModal();
@@ -1792,6 +1799,8 @@ async function runJobBatch(playlistId, jobRef) {
     const jobDoc = await getDoc(jobRef);
     if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
         console.log("Job stopped or cancelled.");
+        if (resolverJobUnsubscribe) resolverJobUnsubscribe();
+        hideResolverModal();
         return;
     }
     
@@ -1801,28 +1810,33 @@ async function runJobBatch(playlistId, jobRef) {
     const playlist = plDoc.data();
     const job = jobDoc.data();
     const { nextIndex, total } = job;
-    const BATCH_SIZE = 5; // Increased batch size for faster multi-scraping
+    const BATCH_SIZE = 10; // <<-- CORREGIDO: Aumentado a 10 para mayor velocidad
 
     if (nextIndex >= total) {
-        const finalStatus = playlist.resolvedCount === total ? 'resolved' : 'partial';
+        const finalResolved = (await getDoc(plRef)).data().resolvedCount || 0;
+        const finalStatus = finalResolved === total ? 'resolved' : 'partial';
         await updateDoc(plRef, { status: finalStatus });
         await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
         const message = finalStatus === 'resolved' 
             ? `Importación completa: ${playlist.name}`
-            : `Importación incompleta: ${playlist.resolvedCount} de ${total} resueltos.`;
+            : `Importación incompleta: ${finalResolved} de ${total} resueltos.`;
         showToast(message, finalStatus === 'partial');
         return;
     }
 
-    const tracksToProcess = playlist.spotifyTracks.slice(nextIndex, nextIndex + BATCH_SIZE);
+    const tracksToProcess = (playlist.spotifyTracks || []).slice(nextIndex, nextIndex + BATCH_SIZE);
+    if (tracksToProcess.length === 0) { // Safety check if spotifyTracks is missing
+      await updateDoc(jobRef, { status: 'error', error: 'Missing spotifyTracks array.' });
+      return;
+    }
     const promises = tracksToProcess.map(track => resolveTrack(track));
     const results = await Promise.all(promises);
 
     const currentPlDoc = await getDoc(plRef);
     const currentPlaylist = currentPlDoc.data();
-    let updatedTracks = [...(currentPlaylist.tracks || [])];
+    let updatedTracks = [...(currentPlaylist.tracks || Array(total).fill(null))];
     if (updatedTracks.length < total) {
-         updatedTracks = Array(total).fill(null);
+         updatedTracks.length = total;
     }
 
     let resolvedInBatch = 0;
@@ -1831,32 +1845,40 @@ async function runJobBatch(playlistId, jobRef) {
     results.forEach((result, i) => {
         const originalIndex = nextIndex + i;
         if (result.videoId) {
+            // <<-- CORREGIDO: Mantiene metadata de Spotify, solo asigna la URL (id) de YouTube
+            const originalTrackData = playlist.spotifyTracks[originalIndex];
             updatedTracks[originalIndex] = {
-                ...playlist.spotifyTracks[originalIndex],
+                ...originalTrackData,
                 id: result.videoId,
-                thumb: `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-                source: 'youtube'
+                source: 'youtube',
+                originalId: originalTrackData.spotifyId || originalTrackData.id
             };
             resolvedInBatch++;
-        } else if (result.error) {
-            errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+        } else {
+            if (!updatedTracks[originalIndex]) {
+                updatedTracks[originalIndex] = { ...(playlist.spotifyTracks[originalIndex] || {}), id: null };
+            }
+            if (result.error) {
+                errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+            }
         }
     });
     
     const newResolvedCount = (currentPlaylist.resolvedCount || 0) + resolvedInBatch;
     const newNextIndex = nextIndex + tracksToProcess.length;
 
+    await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
+
     const jobUpdatePayload = { 
         done: newNextIndex,
         nextIndex: newNextIndex, 
+        resolved: newResolvedCount, // <<-- CORREGIDO: Se agrega el conteo de resueltos al job
         lastUpdated: serverTimestamp(),
         errors: [...(job.errors || []), ...errorsInBatch]
     };
-
-    await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
     await updateDoc(jobRef, jobUpdatePayload);
 
-    setTimeout(() => runJobBatch(playlistId, jobRef), 800); // Increased delay to be safer
+    setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
 }
 
 
@@ -1870,7 +1892,8 @@ async function cancelResolverJob() {
     const plRef = doc(db, "playlists", pl.id);
     
     await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
-    await updateDoc(plRef, { status: 'partial' });
+    const finalResolved = (await getDoc(plRef)).data().resolvedCount || 0;
+    await updateDoc(plRef, { status: finalResolved > 0 ? 'partial' : 'unresolved' });
     
     showToast("Importación cancelada.", true);
     hideResolverModal();
@@ -1880,7 +1903,7 @@ async function cancelResolverJob() {
 /* ========== Resolver Mini Modal ========== */
 function updateResolverModal(job) {
     let modal = document.getElementById('resolver-modal');
-    if (!job || !['running', 'paused'].includes(job.status)) {
+    if (!job || !['running', 'queued', 'paused'].includes(job.status)) {
         hideResolverModal();
         return;
     }
@@ -1888,25 +1911,32 @@ function updateResolverModal(job) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'resolver-modal';
+        modal.className = 'sy-modal-resolver';
         document.body.appendChild(modal);
         modal.innerHTML = `
             <div class="resolver-content">
-                <p>Importando playlist...</p>
+                <p>Importando y asignando URLs...</p>
                 <div class="resolver-progress-bar">
                     <div class="resolver-progress"></div>
                 </div>
-                <span class="resolver-counter"></span>
+                <span class="resolver-counter">0 / 0</span>
                 <button class="resolver-cancel">Cancelar</button>
             </div>
         `;
         modal.querySelector('.resolver-cancel').onclick = cancelResolverJob;
+        setTimeout(()=> modal.classList.add('show'), 10);
     }
+    
+    // <<-- CORREGIDO: Usa el contador del job para reflejar el progreso real
+    const resolved = job.resolved !== undefined ? job.resolved : (job.done || 0);
+    const total = job.total || 0;
 
-    const pl = communityPlaylists.find(p => p.resolverJobId === job.id || p.resolverJobId === job.playlistRef.split('/').pop());
-    const resolved = pl ? pl.resolvedCount : 0;
-    const total = job.total || pl?.trackCount || 0;
-    if (total === 0) return;
-    const progress = (resolved / total) * 100;
+    if (total === 0) {
+        modal.querySelector('.resolver-counter').textContent = 'Calculando...';
+        return;
+    };
+
+    const progress = total > 0 ? (resolved / total) * 100 : 0;
     
     modal.querySelector('.resolver-progress').style.width = `${progress}%`;
     modal.querySelector('.resolver-counter').textContent = `${resolved} / ${total}`;
@@ -1915,7 +1945,8 @@ function updateResolverModal(job) {
 function hideResolverModal() {
     const modal = document.getElementById('resolver-modal');
     if (modal) {
-        modal.remove();
+        modal.classList.remove('show');
+        setTimeout(() => modal.remove(), 300);
     }
     if (resolverJobUnsubscribe) {
         resolverJobUnsubscribe();
@@ -2171,7 +2202,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                     spotifyId: pl.spotifyId,
                     spotifyTracks: spotifyTracks,
                     trackCount: spotifyTracks.length,
-                    tracks: [],
+                    tracks: Array(spotifyTracks.length).fill(null),
                     status: 'unresolved',
                     resolvedCount: 0,
                     updatedAt: serverTimestamp(),
@@ -2198,7 +2229,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                         resolvedCount++;
                         return oldTracksByKey.get(key);
                     }
-                    return { ...st, id: null };
+                    return null;
                 });
 
                 await updateDoc(existingDocRef, {
