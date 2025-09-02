@@ -1959,4 +1959,251 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
 
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
+
 document.addEventListener('click', (e)=>{ if (e.target.closest('[data-view="view-playlists"]')) setTimeout(sy_initSpotifyImportUI, 50); });
+
+/* =========================
+   PATCH: Resolver Spotify -> YouTube por SCRAPING (sin API)
+   Pegar este bloque al FINAL de script.js
+   ========================= */
+
+/** ---------- Utils de normalización y cache ---------- **/
+const __SY_SCRAPE_CACHE = new Map(); // trackKey -> { videoId, thumb }
+const __SY_BAD_WORDS = /(karaoke|cover|tributo|letra|lyrics|lyric|versión|en vivo|live|remix|mix|megahits|compilation|audio\s*only)/i;
+
+function __normalize(s=''){
+  try {
+    return s.normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')  // quita diacríticos
+      .replace(/\s+/g,' ')
+      .trim()
+      .toLowerCase();
+  } catch { return (s||'').toLowerCase(); }
+}
+
+function __trackKey(artist, title){
+  return __normalize(artist) + '|' + __normalize(title);
+}
+
+/** ---------- Scraper básico con r.jina.ai ---------- **/
+async function __scrapeYouTubeIds(query){
+  const url = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  const res = await fetch(url, { headers: { 'x-scrape': '1' }});
+  if(!res.ok) throw new Error(`Scrape status ${res.status}`);
+  const text = await res.text();
+
+  // 1) Junta todos los ids en orden de aparición
+  const idSet = new Set();
+  const ids = [];
+  const re = /watch\?v=([\w-]{11})/g;
+  let m;
+  while((m = re.exec(text))){
+    const id = m[1];
+    if(!idSet.has(id)){
+      idSet.add(id);
+      ids.push(id);
+    }
+  }
+
+  // 2) Heurísticas simples con contexto alrededor
+  const scored = ids.map((id)=>{
+    // tomamos un pequeño contexto alrededor del id para ver palabras clave
+    const idx = text.indexOf(id);
+    const ctx = text.slice(Math.max(0, idx-140), Math.min(text.length, idx+220));
+    let score = 0;
+
+    // preferir Topic/VEVO/canal del artista
+    if (/topic/i.test(ctx)) score += 3;
+    if (/vevo/i.test(ctx))  score += 2;
+    if (/Provided to YouTube by/i.test(ctx)) score += 2;
+
+    // penalizar palabras de “ruido”
+    if (__SY_BAD_WORDS.test(ctx)) score -= 3;
+
+    // pequeño bonus si el título parece contener ambas partes (muy burdo pero ayuda)
+    // buscamos algo tipo "artist ... title" o "title ... artist" en el contexto cercano
+    score += (/[-|–|—]/.test(ctx) ? 1 : 0);
+
+    return { id, score, ctx };
+  });
+
+  // ordena por score desc, mantiene orden para empates
+  scored.sort((a,b)=> b.score - a.score);
+  return scored.map(x=>x.id);
+}
+
+/** ---------- Resolver un tema de Spotify -> videoId por scraping ---------- **/
+async function __resolveTrackByScrape(artist, title){
+  const key = __trackKey(artist, title);
+  if(__SY_SCRAPE_CACHE.has(key)) return __SY_SCRAPE_CACHE.get(key);
+
+  const query = `${artist} ${title}`;
+  const ids = await __scrapeYouTubeIds(query);
+  if(!ids.length) return null;
+
+  // elegimos el mejor candidato post-heurística
+  const videoId = ids[0];
+  const thumb = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+  const hit = { videoId, thumb };
+  __SY_SCRAPE_CACHE.set(key, hit);
+  return hit;
+}
+
+/** ---------- Limitador de concurrencia simple ---------- **/
+function __limitConcurrency(fn, concurrency=3){
+  const queue = [];
+  let active = 0;
+
+  const run = async (task) => {
+    active++;
+    try {
+      const r = await fn(...task.args);
+      task.resolve(r);
+    } catch (e) {
+      task.reject(e);
+    } finally {
+      active--;
+      next();
+    }
+  };
+
+  const next = () => {
+    if (active >= concurrency) return;
+    const task = queue.shift();
+    if (!task) return;
+    run(task);
+  };
+
+  return (...args) => new Promise((resolve, reject)=>{
+    queue.push({ args, resolve, reject });
+    next();
+  });
+}
+
+const __resolveLimited = __limitConcurrency(__resolveTrackByScrape, 3);
+
+/** ---------- Mini “toast” de progreso muy simple ---------- **/
+let __syProgressEl = null;
+function __showProgress(current, total, label='Importando playlist…'){
+  if(!__syProgressEl){
+    __syProgressEl = document.createElement('div');
+    __syProgressEl.style.position = 'fixed';
+    __syProgressEl.style.left = '0';
+    __syProgressEl.style.right = '0';
+    __syProgressEl.style.bottom = '72px'; // justo arriba del mini-dock
+    __syProgressEl.style.margin = '0 auto';
+    __syProgressEl.style.maxWidth = '520px';
+    __syProgressEl.style.background = 'var(--card-bg, rgba(0,0,0,.7))';
+    __syProgressEl.style.backdropFilter = 'blur(6px)';
+    __syProgressEl.style.color = 'var(--fg,#fff)';
+    __syProgressEl.style.padding = '10px 14px';
+    __syProgressEl.style.borderRadius = '16px';
+    __syProgressEl.style.boxShadow = '0 6px 24px rgba(0,0,0,.25)';
+    __syProgressEl.style.zIndex = '9999';
+    __syProgressEl.style.font = '500 14px/1.3 Inter, system-ui, sans-serif';
+    document.body.appendChild(__syProgressEl);
+  }
+  __syProgressEl.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;">
+      <strong>${label}</strong>
+      <div style="flex:1;height:6px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden">
+        <div style="width:${(current/Math.max(total,1))*100}%;height:100%;background:var(--brand,#ff3d00)"></div>
+      </div>
+      <span>${current}/${total}</span>
+    </div>
+  `;
+}
+function __hideProgress(){
+  if(__syProgressEl){
+    __syProgressEl.remove();
+    __syProgressEl = null;
+  }
+}
+
+/** ---------- Reemplazo de importación de playlist de Spotify ---------- **/
+async function handleSpotifyImport(playlistId){
+  const resultsContainer = $("#results");
+  if (resultsContainer){
+    resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Importando desde Spotify…</h3><p>Sin usar la API de YouTube.</p></div>`;
+  }
+  updateHomeGridVisibility?.();
+
+  try {
+    const spotifyPlaylist = await fetchSpotifyPlaylist(playlistId);
+    if (!spotifyPlaylist || !spotifyPlaylist.tracks?.length) {
+      throw new Error("No se pudo obtener la playlist o está vacía.");
+    }
+
+    const total = spotifyPlaylist.tracks.length;
+    let done = 0;
+    __showProgress(done, total, 'Resolviendo canciones…');
+
+    // Resolver por scraping con concurrencia limitada
+    const resolved = [];
+    for (let i = 0; i < spotifyPlaylist.tracks.length; i++){
+      const t = spotifyPlaylist.tracks[i];
+      try{
+        const hit = await __resolveLimited(t.author, t.title);
+        if (hit?.videoId){
+          resolved.push({
+            source: 'youtube',
+            type: 'youtube_video',
+            id: hit.videoId,
+            title: cleanTitle(`${t.title}`),
+            author: cleanAuthor(t.author),
+            thumb: hit.thumb || t.thumb || ''
+          });
+        }
+      }catch(e){
+        // seguimos, sin romper el flujo
+        console.warn('Falló resolver por scraping:', t?.author, '-', t?.title, e);
+      }finally{
+        done++;
+        __showProgress(done, total, 'Resolviendo canciones…');
+      }
+    }
+
+    __hideProgress();
+
+    if (!resolved.length) {
+      throw new Error("No se encontraron equivalentes en YouTube para las canciones de la lista (scraping).");
+    }
+
+    // Llevar la cola al reproductor (no API)
+    if (resultsContainer) resultsContainer.innerHTML = "";
+    setQueue(resolved, 'spotify_playlist', 0);
+    window.viewingPlaylistId = null;
+    renderQueue(resolved, spotifyPlaylist.name);
+    switchView?.('view-player');
+    playCurrent?.(true);
+
+  } catch (error) {
+    console.error("Error al importar desde Spotify (scraping):", error);
+    __hideProgress();
+    if (resultsContainer){
+      resultsContainer.innerHTML = `<div class="loading-indicator"><h3>Error al importar</h3><p>${error.message}</p></div>`;
+    }
+  }
+}
+
+/** ---------- Reemplazo de findYoutubeEquivalent para búsquedas sueltas (opcional) ---------- **/
+async function findYoutubeEquivalent(track){
+  // versión scraping (sin API) para búsquedas de una sola canción
+  if (!track || !track.title) return null;
+  try{
+    const hit = await __resolveLimited(track.author || '', track.title || '');
+    if (!hit?.videoId) return null;
+    return {
+      source: 'youtube',
+      type: 'youtube_video',
+      id: hit.videoId,
+      title: cleanTitle(track.title),
+      author: cleanAuthor(track.author || ''),
+      thumb: hit.thumb || track.thumb || `https://i.ytimg.com/vi/${hit.videoId}/hqdefault.jpg`
+    };
+  }catch(e){
+    console.warn('findYoutubeEquivalent (scraping) falló:', e);
+    return null;
+  }
+}
