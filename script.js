@@ -420,6 +420,8 @@ async function fetchVideoDetailsByIds(ids) {
                     console.warn(`API key ${apiKey} 403 → rotating`);
                     return fetchChunk(chunk, retryCount + 1);
                 }
+                const errorData = await response.json();
+                console.error('API Error Response:', errorData);
                 throw new Error(`API error: ${response.status}`);
             }
             const data = await response.json();
@@ -441,7 +443,6 @@ async function fetchVideoDetailsByIds(ids) {
 
 
 let searchAbort = null;
-// MEJORA: El tipo de búsqueda por defecto es 'video' para ahorrar llamadas a la API.
 let currentSearchType = 'video';
 
 /* ========= Nav ========= */
@@ -452,9 +453,6 @@ function switchView(id){
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
   if(id!=="view-search") {
       updateHomeGridVisibility();
-      $('#search-filters')?.classList.add('hide');
-  } else {
-      $('#search-filters')?.classList.remove('hide');
   }
   heroScrollInvalidate();
 }
@@ -469,8 +467,6 @@ const searchOverlay = $("#searchOverlay");
 const overlayInput  = $("#overlaySearchInput");
 function openSearch(){
     searchOverlay.classList.add("show");
-    // MEJORA: Al abrir la búsqueda, se muestran los filtros.
-    $('#search-filters')?.classList.remove('hide');
     setTimeout(()=> {
         overlayInput.focus();
         overlayInput.select();
@@ -492,38 +488,24 @@ overlayInput?.addEventListener("keydown", async e=>{
     await startSearch(q);
 });
 
-// MEJORA: Al enfocar el campo de búsqueda principal, se muestran los filtros.
-overlayInput?.addEventListener('focus', () => {
-    const searchView = $('#view-search');
-    // Movemos los filtros al overlay temporalmente si no estamos en la vista de búsqueda
-    if (searchView && !searchView.classList.contains('active')) {
-        const filters = $('#search-filters');
-        if (filters) {
-            searchOverlay.querySelector('.search-bar-container').appendChild(filters);
-            filters.classList.remove('hide');
-        }
-    }
-});
-
 /* ========= Search Logic with Infinite Scroll ========= */
 const BATCH_SIZE = 20;
 let paging = { query:"", pageToken:"", loading:false, hasMore:true };
 
+// CORRECCIÓN: Los filtros de búsqueda ahora se crean y se añaden directamente al overlay de búsqueda.
 function setupSearchFilters() {
-    const view = $('#view-search');
-    if (!view || $('#search-filters')) return;
+    const searchContainer = searchOverlay.querySelector('.search-bar-container');
+    if (!searchContainer || $('#search-filters')) return;
     
     const filters = document.createElement('div');
     filters.id = 'search-filters';
-    filters.className = 'search-filters-container hide';
-    // CORRECCIÓN: Se eliminó el filtro "Todo" para forzar una selección y evitar dobles llamadas a la API.
-    // La búsqueda por defecto es "Canciones".
+    filters.className = 'search-filters-container';
     filters.innerHTML = `
         <button class="pill active" data-type="video">Canciones</button>
         <button class="pill" data-type="playlist">Playlists</button>
     `;
     
-    view.prepend(filters);
+    searchContainer.appendChild(filters);
 
     filters.addEventListener('click', e => {
         const btn = e.target.closest('button.pill');
@@ -533,15 +515,10 @@ function setupSearchFilters() {
         btn.classList.add('active');
         currentSearchType = btn.dataset.type;
         
-        // Al cambiar filtro, reiniciamos la paginación y limpiamos resultados para la próxima búsqueda.
-        paging = { query: paging.query, pageToken: null, loading: false, hasMore: true };
-        items = [];
-        const resultsEl = $("#results");
-        if (resultsEl) resultsEl.innerHTML = '';
-        
-        // Si hay una consulta activa, se vuelve a buscar con el nuevo filtro.
-        if (paging.query) {
-            startSearch(paging.query);
+        // Si ya hay una búsqueda en pantalla, la rehace con el nuevo filtro.
+        const currentQuery = paging.query;
+        if(currentQuery && $("#view-search").classList.contains('active')) {
+            startSearch(currentQuery);
         }
     });
 }
@@ -549,7 +526,10 @@ function setupSearchFilters() {
 
 async function youtubeSearch(query, pageToken = '', type = 'video', limit = BATCH_SIZE, retryCount = 0){
   const MAX_RETRIES = YOUTUBE_API_KEYS.length;
-  if(retryCount >= MAX_RETRIES) throw new Error('All YouTube API keys have failed.');
+  if(retryCount >= MAX_RETRIES) {
+      showToast("Error: Se agotaron los intentos de conexión con la API de YouTube.", true);
+      throw new Error('All YouTube API keys have failed.');
+  }
   
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   const apiKey = getRotatedApiKey();
@@ -564,21 +544,27 @@ async function youtubeSearch(query, pageToken = '', type = 'video', limit = BATC
     const response = await fetch(url);
     if (!response.ok) {
       if (response.status === 403) {
-        console.warn(`API key ${apiKey} (403) is exhausted or invalid, rotating...`);
+        console.warn(`API key (403) agotada, rotando...`);
       } else {
-        console.warn(`Network/server error (${response.status}), retrying with another key...`);
+        const errorData = await response.json().catch(() => ({}));
+        console.warn(`Error de red/servidor (${response.status}), reintentando...`, errorData);
       }
       return youtubeSearch(query, pageToken, type, limit, retryCount + 1);
     }
     const data = await response.json();
+    if (!data.items) {
+        console.warn("La respuesta de la API no contiene 'items'.", data);
+        return { items: [], nextPageToken: null, hasMore: false };
+    }
     const resultItems = data.items.map(item => {
+        if (!item.id) return null; // Ignorar resultados sin ID
         const isTopic = /topic/i.test(item.snippet.channelTitle);
         const baseItem = {
             source: 'youtube',
             id: item.id.videoId || item.id.playlistId,
             title: cleanTitle(item.snippet.title),
             author: cleanAuthor(item.snippet.channelTitle),
-            thumb: item.snippet.thumbnails?.high?.url || "",
+            thumb: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "",
             isTopic: isTopic
         };
         if (item.id.kind === 'youtube#video') {
@@ -590,7 +576,7 @@ async function youtubeSearch(query, pageToken = '', type = 'video', limit = BATC
     }).filter(Boolean);
     return { items: resultItems, nextPageToken: data.nextPageToken, hasMore: !!data.nextPageToken };
   } catch (e) {
-    console.error(`Failed to fetch YouTube search, retrying with another key:`, e);
+    console.error(`Fallo al buscar en YouTube, reintentando con otra clave:`, e);
     return youtubeSearch(query, pageToken, type, limit, retryCount + 1);
   }
 }
@@ -603,46 +589,30 @@ async function startSearch(query){
   const resultsEl = $("#results");
   if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
   updateHomeGridVisibility();
-  
-  // MEJORA: Nos aseguramos que los filtros vuelvan a la vista de búsqueda si fueron movidos.
-  const filters = $('#search-filters');
-  if (filters && filters.parentElement !== $('#view-search')) {
-      $('#view-search').prepend(filters);
-  }
-  filters?.classList.remove('hide');
 
   try {
-    let searchResults = [];
-    let ytResult = { items: [], nextPageToken: null, hasMore: false };
-
-    // CORRECCIÓN: La búsqueda se hace solo a la API de YouTube, según el tipo seleccionado.
-    // Esto evita la doble consulta y ahorra cuota de la API.
-    if (currentSearchType === 'video') {
-        ytResult = await youtubeSearch(query, '', 'video', 40);
-        searchResults = ytResult.items;
-    } else if (currentSearchType === 'playlist') {
-        ytResult = await youtubeSearch(query, '', 'playlist', 40);
-        searchResults = ytResult.items;
-    }
+    // CORRECCIÓN: La búsqueda ahora solo usa la API de YouTube y el tipo de búsqueda
+    // ('video' o 'playlist') está controlado por la variable global 'currentSearchType'.
+    const searchResult = await youtubeSearch(query, '', currentSearchType, 40);
     
     if (searchAbort.signal.aborted) return;
 
-    paging.pageToken = ytResult.nextPageToken;
-    paging.hasMore = !!ytResult.nextPageToken;
+    paging.pageToken = searchResult.nextPageToken;
+    paging.hasMore = !!searchResult.nextPageToken;
 
     if (resultsEl) resultsEl.innerHTML = "";
 
-    if (searchResults.length === 0 && !paging.hasMore) {
+    if (searchResult.items.length === 0 && !paging.hasMore) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron resultados.</p></div>`;
         return;
     }
 
-    items = dedupeById(searchResults);
+    items = dedupeById(searchResult.items);
     appendResults(items);
 
   } catch (e) {
     console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda.</p></div>`;
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Revisa la consola para más detalles.</p></div>`;
   } finally {
     paging.loading = false;
   }
@@ -660,7 +630,7 @@ function dedupeById(arr){
 async function loadNextPage(){
   if(paging.loading || !paging.hasMore || !paging.query || !paging.pageToken) return;
   paging.loading = true;
-  
+
   try{
     const result = await youtubeSearch(paging.query, paging.pageToken, currentSearchType, BATCH_SIZE);
     if(result.items.length === 0){
@@ -836,17 +806,24 @@ function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     
-    let trackCount = playlist.trackCount || playlist.tracks?.length || playlist.spotifyTracks?.length || 0;
-    if (playlist.isRecommended) {
-        trackCount = playlist.data.length;
-    }
+    let trackCount = playlist.trackCount || playlist.tracks?.length || playlist.spotifyTracks?.length || (playlist.isRecommended ? playlist.ids.length : 0);
     if (trackCount === 0) return;
 
-    let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
+    let covers;
+    // CORRECCIÓN: Ahora las playlists recomendadas usan sus thumbnails de forma diferida.
+    if (playlist.isRecommended && playlist.data && playlist.data.length > 0) {
+        covers = playlist.data.slice(0, 4).map(track => track && track.thumb).filter(Boolean);
+    } else if (!playlist.isRecommended) {
+        covers = (playlist.tracks || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
+    } else {
+        covers = []; // Aún no cargado
+    }
+    
     if (covers.length === 0 && playlist.cover) {
         covers.push(playlist.cover);
     }
-    while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    // Muestra un placeholder genérico si no hay covers.
+    while (covers.length < 4) covers.push("https://i.imgur.com/gCa3j5g.png");
     
     const logo = playlist.isRecommended ? youtubeLogoSvg() : (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
     const card = document.createElement("article");
@@ -858,8 +835,24 @@ function renderPlaylistCard(playlist) {
             <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
             <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
         </div>`;
+    
+    // CORRECCIÓN: La carga de datos para playlists recomendadas ahora es bajo demanda.
     card.onclick = async () => {
         if (playlist.isRecommended) {
+            // Si los datos no están cargados, los busca.
+            if (!playlist.data || playlist.data.length === 0) {
+                showToast(`Cargando "${playlist.title}"...`);
+                try {
+                    const tracks = await fetchVideoDetailsByIds(playlist.ids);
+                    if (tracks.length === 0) throw new Error("No tracks found");
+                    playlist.data = tracks; // Guarda en caché para futuras vistas.
+                    // Vuelve a renderizar esta tarjeta con las nuevas imágenes
+                    renderAllHomePlaylists();
+                } catch (e) {
+                    showToast("Error al cargar la playlist recomendada.", true);
+                    return;
+                }
+            }
             setQueue(playlist.data, 'recommended', 0);
             viewingPlaylistId = null;
             renderQueue(playlist.data, playlist.title);
@@ -1122,7 +1115,7 @@ $("#createPlConfirm").onclick = async () => {
 /* ========= Sheets & Toasts ========= */
 function showToast(message, isError = false, duration = 3000) {
     let toast = document.getElementById('sy-toast');
-    if (toast) { // Remove existing toast to prevent overlap
+    if (toast) { 
         toast.remove();
     }
     
@@ -1134,10 +1127,9 @@ function showToast(message, isError = false, duration = 3000) {
     toast.className = 'show';
     if(isError) toast.classList.add('error');
     
-    // CORRECCIÓN: El timeout ahora elimina el elemento, evitando que un toast fallido quede "pegado".
     setTimeout(() => {
         toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 500); // Remove from DOM after transition
+        setTimeout(() => toast.remove(), 500); 
     }, duration);
 }
 
@@ -1525,18 +1517,16 @@ async function showPlaylistInPlayer(plId) {
     viewingPlaylistId = pl.id;
     switchView('view-player');
 
-    // CORRECCIÓN: La lógica de importación se activa aquí, cuando el usuario intenta ver la playlist.
-    // No se usa la API de YouTube, sino el scraping a través del "resolverJob".
     if (pl.source === 'spotify' && pl.status !== 'resolved') {
         const tracksToShow = (pl.tracks?.length > 0 && pl.tracks.some(t => t)) ? pl.tracks.map((t, i) => t || { ...pl.spotifyTracks[i], id: null, thumb: pl.spotifyTracks[i].thumb || pl.cover }) : pl.spotifyTracks.map(st => ({...st, thumb: st.thumb || pl.cover, id: null}));
         renderQueue(tracksToShow, pl.name);
         
         if (pl.status !== 'resolving') {
-            startResolverJob(pl.id); // Inicia el proceso de scraping en segundo plano
+            startResolverJob(pl.id);
         } else {
             console.log("Job is already running for this playlist. Attaching listener.");
             const { doc, onSnapshot } = window.firebase;
-            if(!pl.resolverJobId) return; // Safety check
+            if(!pl.resolverJobId) return; 
             const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
             if (resolverJobUnsubscribe) resolverJobUnsubscribe();
             resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
@@ -1555,11 +1545,10 @@ async function showPlaylistInPlayer(plId) {
     if (!tracksToPlay || tracksToPlay.length === 0) {
         if (pl.source === 'spotify') {
              showToast(`La playlist "${pl.name}" aún no tiene canciones importadas. Iniciando...`, false);
-             startResolverJob(pl.id); // Inicia el job si está vacía.
+             startResolverJob(pl.id);
         } else {
              showToast(`La playlist "${pl.name}" está vacía.`, true);
         }
-        // No cambiamos de vista para que el usuario vea el progreso de importación.
         return;
     }
 
@@ -1780,11 +1769,8 @@ async function boot(){
     renderAllHomePlaylists();
   });
 
-  const playlistKeys = Object.keys(recommendedPlaylists);
-  const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
-  const results = await Promise.all(fetchPromises);
-  playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; });
-
+  // CORRECCIÓN: Se elimina la precarga de playlists recomendadas para evitar errores de API al inicio.
+  // Ahora se cargarán cuando el usuario haga clic en ellas.
   renderAllHomePlaylists();
   updateHomeGridVisibility();
 
@@ -1806,7 +1792,7 @@ function renderAllHomePlaylists() {
         p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0))
     );
     
-    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
+    const allPlaylists = [ ...Object.values(recommendedPlaylists), ...publicCommunityPlaylists ];
     allPlaylists.sort((a, b) => { 
         const dateA = a.updatedAt?.toDate() || new Date(0); 
         const dateB = b.updatedAt?.toDate() || new Date(0); 
@@ -1841,7 +1827,6 @@ function getTrackKey(artist, title) {
 }
 
 function buildScrapeUrl(query) {
-    // Using a reliable scraping proxy
     return `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
@@ -1908,21 +1893,21 @@ async function startResolverJob(playlistId) {
     if (jobDoc.exists()) {
         jobData = jobDoc.data();
         if (jobData.status === 'running') {
-            console.log("Job already running, listener will handle it.");
-            return;
+            console.log("Job already running, attaching listener.");
         }
-    } else {
-        jobData = {
-            playlistId: playlistId,
-            status: 'queued',
-            total: playlist.spotifyTracks.length,
-            done: 0, 
-            nextIndex: 0,
-            errors: [],
-            lastUpdated: serverTimestamp()
-        };
-        await setDoc(jobRef, jobData);
-    }
+    } 
+    
+    // Siempre crea o resetea el job para empezar de cero o continuar.
+    jobData = {
+        playlistId: playlistId,
+        status: 'queued',
+        total: playlist.spotifyTracks.length,
+        done: 0, 
+        nextIndex: 0,
+        errors: [],
+        lastUpdated: serverTimestamp()
+    };
+    await setDoc(jobRef, jobData);
     
     await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
     await updateDoc(plRef, { status: 'resolving' });
@@ -1930,7 +1915,10 @@ async function startResolverJob(playlistId) {
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
         const job = doc.data();
-        if (!job) return;
+        if (!job) {
+            hideResolverModal();
+            return;
+        }
         updateResolverModal(job);
         if (['canceled', 'done', 'error'].includes(job.status)) {
             hideResolverModal();
@@ -1942,7 +1930,6 @@ async function startResolverJob(playlistId) {
 
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
-    const plRef = doc(db, "playlists", playlistId);
     
     try {
         const jobDoc = await getDoc(jobRef);
@@ -1951,6 +1938,7 @@ async function runJobBatch(playlistId, jobRef) {
             return;
         }
         
+        const plRef = doc(db, "playlists", playlistId);
         const plDoc = await getDoc(plRef);
         if (!plDoc.exists()) return;
 
@@ -1960,7 +1948,7 @@ async function runJobBatch(playlistId, jobRef) {
         const BATCH_SIZE = 3;
 
         if (nextIndex >= total) {
-            const finalStatus = playlist.resolvedCount === total ? 'resolved' : 'partial';
+            const finalStatus = (playlist.resolvedCount || 0) === total ? 'resolved' : 'partial';
             await updateDoc(plRef, { status: finalStatus });
             await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
             const message = finalStatus === 'resolved' 
@@ -2011,12 +1999,14 @@ async function runJobBatch(playlistId, jobRef) {
 
         setTimeout(() => runJobBatch(playlistId, jobRef), 500);
     } catch (e) {
-        // CORRECCIÓN: Se agrega manejo de errores para que el proceso no quede "colgado".
-        // Si hay un error, el cartel de notificación se cerrará.
         console.error("Error in job batch:", e);
-        const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
-        await updateDoc(jobRef, { status: 'error', error_message: e.message, lastUpdated: serverTimestamp() });
+        const pl = communityPlaylists.find(p => p.id === playlistId);
+        if (pl && pl.resolverJobId) {
+             const failedJobRef = doc(db, "resolverJobs", pl.resolverJobId);
+             await updateDoc(failedJobRef, { status: 'error', error_message: e.message, lastUpdated: serverTimestamp() });
+        }
         showToast("Ocurrió un error durante la importación.", true);
+        hideResolverModal(); // Ensure modal closes on error
     }
 }
 
@@ -2069,13 +2059,13 @@ function updateResolverModal(job) {
     
     modal.querySelector('.resolver-progress').style.width = `${progress}%`;
     modal.querySelector('.resolver-counter').textContent = `${resolved} / ${job.total}`;
-    modal.style.display = 'flex'; // Make sure it's visible
+    modal.style.display = 'flex';
 }
 
 function hideResolverModal() {
     const modal = document.getElementById('resolver-modal');
     if (modal) {
-        modal.style.display = 'none'; // Hide it
+        modal.style.display = 'none';
     }
     if (resolverJobUnsubscribe) {
         resolverJobUnsubscribe();
@@ -2331,7 +2321,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                     spotifyId: pl.spotifyId,
                     spotifyTracks: spotifyTracks,
                     trackCount: spotifyTracks.length,
-                    tracks: [],
+                    tracks: Array(spotifyTracks.length).fill(null), // Initialize with nulls
                     status: 'unresolved',
                     resolvedCount: 0,
                     updatedAt: serverTimestamp(),
@@ -2358,7 +2348,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                         resolvedCount++;
                         return oldTracksByKey.get(key);
                     }
-                    return null; // Keep unresolved as null
+                    return null;
                 });
 
                 await updateDoc(existingDocRef, {
