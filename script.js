@@ -389,7 +389,22 @@ async function withRetry(fn, retries = 2, delay = 300) {
     }
 }
 
-// Función unificada y robusta para scraping, basada en bot.html
+// NUEVA FUNCIÓN: Solo para obtener la URL de YouTube para el importador de Spotify
+async function scrapeYoutubeUrlOnly(query) {
+    return withRetry(async () => {
+        const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
+            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
+            return r.text();
+        });
+
+        const match = html.match(/watch\?v=([\w-]{11})/);
+        return match ? match[1] : null;
+    });
+}
+
+
+// Función de scraping para el buscador principal (usa noembed)
 async function scrapeYoutube(query, limit = 5) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
@@ -1717,9 +1732,9 @@ async function resolveTrack(track) {
 
     const query = `${track.author} ${track.title}`;
     try {
-        const results = await scrapeYoutube(query, 1);
-        if (results && results[0] && results[0].id) {
-            const videoId = results[0].id;
+        // MODIFICADO: Usar el scraper específico para el resolver que no usa noembed
+        const videoId = await scrapeYoutubeUrlOnly(query);
+        if (videoId) {
             trackCache.set(trackKey, videoId);
             return { videoId: videoId, error: null };
         }
@@ -1801,7 +1816,7 @@ async function runJobBatch(playlistId, jobRef) {
     const playlist = plDoc.data();
     const job = jobDoc.data();
     const { nextIndex, total } = job;
-    const BATCH_SIZE = 5; // Increased batch size for faster multi-scraping
+    const BATCH_SIZE = 2; // MODIFICADO: Scrapping de a dos
 
     if (nextIndex >= total) {
         const finalStatus = playlist.resolvedCount === total ? 'resolved' : 'partial';
@@ -1820,10 +1835,11 @@ async function runJobBatch(playlistId, jobRef) {
 
     const currentPlDoc = await getDoc(plRef);
     const currentPlaylist = currentPlDoc.data();
-    let updatedTracks = [...(currentPlaylist.tracks || [])];
-    if (updatedTracks.length < total) {
-         updatedTracks = Array(total).fill(null);
-    }
+    
+    // CORREGIDO: Inicializar el array de tracks de forma segura para no perder datos
+    const existingTracks = currentPlaylist.tracks || [];
+    let updatedTracks = Array.from({ length: total }, (_, i) => existingTracks[i] || null);
+
 
     let resolvedInBatch = 0;
     let errorsInBatch = [];
@@ -1831,11 +1847,15 @@ async function runJobBatch(playlistId, jobRef) {
     results.forEach((result, i) => {
         const originalIndex = nextIndex + i;
         if (result.videoId) {
+            // MODIFICADO: Usar metadatos y portada de Spotify
+            const spotifyTrack = playlist.spotifyTracks[originalIndex];
             updatedTracks[originalIndex] = {
-                ...playlist.spotifyTracks[originalIndex],
                 id: result.videoId,
-                thumb: `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-                source: 'youtube'
+                title: spotifyTrack.title,
+                author: spotifyTrack.author,
+                thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`, // Prioriza carátula de Spotify
+                source: 'youtube',
+                originalId: spotifyTrack.spotifyId 
             };
             resolvedInBatch++;
         } else if (result.error) {
@@ -1843,7 +1863,7 @@ async function runJobBatch(playlistId, jobRef) {
         }
     });
     
-    const newResolvedCount = (currentPlaylist.resolvedCount || 0) + resolvedInBatch;
+    const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
     const newNextIndex = nextIndex + tracksToProcess.length;
 
     const jobUpdatePayload = { 
@@ -1856,7 +1876,7 @@ async function runJobBatch(playlistId, jobRef) {
     await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
     await updateDoc(jobRef, jobUpdatePayload);
 
-    setTimeout(() => runJobBatch(playlistId, jobRef), 800); // Increased delay to be safer
+    setTimeout(() => runJobBatch(playlistId, jobRef), 1000); // Pausa de 1 seg para no saturar
 }
 
 
@@ -2198,7 +2218,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                         resolvedCount++;
                         return oldTracksByKey.get(key);
                     }
-                    return { ...st, id: null };
+                    return null; // Dejar como nulo para que el resolver lo procese
                 });
 
                 await updateDoc(existingDocRef, {
