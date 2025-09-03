@@ -1073,129 +1073,69 @@ function togglePlay(){
 $("#npPlay")?.addEventListener("click", togglePlay);
 $("#miniPlay")?.addEventListener("click", togglePlay);
 
-async 
-function sy_syncRemovalRealtime(plId, removedTrackId) {
-  const pl = communityPlaylists.find(p => p.id === plId);
-  if (!pl) return;
+async function removeFromPlaylist(plId, trackId) {
+const pl = (typeof communityPlaylists !== 'undefined' && Array.isArray(communityPlaylists))
+  ? communityPlaylists.find(p => p && p.id === plId)
+  : null;
+if (!pl) return;
 
-  // 1) Quitar de la playlist en memoria
-  pl.tracks = (pl.tracks || []).filter(t => t && t.id !== removedTrackId);
-  pl.resolvedCount = (pl.tracks || []).length;
-
-  // 2) ¿Estoy viendo esta playlist en el reproductor?
-  const isViewingThis = (queueType === 'playlist' && viewingPlaylistId === plId);
-
-  if (isViewingThis) {
-    const removedWasCurrent = currentTrack && currentTrack.id === removedTrackId;
-
-    // reconstruir queue a partir de los tracks actuales
-    const newQueue = (pl.tracks || []).filter(t => t && t.id);
-    queue = newQueue;
-
-    if (removedWasCurrent) {
-      try { ytPlayer?.stopVideo?.(); } catch(_){}
-      currentTrack = null;
-      qIdx = newQueue.length ? Math.min(qIdx, newQueue.length - 1) : -1;
-    } else if (currentTrack) {
-      // reubicar el índice del tema actual
-      const idx = newQueue.findIndex(t => t.id === currentTrack.id);
-      qIdx = idx >= 0 ? idx : 0;
-    } else {
-      qIdx = newQueue.length ? 0 : -1;
-    }
-
-    // refrescar UI del panel de cola y cabecera
-    renderQueue(newQueue, pl.name || "");
-    updateUIOnTrackChange();
-
-    // si no queda nada, ocultar panel
-    if (!newQueue.length) {
-      hideQueuePanel();
-    }
-  } else {
-    // Si no estoy en la playlist, al menos refresco el listado general
-    renderPlaylists();
-  }
-
-  // Indicadores globales
-  if (typeof refreshIndicators === 'function') refreshIndicators();
-}
-function removeFromPlaylist(plId, trackId) {
-    const pl = communityPlaylists.find(p => p.id === plId);
-    if (!pl) return;
-
-    const { doc, updateDoc, serverTimestamp } = window.firebase;
-    const plRef = doc(db, "playlists", plId);
-
-    // Construir lista sin el track eliminado
-    const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
-
-    const payload = {
-        tracks: updatedTracks,
-        resolvedCount: updatedTracks.length,
-        updatedAt: serverTimestamp()
-    };
-
-    // Sincronizar YA en memoria y UI
-    sy_syncRemovalRealtime(plId, trackId);
-
-// Verificar que la playlist existe
-if (!pl) {
-    console.error("Playlist not found");
-    showToast("Playlist no encontrada.", true);
-    return;
+const { db, doc, updateDoc, setDoc, serverTimestamp } = sy_fs();
+if (!db || !doc || (!updateDoc && !setDoc)) {
+  console.error('Firestore no disponible: faltan funciones doc/updateDoc/setDoc');
+  if (typeof showToast === 'function') showToast('No se pudo quitar la canción. Falta Firestore.', true);
+  return;
 }
 
-// Guardar estado anterior para rollback más preciso
-const previousState = { 
-    tracks: [...(pl.tracks || [])], 
-    trackCount: pl.trackCount,
-    spotifyTracks: pl.spotifyTracks ? [...pl.spotifyTracks] : undefined
+// Build new tracks without the removed one
+const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
+
+const payload = {
+  tracks: updatedTracks,
+  resolvedCount: updatedTracks.length,
+  updatedAt: serverTimestamp ? serverTimestamp() : Date.now()
 };
 
-let newTrackCount;
-
-// Mantener consistencia con playlists que provienen de Spotify
-if (pl.source === 'spotify' && pl.spotifyTracks) {
-    const removed = (pl.tracks || []).find(t => t && t.id === trackId);
-    if (removed && removed.originalId) {
-        const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== removed.originalId);
-        payload.spotifyTracks = updatedSpotifyTracks;
-        newTrackCount = updatedSpotifyTracks.length;
-    } else {
-        newTrackCount = Math.max(0, (pl.trackCount ?? (pl.spotifyTracks?.length || 0)) - 1);
-    }
-} else {
-    // Para playlists normales, también actualizar trackCount
-    newTrackCount = Math.max(0, (pl.trackCount ?? (pl.tracks?.length || 0)) - 1);
+// Keep consistency for spotify-backed lists
+if (pl.source === 'spotify' && Array.isArray(pl.spotifyTracks)) {
+  const removed = (pl.tracks || []).find(t => t && t.id === trackId);
+  if (removed && removed.originalId) {
+    const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== removed.originalId);
+    payload.spotifyTracks = updatedSpotifyTracks;
+    payload.trackCount = updatedSpotifyTracks.length;
+  } else {
+    const baseCount = (typeof pl.trackCount === 'number') ? pl.trackCount : (pl.spotifyTracks ? pl.spotifyTracks.length : 0);
+    payload.trackCount = Math.max(0, baseCount - 1);
+  }
 }
 
-// Actualizar trackCount para TODAS las playlists
-payload.trackCount = newTrackCount;
+// 1) Real-time sync (UI + queue + player)
+sy_syncRemovalRealtime(plId, trackId);
 
 try {
+  const plRef = doc(db, 'playlists', plId);
+  if (typeof updateDoc === 'function') {
     await updateDoc(plRef, payload);
-    showToast("Canción eliminada.");
+  } else {
+    await setDoc(plRef, payload, { merge: true });
+  }
+  if (typeof showToast === 'function') showToast('Canción eliminada.');
 } catch (e) {
-    console.error("Error removing song: ", e);
-    showToast("No se pudo quitar la canción.", true);
-    
-    // Rollback más preciso usando el estado anterior
-    pl.tracks = previousState.tracks;
-    pl.trackCount = previousState.trackCount;
-    if (previousState.spotifyTracks) {
-        pl.spotifyTracks = previousState.spotifyTracks;
-    }
-    
-    // Re-render desde el estado restaurado
-    const cur = communityPlaylists.find(p => p.id === plId);
-    if (queueType === 'playlist' && viewingPlaylistId === plId) {
-        renderQueue((cur?.tracks || []).filter(t => t && t.id), cur?.name || "");
-        updateUIOnTrackChange();
-    }
-    renderPlaylists();
+  console.error('Error removing song:', e);
+  if (typeof showToast === 'function') showToast('No se pudo quitar la canción.', true);
+  // Soft rollback visuals
+  if (typeof renderPlaylists === 'function') renderPlaylists();
+  if (typeof queueType !== 'undefined' && typeof viewingPlaylistId !== 'undefined' && queueType === 'playlist' && viewingPlaylistId === plId) {
+    const plNow = (typeof communityPlaylists !== 'undefined' && Array.isArray(communityPlaylists))
+      ? communityPlaylists.find(p => p && p.id === plId)
+      : null;
+    if (plNow && typeof renderQueue === 'function') renderQueue((plNow.tracks || []).filter(t => t && t.id), plNow.name || '');
     if (typeof refreshIndicators === 'function') refreshIndicators();
+  }
 }
+
+
+}
+
 
 /* Mini reproductor */
 function updateMiniNow(){
@@ -2329,3 +2269,68 @@ document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
 document.addEventListener('click', (e)=>{ if (e.target.closest('[data-view="view-playlists"]')) setTimeout(sy_initSpotifyImportUI, 50); });
 
+
+// === helper: unified firestore access ===
+function sy_fs() {
+  const f = (window.firebase || {});
+  return {
+    db: (typeof db !== 'undefined' ? db : window.db),
+    doc: f.doc || window.doc,
+    updateDoc: f.updateDoc || window.updateDoc,
+    setDoc: f.setDoc || window.setDoc,
+    serverTimestamp: f.serverTimestamp || window.serverTimestamp
+  };
+}
+
+
+// === helper: sync removal in realtime (queue + UI) ===
+function sy_syncRemovalRealtime(plId, removedTrackId) {
+  try {
+    const pl = (typeof communityPlaylists !== 'undefined' && Array.isArray(communityPlaylists))
+      ? communityPlaylists.find(p => p && p.id === plId)
+      : null;
+    if (!pl) return;
+
+    // Remove from in-memory playlist
+    pl.tracks = (pl.tracks || []).filter(t => t && t.id !== removedTrackId);
+    pl.resolvedCount = (pl.tracks || []).length;
+
+    // If current view is that playlist, rebuild queue
+    const sameView = (typeof queueType !== 'undefined' && typeof viewingPlaylistId !== 'undefined'
+                      && queueType === 'playlist' && viewingPlaylistId === plId);
+
+    if (sameView) {
+      const wasCurrent = (typeof currentTrack !== 'undefined' && currentTrack && currentTrack.id === removedTrackId);
+      const newQueue = (pl.tracks || []).filter(t => t && t.id);
+      if (typeof queue !== 'undefined') queue = newQueue;
+
+      if (!wasCurrent) {
+        if (typeof currentTrack !== 'undefined' && currentTrack) {
+          const newIdx = newQueue.findIndex(t => t.id === currentTrack.id);
+          if (typeof qIdx !== 'undefined') qIdx = newIdx >= 0 ? newIdx : 0;
+        } else {
+          if (typeof qIdx !== 'undefined') qIdx = newQueue.length ? 0 : -1;
+        }
+      } else {
+        try { if (typeof ytPlayer !== 'undefined' && ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo(); } catch (_) {}
+        if (typeof currentTrack !== 'undefined') currentTrack = null;
+        if (typeof qIdx !== 'undefined') qIdx = newQueue.length ? 0 : -1;
+      }
+
+      // Refresh UI pieces if available
+      if (typeof renderQueue === 'function') renderQueue(newQueue, pl.name || '');
+      if (typeof updateUIOnTrackChange === 'function') updateUIOnTrackChange();
+
+      if ((!newQueue || !newQueue.length) && typeof hideQueuePanel === 'function') {
+        hideQueuePanel();
+      }
+    } else {
+      // Update playlists grid if present
+      if (typeof renderPlaylists === 'function') renderPlaylists();
+    }
+
+    if (typeof refreshIndicators === 'function') refreshIndicators();
+  } catch (err) {
+    console.error('sy_syncRemovalRealtime error:', err);
+  }
+}
