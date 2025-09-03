@@ -1522,13 +1522,16 @@ async function boot(){
             console.log(`Real-time update for playlist: ${newPl.name}`);
             
             // Re-render the visual list first
-            const tracksToShow = (newPl.tracks || []).map((track, index) => {
-                 if (!track && newPl.spotifyTracks && newPl.spotifyTracks[index]) {
-                     const spotifyTrack = newPl.spotifyTracks[index];
-                     return { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPl.cover };
-                 }
-                 return track;
-            });
+            let tracksToShow = newPl.tracks || [];
+            if (newPl.source === 'spotify') {
+                tracksToShow = (newPl.tracks || []).map((track, index) => {
+                    if (!track && newPl.spotifyTracks && newPl.spotifyTracks[index]) {
+                        const spotifyTrack = newPl.spotifyTracks[index];
+                        return { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPl.cover };
+                    }
+                    return track;
+                }).filter(Boolean); // Filter out potential nulls if spotifyTracks is shorter
+            }
             renderQueue(tracksToShow, newPl.name);
             
             const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
@@ -2137,6 +2140,22 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
 
             const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder")); // Scope to user
             const snapshot = await getDocs(q);
+            
+            const isDuplicate = communityPlaylists.some(p => p.spotifyId === pl.spotifyId && isMyPlaylist(p.id));
+            if (!snapshot.empty || isDuplicate) {
+                 // Playlist already exists, update it.
+                const docId = snapshot.docs[0]?.id || communityPlaylists.find(p => p.spotifyId === pl.spotifyId && isMyPlaylist(p.id)).id;
+                const existingDocRef = doc(db, 'playlists', docId);
+                 await updateDoc(existingDocRef, {
+                    name: pl.name,
+                    spotifyTracks: spotifyTracks,
+                    trackCount: spotifyTracks.length,
+                    updatedAt: serverTimestamp()
+                });
+                updatedCount++;
+                continue;
+            }
+
 
             if (snapshot.empty) {
                 const docRef = await addDoc(col, {
