@@ -1515,62 +1515,78 @@ async function boot(){
 
     communityPlaylists.forEach(newPl => {
         const oldPl = oldPlaylists.get(newPl.id);
+        // Check if the playlist was meaningfully updated
         const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
         
-        // This is the real-time update logic, now handling deletions correctly
+        // BUG FIX: This is the new, robust real-time update logic
         if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
-            console.log(`Real-time update for playlist: ${newPl.name}`);
-            
-            // Re-render the visual list first
+            console.log(`Playlist '${newPl.name}' updated in real-time.`);
+
+            // 1. Get new state from Firestore data
+            const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
+            const currentTrackId = currentTrack ? currentTrack.id : null;
+
+            // 2. Immediately update the visual queue for the user
+            // We construct a list that includes unresolved tracks for visual consistency
             let tracksToShow = newPl.tracks || [];
             if (newPl.source === 'spotify') {
-                tracksToShow = (newPl.tracks || []).map((track, index) => {
-                    if (!track && newPl.spotifyTracks && newPl.spotifyTracks[index]) {
+                tracksToShow = (newPl.tracks || Array(newPl.spotifyTracks.length).fill(null)).map((track, index) => {
+                    if (track) return track;
+                    if (newPl.spotifyTracks && newPl.spotifyTracks[index]) {
                         const spotifyTrack = newPl.spotifyTracks[index];
                         return { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPl.cover };
                     }
-                    return track;
-                }).filter(Boolean); // Filter out potential nulls if spotifyTracks is shorter
+                    return null;
+                }).filter(Boolean);
             }
             renderQueue(tracksToShow, newPl.name);
-            
-            const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
-            const currentTrackId = currentTrack ? currentTrack.id : null;
-            let newIdx = qIdx;
 
+            // 3. Handle playback and internal state logic
+
+            // Edge Case: Playlist is now empty
             if (newPlayableTracks.length === 0) {
-                // The playlist is now empty
-                ytPlayer.stopVideo();
+                console.log("Playlist is now empty. Stopping playback.");
+                if (ytPlayer) ytPlayer.stopVideo();
                 currentTrack = null;
                 queue = [];
                 qIdx = -1;
                 updateUIOnTrackChange();
-                return; // Stop further processing
+                // No more work to do, move to the next playlist in the loop
+                return; 
             }
 
-            if (currentTrackId) {
-                const foundIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
-                
-                if (foundIndex !== -1) {
-                    // Current song is still in the list, just update its index
-                    newIdx = foundIndex;
-                } else {
-                    // The song that was playing has been deleted
-                    // Let's play the song that took its place
-                    if (qIdx >= newPlayableTracks.length) {
-                         // If the deleted song was the last one, play the new last one
-                        newIdx = newPlayableTracks.length - 1;
-                    } else {
-                        // The index qIdx is still valid for the new, shorter list
-                        newIdx = qIdx;
-                    }
-                    setQueue(newPlayableTracks, 'playlist', newIdx);
-                    playCurrent(true); // Auto-play the next song
-                    return; // Important: exit to avoid double-setting the queue
+            // Check if a track was playing and if it was removed
+            const wasPlayingTrackRemoved = currentTrackId && !newPlayableTracks.some(t => t.id === currentTrackId);
+
+            if (wasPlayingTrackRemoved) {
+                console.log("Currently playing track was removed.");
+                // The song that was playing has been deleted. Play the next logical song.
+                // This is usually the song that now occupies the deleted song's index.
+                let nextIndex = qIdx;
+
+                // If the deleted song was the last one, the index might be out of bounds.
+                if (nextIndex >= newPlayableTracks.length) {
+                    nextIndex = newPlayableTracks.length - 1;
                 }
+
+                // Set the new queue and play the new song at `nextIndex`
+                setQueue(newPlayableTracks, 'playlist', nextIndex);
+                playCurrent(true); // Autoplay the new track
+
+            } else {
+                // The current track is still present, or no track was playing.
+                // We just need to silently update the internal queue state.
+                // Playback should not be interrupted if it's ongoing.
+                let newCurrentIndex = qIdx; // Default to old index
+                if (currentTrackId) {
+                    newCurrentIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
+                }
+
+                // Update the queue. If a song was playing, its index might have changed.
+                // `setQueue` handles updating both the queue array and the current index (qIdx).
+                setQueue(newPlayableTracks, 'playlist', newCurrentIndex);
+                console.log("Internal queue state updated silently.");
             }
-             // Update the queue state without interrupting playback if the current song is safe
-            setQueue(newPlayableTracks, 'playlist', newIdx);
         }
     });
 
