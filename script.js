@@ -1497,22 +1497,34 @@ async function boot(){
         const oldPl = oldPlaylists.get(newPl.id);
         const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
         
+        // This is the real-time update logic
         if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
             console.log(`Real-time update for playlist: ${newPl.name}`);
             
+            const tracksToShow = (newPl.tracks || []).map((track, index) => {
+                 if (!track) {
+                     const spotifyTrack = newPl.spotifyTracks[index];
+                     return { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPl.cover };
+                 }
+                 return track;
+            });
+            renderQueue(tracksToShow, newPl.name);
+            
             const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
             const currentTrackId = currentTrack ? currentTrack.id : null;
-            let newIdx = qIdx;
+            let newIdx = -1;
 
             if (currentTrackId) {
-                const foundIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
-                if (foundIndex !== -1) {
-                    newIdx = foundIndex;
-                }
+                newIdx = newPlayableTracks.findIndex(t => t.id === currentTrackId);
             }
             
-            setQueue(newPlayableTracks, 'playlist', newIdx); 
-            renderQueue(newPlayableTracks, newPl.name);
+            // Only update queue if it's safe to do so
+            if (newIdx !== -1) {
+                setQueue(newPlayableTracks, 'playlist', newIdx);
+            } else {
+                // If current track is gone, or wasn't playing, just update the source
+                queue = newPlayableTracks;
+            }
         }
     });
 
@@ -1670,7 +1682,6 @@ async function startResolverJob(playlistId) {
         status: 'queued',
         total: playlist.spotifyTracks.length,
         done: playlist.resolvedCount || 0,
-        nextIndex: 0, // Always start from the beginning to check for unresolved tracks
         errors: [],
         lastUpdated: serverTimestamp()
     };
@@ -1712,11 +1723,17 @@ async function runJobBatch(playlistId, jobRef) {
 
     const playlist = plDoc.data();
     const job = jobDoc.data();
+    const BATCH_SIZE = 3; // Max 3 scrapers at a time
     
-    // Find next unresolved track index
-    const nextIndex = (playlist.tracks || []).findIndex(t => t === null);
-    if (nextIndex === -1 && (playlist.tracks?.length || 0) >= playlist.spotifyTracks.length) {
-        // All tracks are processed
+    const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
+    const unresolvedIndices = [];
+    for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) {
+        if (tracksArray[i] === null) {
+            unresolvedIndices.push(i);
+        }
+    }
+    
+    if (unresolvedIndices.length === 0) {
         const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
         await updateDoc(plRef, { status: finalStatus });
         await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
@@ -1727,33 +1744,31 @@ async function runJobBatch(playlistId, jobRef) {
         return;
     }
 
-    const trackToProcess = playlist.spotifyTracks[nextIndex];
-    if (!trackToProcess) {
-         console.error("Mismatch between spotifyTracks and tracks array. Stopping job.");
-         await updateDoc(jobRef, { status: 'error', error: 'Track array mismatch' });
-         return;
-    }
+    const tracksToProcess = unresolvedIndices.map(index => playlist.spotifyTracks[index]);
+    const promises = tracksToProcess.map(track => resolveTrack(track));
+    const results = await Promise.all(promises);
 
-    const result = await resolveTrack(trackToProcess);
-    
-    // Fetch latest playlist data to avoid race conditions
     const currentPlDoc = await getDoc(plRef);
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
     let errorsInBatch = [];
 
-    if (result.videoId) {
-        updatedTracks[nextIndex] = {
-            id: result.videoId,
-            title: trackToProcess.title,
-            author: trackToProcess.author,
-            thumb: trackToProcess.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-            source: 'youtube',
-            originalId: trackToProcess.spotifyId 
-        };
-    } else if (result.error) {
-        errorsInBatch.push(`Track ${nextIndex}: ${result.error}`);
-    }
+    results.forEach((result, i) => {
+        const originalIndex = unresolvedIndices[i];
+        if (result.videoId) {
+            const spotifyTrack = playlist.spotifyTracks[originalIndex];
+            updatedTracks[originalIndex] = {
+                id: result.videoId,
+                title: spotifyTrack.title,
+                author: spotifyTrack.author,
+                thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
+                source: 'youtube',
+                originalId: spotifyTrack.spotifyId 
+            };
+        } else if (result.error) {
+            errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+        }
+    });
     
     const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
     
@@ -1764,7 +1779,7 @@ async function runJobBatch(playlistId, jobRef) {
         errors: [...(job.errors || []), ...errorsInBatch]
     });
 
-    setTimeout(() => runJobBatch(playlistId, jobRef), 800); // Pausa para no saturar
+    setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
 }
 
 
