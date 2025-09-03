@@ -47,7 +47,6 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 let ytPlayer = null, YT_READY = false, timer = null;
 let db; // Instancia de Firestore
 let resolverJobUnsubscribe = null; // Unsubscriber for the job listener
-let playlistUnsubscribe = null; // Unsubscriber for live playlist updates
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
@@ -241,49 +240,6 @@ function restorePlayerState(state) {
   else window.addEventListener('yt-ready', restore, { once: true });
 }
 
-
-// Live subscription to playlist doc to reflect resolved tracks in real time
-function subscribePlaylistLive(plId){
-  try{
-    const { doc, onSnapshot } = window.firebase;
-    // cleanup previous
-    if (playlistUnsubscribe){ try { playlistUnsubscribe(); } catch(e){} playlistUnsubscribe = null; }
-    const plRef = doc(db, "playlists", plId);
-    playlistUnsubscribe = onSnapshot(plRef, (snap) => {
-      try{
-        if (!snap.exists()) return;
-        const plData = snap.data() || {};
-        // update local cache entry
-        const i = communityPlaylists.findIndex(p => p.id === plId);
-        if (i !== -1){
-          communityPlaylists[i] = { ...communityPlaylists[i], ...plData };
-        }
-        // if user is viewing this playlist, hydrate UI
-        if (viewingPlaylistId === plId){
-          const tracks = (plData.tracks || []).map(t => ({
-            id: t.videoId || null,
-            title: t.title || t.name || '-',
-            author: t.artist || t.author || '-',
-            thumb: t.artUrl || (t.videoId ? `https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg` : ''),
-            duration: t.durationSec || t.duration || null
-          }));
-          // Re-render queue while keeping current index if possible
-          const prevId = currentTrack && currentTrack.id;
-          const newIndex = prevId ? Math.max(0, tracks.findIndex(x => x.id === prevId)) : 0;
-          setQueue(tracks, 'playlist', newIndex);
-          renderQueue(tracks, plData.name || currentQueueTitle || 'Playlist');
-          refreshIndicators();
-          // If current track disappeared or no longer playable, pause
-          if (prevId && newIndex === -1){
-            try{ ytPlayer && ytPlayer.pauseVideo && ytPlayer.pauseVideo(); }catch(e){}
-          }
-        }
-      }catch(e){ console.error("subscribePlaylistLive/onSnapshot:", e); }
-    });
-  }catch(e){
-    console.error("subscribePlaylistLive failed:", e);
-  }
-}
 /* ========= Tema ========= */
 const THEME_KEY = "sy_theme_v1";
 function applyTheme(theme){
@@ -615,7 +571,7 @@ async function handleResultClick(event, item, forcePlay = false) {
 }
 
 async function playSpotifyTrack(track) {
-    showToast("Buscando, espere…");
+    showToast("Buscando en YouTube...");
     const ytEquivalent = await findYoutubeEquivalent(track);
     if (ytEquivalent) {
         setQueue([ytEquivalent], "search", 0);
@@ -1369,7 +1325,6 @@ function renderQueue(queueItems, title) {
 }
 
 async function showPlaylistInPlayer(plId) {
-    try { subscribePlaylistLive(plId); } catch(e) { console.warn('subscribePlaylistLive failed', e); }
     const pl = communityPlaylists.find(p => p.id === plId);
     if (!pl) return;
 
@@ -1419,8 +1374,10 @@ async function showPlaylistInPlayer(plId) {
 function hideQueuePanel(){ 
     $("#queuePanel")?.classList.add("hide"); 
     if ($("#queueList")) $("#queueList").innerHTML=""; 
-    if (resolverJobUnsubscribe) { try { resolverJobUnsubscribe(); } catch(e){} resolverJobUnsubscribe=null; }
-    if (playlistUnsubscribe) { try { playlistUnsubscribe(); } catch(e){} playlistUnsubscribe=null; }
+    if (resolverJobUnsubscribe) {
+        resolverJobUnsubscribe();
+        resolverJobUnsubscribe = null;
+    }
     viewingPlaylistId=null; 
     renderPlaylists(); 
 }
