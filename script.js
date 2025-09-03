@@ -1139,36 +1139,63 @@ function removeFromPlaylist(plId, trackId) {
     // Sincronizar YA en memoria y UI
     sy_syncRemovalRealtime(plId, trackId);
 
-    // Mantener consistencia con playlists que provienen de Spotify
-    if (pl.source === 'spotify' && pl.spotifyTracks) {
-        const removed = (pl.tracks || []).find(t => t && t.id === trackId);
-        if (removed && removed.originalId) {
-            const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== removed.originalId);
-            payload.spotifyTracks = updatedSpotifyTracks;
-            payload.trackCount = updatedSpotifyTracks.length;
-        } else {
-            payload.trackCount = Math.max(0, (pl.trackCount ?? (pl.spotifyTracks?.length || 0)) - 1);
-        }
-    }
-
-    try {
-        await updateDoc(plRef, payload);
-        showToast("Canción eliminada.");
-    } catch (e) {
-        console.error("Error removing song: ", e);
-        showToast("No se pudo quitar la canción.", true);
-        // rollback visual básico: re-render desde el estado actual en memoria
-        const cur = communityPlaylists.find(p => p.id === plId);
-        if (queueType === 'playlist' && viewingPlaylistId === plId) {
-            renderQueue((cur?.tracks || []).filter(t => t && t.id), cur?.name || "");
-            updateUIOnTrackChange();
-        }
-        renderPlaylists();
-        if (typeof refreshIndicators === 'function') refreshIndicators();
-    }
-
+// Verificar que la playlist existe
+if (!pl) {
+    console.error("Playlist not found");
+    showToast("Playlist no encontrada.", true);
+    return;
 }
 
+// Guardar estado anterior para rollback más preciso
+const previousState = { 
+    tracks: [...(pl.tracks || [])], 
+    trackCount: pl.trackCount,
+    spotifyTracks: pl.spotifyTracks ? [...pl.spotifyTracks] : undefined
+};
+
+let newTrackCount;
+
+// Mantener consistencia con playlists que provienen de Spotify
+if (pl.source === 'spotify' && pl.spotifyTracks) {
+    const removed = (pl.tracks || []).find(t => t && t.id === trackId);
+    if (removed && removed.originalId) {
+        const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== removed.originalId);
+        payload.spotifyTracks = updatedSpotifyTracks;
+        newTrackCount = updatedSpotifyTracks.length;
+    } else {
+        newTrackCount = Math.max(0, (pl.trackCount ?? (pl.spotifyTracks?.length || 0)) - 1);
+    }
+} else {
+    // Para playlists normales, también actualizar trackCount
+    newTrackCount = Math.max(0, (pl.trackCount ?? (pl.tracks?.length || 0)) - 1);
+}
+
+// Actualizar trackCount para TODAS las playlists
+payload.trackCount = newTrackCount;
+
+try {
+    await updateDoc(plRef, payload);
+    showToast("Canción eliminada.");
+} catch (e) {
+    console.error("Error removing song: ", e);
+    showToast("No se pudo quitar la canción.", true);
+    
+    // Rollback más preciso usando el estado anterior
+    pl.tracks = previousState.tracks;
+    pl.trackCount = previousState.trackCount;
+    if (previousState.spotifyTracks) {
+        pl.spotifyTracks = previousState.spotifyTracks;
+    }
+    
+    // Re-render desde el estado restaurado
+    const cur = communityPlaylists.find(p => p.id === plId);
+    if (queueType === 'playlist' && viewingPlaylistId === plId) {
+        renderQueue((cur?.tracks || []).filter(t => t && t.id), cur?.name || "");
+        updateUIOnTrackChange();
+    }
+    renderPlaylists();
+    if (typeof refreshIndicators === 'function') refreshIndicators();
+}
 
 /* Mini reproductor */
 function updateMiniNow(){
@@ -2301,3 +2328,4 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
 document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
 window.addEventListener('hashchange', sy_initSpotifyImportUI);
 document.addEventListener('click', (e)=>{ if (e.target.closest('[data-view="view-playlists"]')) setTimeout(sy_initSpotifyImportUI, 50); });
+
