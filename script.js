@@ -1073,26 +1073,46 @@ function togglePlay(){
 $("#npPlay")?.addEventListener("click", togglePlay);
 $("#miniPlay")?.addEventListener("click", togglePlay);
 
-async function removeFromPlaylist(plId, trackId){
-  const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
-  const { doc, updateDoc, serverTimestamp } = window.firebase;
-  const plRef = doc(db, "playlists", plId);
-  
-  const trackToRemove = pl.tracks.find(t => t.id === trackId);
-  const updatedTracks = pl.tracks.filter(t => t.id !== trackId);
-  const updatedSpotifyTracks = pl.spotifyTracks ? pl.spotifyTracks.filter(t => t.id !== trackToRemove?.originalId) : [];
+async function removeFromPlaylist(plId, trackId) {
+    const pl = communityPlaylists.find(p => p.id === plId);
+    if (!pl) return;
+    const { doc, updateDoc, serverTimestamp } = window.firebase;
+    const plRef = doc(db, "playlists", plId);
 
-  try { 
-      await updateDoc(plRef, { 
-          tracks: updatedTracks, 
-          spotifyTracks: updatedSpotifyTracks,
-          updatedAt: serverTimestamp() 
-      }); 
-  } catch (e) { 
-      console.error("Error removing song: ", e); 
-      showToast("No se pudo quitar la canción.", true); 
-  }
+    // Filter out the track from the resolved tracks list
+    const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
+
+    const payload = {
+        tracks: updatedTracks,
+        updatedAt: serverTimestamp()
+    };
+
+    // If it's a Spotify playlist, we also need to remove its corresponding entry
+    // from spotifyTracks to keep counts and indices aligned.
+    if (pl.source === 'spotify' && pl.spotifyTracks) {
+        const trackToRemove = (pl.tracks || []).find(t => t && t.id === trackId);
+        if (trackToRemove && trackToRemove.originalId) {
+            const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== trackToRemove.originalId);
+            payload.spotifyTracks = updatedSpotifyTracks;
+            payload.trackCount = updatedSpotifyTracks.length;
+        } else {
+             // Handle case for manually added songs to a spotify playlist, or if originalId is missing
+             payload.trackCount = pl.trackCount ? pl.trackCount -1 : (pl.spotifyTracks?.length || 0);
+        }
+    }
+  
+    // Update the resolved count
+    payload.resolvedCount = updatedTracks.filter(Boolean).length;
+
+    try {
+        await updateDoc(plRef, payload);
+        showToast("Canción eliminada.");
+    } catch (e) {
+        console.error("Error removing song: ", e);
+        showToast("No se pudo quitar la canción.", true);
+    }
 }
+
 
 /* Mini reproductor */
 function updateMiniNow(){
@@ -1497,12 +1517,13 @@ async function boot(){
         const oldPl = oldPlaylists.get(newPl.id);
         const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
         
-        // This is the real-time update logic
+        // This is the real-time update logic, now handling deletions correctly
         if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
             console.log(`Real-time update for playlist: ${newPl.name}`);
             
+            // Re-render the visual list first
             const tracksToShow = (newPl.tracks || []).map((track, index) => {
-                 if (!track) {
+                 if (!track && newPl.spotifyTracks && newPl.spotifyTracks[index]) {
                      const spotifyTrack = newPl.spotifyTracks[index];
                      return { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPl.cover };
                  }
@@ -1512,19 +1533,41 @@ async function boot(){
             
             const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
             const currentTrackId = currentTrack ? currentTrack.id : null;
-            let newIdx = -1;
+            let newIdx = qIdx;
+
+            if (newPlayableTracks.length === 0) {
+                // The playlist is now empty
+                ytPlayer.stopVideo();
+                currentTrack = null;
+                queue = [];
+                qIdx = -1;
+                updateUIOnTrackChange();
+                return; // Stop further processing
+            }
 
             if (currentTrackId) {
-                newIdx = newPlayableTracks.findIndex(t => t.id === currentTrackId);
+                const foundIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
+                
+                if (foundIndex !== -1) {
+                    // Current song is still in the list, just update its index
+                    newIdx = foundIndex;
+                } else {
+                    // The song that was playing has been deleted
+                    // Let's play the song that took its place
+                    if (qIdx >= newPlayableTracks.length) {
+                         // If the deleted song was the last one, play the new last one
+                        newIdx = newPlayableTracks.length - 1;
+                    } else {
+                        // The index qIdx is still valid for the new, shorter list
+                        newIdx = qIdx;
+                    }
+                    setQueue(newPlayableTracks, 'playlist', newIdx);
+                    playCurrent(true); // Auto-play the next song
+                    return; // Important: exit to avoid double-setting the queue
+                }
             }
-            
-            // Only update queue if it's safe to do so
-            if (newIdx !== -1) {
-                setQueue(newPlayableTracks, 'playlist', newIdx);
-            } else {
-                // If current track is gone, or wasn't playing, just update the source
-                queue = newPlayableTracks;
-            }
+             // Update the queue state without interrupting playback if the current song is safe
+            setQueue(newPlayableTracks, 'playlist', newIdx);
         }
     });
 
