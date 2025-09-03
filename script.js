@@ -1073,36 +1073,83 @@ function togglePlay(){
 $("#npPlay")?.addEventListener("click", togglePlay);
 $("#miniPlay")?.addEventListener("click", togglePlay);
 
-async function removeFromPlaylist(plId, trackId) {
+async 
+function sy_syncRemovalRealtime(plId, removedTrackId) {
+  const pl = communityPlaylists.find(p => p.id === plId);
+  if (!pl) return;
+
+  // 1) Quitar de la playlist en memoria
+  pl.tracks = (pl.tracks || []).filter(t => t && t.id !== removedTrackId);
+  pl.resolvedCount = (pl.tracks || []).length;
+
+  // 2) ¿Estoy viendo esta playlist en el reproductor?
+  const isViewingThis = (queueType === 'playlist' && viewingPlaylistId === plId);
+
+  if (isViewingThis) {
+    const removedWasCurrent = currentTrack && currentTrack.id === removedTrackId;
+
+    // reconstruir queue a partir de los tracks actuales
+    const newQueue = (pl.tracks || []).filter(t => t && t.id);
+    queue = newQueue;
+
+    if (removedWasCurrent) {
+      try { ytPlayer?.stopVideo?.(); } catch(_){}
+      currentTrack = null;
+      qIdx = newQueue.length ? Math.min(qIdx, newQueue.length - 1) : -1;
+    } else if (currentTrack) {
+      // reubicar el índice del tema actual
+      const idx = newQueue.findIndex(t => t.id === currentTrack.id);
+      qIdx = idx >= 0 ? idx : 0;
+    } else {
+      qIdx = newQueue.length ? 0 : -1;
+    }
+
+    // refrescar UI del panel de cola y cabecera
+    renderQueue(newQueue, pl.name || "");
+    updateUIOnTrackChange();
+
+    // si no queda nada, ocultar panel
+    if (!newQueue.length) {
+      hideQueuePanel();
+    }
+  } else {
+    // Si no estoy en la playlist, al menos refresco el listado general
+    renderPlaylists();
+  }
+
+  // Indicadores globales
+  if (typeof refreshIndicators === 'function') refreshIndicators();
+}
+function removeFromPlaylist(plId, trackId) {
     const pl = communityPlaylists.find(p => p.id === plId);
     if (!pl) return;
+
     const { doc, updateDoc, serverTimestamp } = window.firebase;
     const plRef = doc(db, "playlists", plId);
 
-    // Filter out the track from the resolved tracks list
+    // Construir lista sin el track eliminado
     const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
 
     const payload = {
         tracks: updatedTracks,
+        resolvedCount: updatedTracks.length,
         updatedAt: serverTimestamp()
     };
 
-    // If it's a Spotify playlist, we also need to remove its corresponding entry
-    // from spotifyTracks to keep counts and indices aligned.
+    // Sincronizar YA en memoria y UI
+    sy_syncRemovalRealtime(plId, trackId);
+
+    // Mantener consistencia con playlists que provienen de Spotify
     if (pl.source === 'spotify' && pl.spotifyTracks) {
-        const trackToRemove = (pl.tracks || []).find(t => t && t.id === trackId);
-        if (trackToRemove && trackToRemove.originalId) {
-            const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== trackToRemove.originalId);
+        const removed = (pl.tracks || []).find(t => t && t.id === trackId);
+        if (removed && removed.originalId) {
+            const updatedSpotifyTracks = pl.spotifyTracks.filter(st => st.spotifyId !== removed.originalId);
             payload.spotifyTracks = updatedSpotifyTracks;
             payload.trackCount = updatedSpotifyTracks.length;
         } else {
-             // Handle case for manually added songs to a spotify playlist, or if originalId is missing
-             payload.trackCount = pl.trackCount ? pl.trackCount -1 : (pl.spotifyTracks?.length || 0);
+            payload.trackCount = Math.max(0, (pl.trackCount ?? (pl.spotifyTracks?.length || 0)) - 1);
         }
     }
-  
-    // Update the resolved count
-    payload.resolvedCount = updatedTracks.filter(Boolean).length;
 
     try {
         await updateDoc(plRef, payload);
@@ -1110,7 +1157,16 @@ async function removeFromPlaylist(plId, trackId) {
     } catch (e) {
         console.error("Error removing song: ", e);
         showToast("No se pudo quitar la canción.", true);
+        // rollback visual básico: re-render desde el estado actual en memoria
+        const cur = communityPlaylists.find(p => p.id === plId);
+        if (queueType === 'playlist' && viewingPlaylistId === plId) {
+            renderQueue((cur?.tracks || []).filter(t => t && t.id), cur?.name || "");
+            updateUIOnTrackChange();
+        }
+        renderPlaylists();
+        if (typeof refreshIndicators === 'function') refreshIndicators();
     }
+
 }
 
 
