@@ -204,7 +204,6 @@ function loadPlayerState() {
   if (!savedState) return null;
   try {
     const state = JSON.parse(savedState);
-    // Expire state after 2 hours
     if (Date.now() - (state.timestamp || 0) > 2 * 60 * 60 * 1000) {
       localStorage.removeItem(PLAYER_STATE_KEY);
       return null;
@@ -374,8 +373,7 @@ async function fetchSpotifyPlaylist(playlistId) {
 /* ========= Lógica de Scraping de YouTube (Reemplazo de API) ========= */
 const uniq = a => [...new Set(a)];
 
-// Función de reintento para peticiones fetch
-async function withRetry(fn, retries = 2, delay = 300) {
+async function withRetry(fn, retries = 2, delay = 500) {
     for (let i = 0; i <= retries; i++) {
         try {
             return await fn();
@@ -384,44 +382,58 @@ async function withRetry(fn, retries = 2, delay = 300) {
                  console.error("Scraping failed after all retries.", e);
                  throw e;
             }
-            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-            await new Promise(res => setTimeout(res, delay));
+            console.warn(`Scraping attempt ${i + 1} for ${fn.name || 'anonymous function'} failed. Retrying in ${delay}ms...`);
+            await new Promise(res => setTimeout(res, delay * (i + 1))); // Incremental backoff
         }
     }
 }
 
-// Función unificada y robusta para scraping
 async function scrapeYoutube(query, limit = 5) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
-            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
-            return r.text();
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
 
-        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
-        if (!ids.length) return [];
-        
-        const metadataPromises = ids.map(id => 
-            fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
-                .then(r => r.json())
-                .then(meta => {
-                    if (meta.error) return null;
-                    return {
-                        id,
-                        title: cleanTitle(meta.title || `Video ${id}`),
-                        thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
-                        author: cleanAuthor(meta.author_name || "YouTube"),
-                        source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
-                    };
-                })
-                .catch(() => ({ // Fallback si noembed falla
-                    id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-                    author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
-                }))
-        );
-        
-        return (await Promise.all(metadataPromises)).filter(Boolean);
+        try {
+            const response = await fetch(endpoint, { 
+                headers: { 'Accept': 'text/plain' },
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
+            const html = await response.text();
+
+            const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
+            if (!ids.length) return [];
+            
+            const metadataPromises = ids.map(id => 
+                fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+                    .then(r => r.ok ? r.json() : Promise.reject('Noembed fetch failed'))
+                    .then(meta => {
+                        if (meta.error) return null;
+                        return {
+                            id,
+                            title: cleanTitle(meta.title || `Video ${id}`),
+                            thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                            author: cleanAuthor(meta.author_name || "YouTube"),
+                            source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
+                        };
+                    })
+                    .catch(() => ({
+                        id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                        author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
+                    }))
+            );
+            
+            return (await Promise.all(metadataPromises)).filter(Boolean);
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                console.warn(`Scraping timed out for query: ${query}`);
+            }
+            throw error;
+        }
     });
 }
 
@@ -499,7 +511,7 @@ overlayInput?.addEventListener("keydown", async e=>{
 });
 
 /* ========= Búsqueda Mixta con Scroll Infinito ========= */
-let paging = { query:"", loading:false, hasMore:false }; // Paging is disabled with scraping
+let paging = { query:"", loading:false, hasMore:false };
 
 function setupSearchFilters() {
     const view = $('#view-search');
@@ -534,7 +546,7 @@ function setupSearchFilters() {
 async function startSearch(query){
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
-  paging = { query, loading: true, hasMore: false }; // Pagination disabled
+  paging = { query, loading: true, hasMore: false };
   items = [];
   const resultsEl = $("#results");
   if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando...</h3></div>`;
@@ -592,10 +604,7 @@ function dedupeById(arr){
   });
 }
 
-async function loadNextPage(){
-  // No-op: scraping does not support pagination.
-  return;
-}
+async function loadNextPage(){ return; }
 
 /* ========= Render resultados ========= */
 function appendResults(chunk){
@@ -612,11 +621,7 @@ function appendResults(chunk){
     if (it.source === 'spotify') {
       logo = spotifyLogoSvg();
     } else { 
-      if (it.isTopic) {
-        logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
-      } else {
-        logo = youtubeLogoSvg();
-      }
+      logo = youtubeLogoSvg();
     }
 
     if (it.type.includes('playlist')) {
@@ -668,14 +673,12 @@ async function handleResultClick(event, item, forcePlay = false) {
         case 'youtube_video':
             playFromSearch(item.id, true);
             break;
-        case 'youtube_playlist':
-            showToast("La reproducción de playlists de YouTube ya no está disponible.", true);
-            break;
         case 'spotify_track':
             playSpotifyTrack(item);
             break;
         case 'spotify_playlist':
-            showToast("Para importar, usa el botón en la pestaña de Playlists.", false);
+            // <<-- CORREGIDO: Inicia la importación desde la búsqueda
+            importPlaylistFromSearch(item);
             break;
     }
 }
@@ -698,15 +701,13 @@ async function findYoutubeEquivalent(track) {
     const { videoId } = await resolveTrack(track);
     if (!videoId) return null;
 
-    // Se mantiene la metadata original de Spotify
     return {
         id: videoId,
         title: track.title,
         author: track.author,
-        thumb: track.thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        thumb: track.thumb || `https://i.imgur.com/gCa3j5g.png`,
         source: 'youtube',
         type: 'youtube_video',
-        isTopic: false, 
         originalId: track.id || track.spotifyId,
     };
 }
@@ -726,6 +727,7 @@ function renderPlaylistCard(playlist) {
     if (covers.length === 0 && playlist.cover) {
         covers.push(playlist.cover);
     }
+     while (covers.length > 0 && covers.length < 4) covers.push(covers[0]);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     
     const logo = playlist.isRecommended ? youtubeLogoSvg() : (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
@@ -899,10 +901,9 @@ async function savePlaylistCopy(originalPlaylist) {
             creator: creator,
             isPublic: false,
             updatedAt: serverTimestamp(),
-            originalOwnerId: originalPlaylist.ownerUserId || null, // Optional reference
-            ownerUserId: 'current_user_id', // Replace with actual user ID if auth exists
+            originalOwnerId: originalPlaylist.ownerUserId || null,
+            ownerUserId: 'current_user_id',
         };
-        // Do not copy resolver state fields
         delete newPlaylistData.id;
         delete newPlaylistData.resolverJobId;
         delete newPlaylistData.status;
@@ -1341,8 +1342,8 @@ function renderQueue(queueItems, title) {
     const isUserPlaylist = queueType === 'playlist';
     if (!isUserPlaylist && queueType !== 'spotify_playlist_unresolved') viewingPlaylistId = null;
 
-    (queueItems || []).forEach((t, i) => {
-        if (!t) return; // Skip null/undefined items in sparse arrays
+    (queueItems || []).forEach((t) => {
+        if (!t) return;
         const li = document.createElement("li");
         li.className = "queue-item";
         li.dataset.trackId = t.id || `spotify_${t.spotifyId}`;
@@ -1406,7 +1407,7 @@ async function showPlaylistInPlayer(plId) {
         renderQueue(tracksToShow, pl.name);
         
         if (pl.status !== 'resolving') {
-            startResolverJob(plId);
+            startResolverJob(pl.id);
         } else {
             console.log("Job is already running for this playlist. Attaching listener.");
             const { doc, onSnapshot } = window.firebase;
@@ -1618,10 +1619,12 @@ async function boot(){
   initTheme();
   setupSearchFilters();
 
-  const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
-  const { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
-  window.firebase = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc };
+  const { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, runTransaction, FieldValue } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  
+  const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
+  window.firebase = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, runTransaction, FieldValue };
+  
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
 
@@ -1633,18 +1636,26 @@ async function boot(){
         const oldPl = oldPlaylists.get(newPl.id);
         const playlistWasUpdated = !oldPl || newPl.updatedAt > oldPl.updatedAt;
 
+        // <<-- CORREGIDO: Lógica de actualización en tiempo real mejorada
         if (playlistWasUpdated && viewingPlaylistId === newPl.id) {
-            const tracksToShow = newPl.status === 'resolved' ? newPl.tracks : 
-                ((newPl.tracks || []).length > 0 ? newPl.tracks.map((t, i) => t || { ...(newPl.spotifyTracks[i] || {}), id: null }) : (newPl.spotifyTracks || []).map(st => ({...st, id: null})));
+            const tracksToShow = (newPl.tracks?.length > 0 && newPl.tracks.some(t => t)) 
+                ? newPl.tracks.map((t, i) => t || { ...(newPl.spotifyTracks?.[i] || {}), id: null }) 
+                : (newPl.spotifyTracks || []).map(st => ({...st, id: null}));
             
             renderQueue(tracksToShow, newPl.name);
             
             const currentTrackId = currentTrack?.id;
-            if(currentTrackId) {
+            if (currentTrackId && queueType === 'playlist') {
                 const newQueue = (tracksToShow || []).filter(t => t && t.id);
                 const newIdx = newQueue.findIndex(t => t.id === currentTrackId);
-                if(newIdx !== -1) {
-                    setQueue(newQueue, 'playlist', newIdx);
+                
+                if (newIdx !== -1) {
+                    // Actualiza la cola sin interrumpir la reproducción si la canción actual sigue allí
+                    queue = newQueue;
+                    qIdx = newIdx;
+                } else {
+                    // La canción actual fue eliminada, para la reproducción
+                    ytPlayer.stopVideo(); currentTrack = null; updateUIOnTrackChange();
                 }
             }
         }
@@ -1692,33 +1703,22 @@ function renderAllHomePlaylists() {
 boot();
 
 window.addEventListener('beforeunload', savePlayerState);
-window.addEventListener('pagehide', savePlayerState); // For mobile
+window.addEventListener('pagehide', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 
 /* ========== Spotify Import & Resolver Logic ========== */
 
 const trackCache = new Map();
 
-function normalize(str) {
-  if (!str) return '';
-  return str
-    .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function getTrackKey(artist, title) {
-    return `${normalize(artist)}|${normalize(title)}`;
+    const n = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${n(artist)}|${n(title)}`;
 }
 
 async function resolveTrack(track) {
-    const trackKey = getTrackKey(track.author, track.title);
-    if (trackCache.has(trackKey)) {
-        return { videoId: trackCache.get(trackKey), error: null };
+    const cacheKey = track.spotifyId || getTrackKey(track.author, track.title);
+    if (trackCache.has(cacheKey)) {
+        return { videoId: trackCache.get(cacheKey) };
     }
 
     const query = `${track.author} ${track.title}`;
@@ -1726,12 +1726,12 @@ async function resolveTrack(track) {
         const results = await scrapeYoutube(query, 1);
         if (results && results[0] && results[0].id) {
             const videoId = results[0].id;
-            trackCache.set(trackKey, videoId);
-            return { videoId: videoId, error: null };
+            trackCache.set(cacheKey, videoId);
+            return { videoId };
         }
-        return { videoId: null, error: "No video found via scraping" };
+        return { error: "No video found via scraping" };
     } catch (e) {
-        return { videoId: null, error: e.message };
+        return { error: e.message };
     }
 }
 
@@ -1740,45 +1740,31 @@ async function startResolverJob(playlistId) {
     const plRef = doc(db, "playlists", playlistId);
     
     const plDoc = await getDoc(plRef);
-    if (!plDoc.exists()) {
-        console.error("Playlist not found for resolver job:", playlistId);
-        return;
-    }
+    if (!plDoc.exists()) return;
     const playlist = { id: plDoc.id, ...plDoc.data() };
 
+    trackCache.clear(); // <<-- CORREGIDO: Limpia la caché para evitar duplicados entre playlists
+
     let jobId = playlist.resolverJobId;
-    if (!jobId) {
-        jobId = `job_${playlistId}_${Date.now()}`;
-        await updateDoc(plRef, { resolverJobId: jobId });
-    }
+    const jobRef = doc(db, "resolverJobs", jobId || `job_${playlistId}_${Date.now()}`);
 
-    const jobRef = doc(db, "resolverJobs", jobId);
-    let jobData;
-    const jobDoc = await getDoc(jobRef);
-
-    if (jobDoc.exists()) {
-        jobData = jobDoc.data();
-        if (jobData.status === 'running') {
-            console.log("Job already running, listener will handle it.");
-            return;
-        }
-    } else {
-        jobData = {
+    if (!jobId || !(await getDoc(jobRef)).exists()) {
+        jobId = jobRef.id;
+        await updateDoc(plRef, { resolverJobId: jobId, status: 'resolving' });
+        await setDoc(jobRef, {
             playlistRef: plRef.path,
-            status: 'queued',
+            status: 'running',
             total: (playlist.spotifyTracks || []).length,
-            done: 0,
-            resolved: 0,
             nextIndex: 0,
+            resolvedCount: playlist.resolvedCount || 0,
             errors: [],
             lastUpdated: serverTimestamp()
-        };
-        await setDoc(jobRef, jobData);
+        });
+    } else {
+        await updateDoc(plRef, { status: 'resolving' });
+        await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
     }
     
-    await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
-    await updateDoc(plRef, { status: 'resolving' });
-
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (doc) => {
         if (!doc.exists()) { hideResolverModal(); return; }
@@ -1789,96 +1775,76 @@ async function startResolverJob(playlistId) {
         }
     });
 
-    runJobBatch(playlistId, jobRef);
+    // <<-- CORREGIDO: Lanza múltiples trabajadores independientes
+    const CONCURRENT_WORKERS = 5;
+    for (let i = 0; i < CONCURRENT_WORKERS; i++) {
+        worker(playlistId, jobRef.id);
+    }
 }
 
-async function runJobBatch(playlistId, jobRef) {
-    const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
+// <<-- CORREGIDO: Nueva función "worker" para procesamiento no bloqueante
+async function worker(playlistId, jobId) {
+    const { doc, getDoc, updateDoc, runTransaction, FieldValue } = window.firebase;
+    const jobRef = doc(db, "resolverJobs", jobId);
     const plRef = doc(db, "playlists", playlistId);
-    
-    const jobDoc = await getDoc(jobRef);
-    if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
-        console.log("Job stopped or cancelled.");
-        if (resolverJobUnsubscribe) resolverJobUnsubscribe();
-        hideResolverModal();
-        return;
-    }
-    
-    const plDoc = await getDoc(plRef);
-    if (!plDoc.exists()) return;
 
-    const playlist = plDoc.data();
-    const job = jobDoc.data();
-    const { nextIndex, total } = job;
-    const BATCH_SIZE = 10; // <<-- CORREGIDO: Aumentado a 10 para mayor velocidad
+    while (true) {
+        let jobData, playlistData, currentIndex;
+        try {
+            await runTransaction(db, async (transaction) => {
+                const jobDoc = await transaction.get(jobRef);
+                if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
+                    throw new Error("Job stopped");
+                }
+                jobData = jobDoc.data();
+                currentIndex = jobData.nextIndex;
+                if (currentIndex >= jobData.total) {
+                    throw new Error("Job finished");
+                }
+                transaction.update(jobRef, { nextIndex: currentIndex + 1 });
+            });
 
-    if (nextIndex >= total) {
-        const finalResolved = (await getDoc(plRef)).data().resolvedCount || 0;
-        const finalStatus = finalResolved === total ? 'resolved' : 'partial';
-        await updateDoc(plRef, { status: finalStatus });
-        await updateDoc(jobRef, { status: 'done', lastUpdated: serverTimestamp() });
-        const message = finalStatus === 'resolved' 
-            ? `Importación completa: ${playlist.name}`
-            : `Importación incompleta: ${finalResolved} de ${total} resueltos.`;
-        showToast(message, finalStatus === 'partial');
-        return;
-    }
+            const plDoc = await getDoc(plRef);
+            if (!plDoc.exists()) throw new Error("Playlist deleted");
+            playlistData = plDoc.data();
+            
+            const trackToProcess = playlistData.spotifyTracks[currentIndex];
+            if (!trackToProcess) continue;
 
-    const tracksToProcess = (playlist.spotifyTracks || []).slice(nextIndex, nextIndex + BATCH_SIZE);
-    if (tracksToProcess.length === 0) { // Safety check if spotifyTracks is missing
-      await updateDoc(jobRef, { status: 'error', error: 'Missing spotifyTracks array.' });
-      return;
-    }
-    const promises = tracksToProcess.map(track => resolveTrack(track));
-    const results = await Promise.all(promises);
-
-    const currentPlDoc = await getDoc(plRef);
-    const currentPlaylist = currentPlDoc.data();
-    let updatedTracks = [...(currentPlaylist.tracks || Array(total).fill(null))];
-    if (updatedTracks.length < total) {
-         updatedTracks.length = total;
-    }
-
-    let resolvedInBatch = 0;
-    let errorsInBatch = [];
-
-    results.forEach((result, i) => {
-        const originalIndex = nextIndex + i;
-        if (result.videoId) {
-            // <<-- CORREGIDO: Mantiene metadata de Spotify, solo asigna la URL (id) de YouTube
-            const originalTrackData = playlist.spotifyTracks[originalIndex];
-            updatedTracks[originalIndex] = {
-                ...originalTrackData,
-                id: result.videoId,
-                source: 'youtube',
-                originalId: originalTrackData.spotifyId || originalTrackData.id
-            };
-            resolvedInBatch++;
-        } else {
-            if (!updatedTracks[originalIndex]) {
-                updatedTracks[originalIndex] = { ...(playlist.spotifyTracks[originalIndex] || {}), id: null };
+            const result = await resolveTrack(trackToProcess);
+            
+            const updatePayload = {};
+            if (result.videoId) {
+                const resolvedTrack = {
+                    ...trackToProcess,
+                    id: result.videoId,
+                    source: 'youtube',
+                    originalId: trackToProcess.spotifyId || trackToProcess.id
+                };
+                updatePayload[`tracks.${currentIndex}`] = resolvedTrack;
+                updatePayload.resolvedCount = FieldValue.increment(1);
+            } else {
+                 updatePayload[`tracks.${currentIndex}`] = { ...trackToProcess, id: null };
+                 // No se incrementa el contador si falla
             }
-            if (result.error) {
-                errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+            await updateDoc(plRef, updatePayload);
+
+        } catch (e) {
+            if (e.message === "Job stopped" || e.message === "Job finished") {
+                 // Finaliza el worker de forma controlada
+                const finalJobDoc = await getDoc(jobRef);
+                if(finalJobDoc.exists() && finalJobDoc.data().nextIndex >= finalJobDoc.data().total) {
+                    await updateDoc(jobRef, { status: 'done' });
+                    const finalPl = (await getDoc(plRef)).data();
+                    const finalStatus = finalPl.resolvedCount === finalPl.trackCount ? 'resolved' : 'partial';
+                    await updateDoc(plRef, { status: finalStatus });
+                }
+                return;
             }
+            console.error(`Worker failed at index ${currentIndex}:`, e);
+            continue; // Intenta con el siguiente
         }
-    });
-    
-    const newResolvedCount = (currentPlaylist.resolvedCount || 0) + resolvedInBatch;
-    const newNextIndex = nextIndex + tracksToProcess.length;
-
-    await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
-
-    const jobUpdatePayload = { 
-        done: newNextIndex,
-        nextIndex: newNextIndex, 
-        resolved: newResolvedCount, // <<-- CORREGIDO: Se agrega el conteo de resueltos al job
-        lastUpdated: serverTimestamp(),
-        errors: [...(job.errors || []), ...errorsInBatch]
-    };
-    await updateDoc(jobRef, jobUpdatePayload);
-
-    setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
+    }
 }
 
 
@@ -1887,13 +1853,14 @@ async function cancelResolverJob() {
     const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
     if (!pl || !pl.resolverJobId) return;
 
-    const { doc, updateDoc, serverTimestamp } = window.firebase;
+    const { doc, updateDoc, serverTimestamp, getDoc } = window.firebase;
     const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
     const plRef = doc(db, "playlists", pl.id);
     
     await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
-    const finalResolved = (await getDoc(plRef)).data().resolvedCount || 0;
-    await updateDoc(plRef, { status: finalResolved > 0 ? 'partial' : 'unresolved' });
+    const finalPl = (await getDoc(plRef)).data();
+    const finalStatus = (finalPl.resolvedCount || 0) > 0 ? 'partial' : 'unresolved';
+    await updateDoc(plRef, { status: finalStatus });
     
     showToast("Importación cancelada.", true);
     hideResolverModal();
@@ -1903,7 +1870,7 @@ async function cancelResolverJob() {
 /* ========== Resolver Mini Modal ========== */
 function updateResolverModal(job) {
     let modal = document.getElementById('resolver-modal');
-    if (!job || !['running', 'queued', 'paused'].includes(job.status)) {
+    if (!job || !['running', 'queued'].includes(job.status)) {
         hideResolverModal();
         return;
     }
@@ -1915,7 +1882,7 @@ function updateResolverModal(job) {
         document.body.appendChild(modal);
         modal.innerHTML = `
             <div class="resolver-content">
-                <p>Importando y asignando URLs...</p>
+                <p>Asignando URLs...</p>
                 <div class="resolver-progress-bar">
                     <div class="resolver-progress"></div>
                 </div>
@@ -1927,14 +1894,11 @@ function updateResolverModal(job) {
         setTimeout(()=> modal.classList.add('show'), 10);
     }
     
-    // <<-- CORREGIDO: Usa el contador del job para reflejar el progreso real
-    const resolved = job.resolved !== undefined ? job.resolved : (job.done || 0);
-    const total = job.total || 0;
+    const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
+    const resolved = pl?.resolvedCount || 0;
+    const total = job.total || pl?.trackCount || 0;
 
-    if (total === 0) {
-        modal.querySelector('.resolver-counter').textContent = 'Calculando...';
-        return;
-    };
+    if (total === 0) return;
 
     const progress = total > 0 ? (resolved / total) * 100 : 0;
     
@@ -2189,7 +2153,7 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
             const spotifyTracks = await fetchAllSpotifyPlaylistTracks(pl.spotifyId);
             if(spotifyTracks.length === 0) continue;
 
-            const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder")); // Scope to user
+            const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
             const snapshot = await getDocs(q);
 
             if (snapshot.empty) {
@@ -2215,19 +2179,18 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
                 const existingData = snapshot.docs[0].data();
                 const existingDocRef = doc(db, 'playlists', docId);
                 
-                const oldTracksByKey = new Map();
+                const oldTracksBySpotifyId = new Map();
                 if(existingData.tracks) {
                     existingData.tracks.forEach(t => {
-                        if (t && t.id) oldTracksByKey.set(getTrackKey(t.author, t.title), t);
+                        if (t && t.id && t.originalId) oldTracksBySpotifyId.set(t.originalId, t);
                     });
                 }
                 
                 let resolvedCount = 0;
                 const newTracksPayload = spotifyTracks.map(st => {
-                    const key = getTrackKey(st.author, st.title);
-                    if (oldTracksByKey.has(key)) {
+                    if (oldTracksBySpotifyId.has(st.spotifyId)) {
                         resolvedCount++;
-                        return oldTracksByKey.get(key);
+                        return oldTracksBySpotifyId.get(st.spotifyId);
                     }
                     return null;
                 });
@@ -2257,6 +2220,58 @@ async function sy_processAndSavePlaylists(list, resultsContainer) {
         importButton.disabled = false;
         importButton.textContent = 'Importar / Actualizar';
       }
+    }
+}
+
+// <<-- NUEVA FUNCIÓN: Para importar playlists desde la búsqueda
+async function importPlaylistFromSearch(playlistItem) {
+    showToast(`Importando "${playlistItem.title}"...`);
+    const { collection, query, where, getDocs, addDoc, serverTimestamp } = window.firebase;
+    const playlistsCol = collection(db, 'playlists');
+
+    // Verifica si ya existe una playlist con este ID de Spotify para el usuario actual
+    const q = query(playlistsCol, where("spotifyId", "==", playlistItem.id), where("ownerUserId", "==", "current_user_id_placeholder"));
+    const existingSnapshot = await getDocs(q);
+
+    if (!existingSnapshot.empty) {
+        // La playlist ya existe, simplemente la mostramos
+        const existingId = existingSnapshot.docs[0].id;
+        showToast("Playlist encontrada en tu librería.");
+        await showPlaylistInPlayer(existingId);
+    } else {
+        // La playlist es nueva, la creamos y luego la mostramos
+        try {
+            const spotifyTracks = await fetchAllSpotifyPlaylistTracks(playlistItem.id);
+            if (spotifyTracks.length === 0) {
+                showToast("Esta playlist de Spotify está vacía o es privada.", true);
+                return;
+            }
+
+            const newPlaylist = {
+                name: playlistItem.title,
+                creator: playlistItem.author,
+                isPublic: false,
+                cover: playlistItem.thumb || null,
+                source: 'spotify',
+                spotifyId: playlistItem.id,
+                spotifyTracks,
+                trackCount: spotifyTracks.length,
+                tracks: Array(spotifyTracks.length).fill(null),
+                status: 'unresolved',
+                resolvedCount: 0,
+                updatedAt: serverTimestamp(),
+                ownerUserId: "current_user_id_placeholder"
+            };
+
+            const docRef = await addDoc(playlistsCol, newPlaylist);
+            addMyPlaylistId(docRef.id);
+            showToast("Playlist agregada. Iniciando asignación de URLs...");
+            await showPlaylistInPlayer(docRef.id);
+
+        } catch (e) {
+            console.error("Error al importar playlist desde la búsqueda:", e);
+            showToast("No se pudo importar la playlist.", true);
+        }
     }
 }
 
