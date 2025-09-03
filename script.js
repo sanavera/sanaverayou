@@ -479,7 +479,7 @@ async function startSearch(query){
   paging = { query, loading: true };
   items = [];
   const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando videos...</h3></div>`;
+  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
   updateHomeGridVisibility();
   $('#search-filters')?.classList.add('hide'); // Ocultar filtros siempre
 
@@ -1826,6 +1826,26 @@ async function runJobBatch(playlistId, jobRef) {
             ? `Importación completa: ${playlist.name}`
             : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`;
         showToast(message, finalStatus === 'partial');
+        // Refresh final state if user is on this playlist
+        try {
+            const plIndex = communityPlaylists.findIndex(p => p && p.id === playlistId);
+            if (plIndex >= 0) {
+                const memPl = communityPlaylists[plIndex];
+                const hydrated = (memPl.spotifyTracks || []).map((st, i) => memPl.tracks?.[i] && memPl.tracks[i].id ? memPl.tracks[i] : {
+                    id: null,
+                    title: st.title,
+                    author: st.author,
+                    thumb: st.thumb || memPl.cover || '',
+                    source: 'youtube',
+                    originalId: st.spotifyId
+                });
+                if (typeof viewingPlaylistId !== 'undefined' && viewingPlaylistId === playlistId) {
+                    if (typeof renderQueue === 'function') renderQueue(hydrated, memPl.name || '');
+                    if (typeof refreshIndicators === 'function') refreshIndicators();
+                }
+            }
+        } catch(e){ console.warn('Final UI refresh error:', e); }
+
         return;
     }
 
@@ -1858,6 +1878,44 @@ async function runJobBatch(playlistId, jobRef) {
     const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
     
     await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
+    // === Real-time hydration: actualizar memoria y UI sin salir de la vista ===
+    try {
+        const plIndex = (typeof communityPlaylists !== 'undefined' && Array.isArray(communityPlaylists))
+            ? communityPlaylists.findIndex(p => p && p.id === playlistId)
+            : -1;
+        if (plIndex >= 0) {
+            // merge into in-memory playlist
+            const memPl = communityPlaylists[plIndex];
+            memPl.tracks = updatedTracks;
+            memPl.resolvedCount = newResolvedCount;
+            memPl.status = (newResolvedCount >= (memPl.spotifyTracks?.length || newResolvedCount)) ? 'resolved' : 'resolving';
+
+            // if user is viewing this playlist, re-render queue mixing resolved and pendientes
+            const sameView = (typeof queueType !== 'undefined' && typeof viewingPlaylistId !== 'undefined'
+                              && viewingPlaylistId === playlistId);
+            if (sameView) {
+                const hydrated = (memPl.spotifyTracks || []).map((st, i) => {
+                    const t = updatedTracks[i];
+                    if (t && t.id) return t;
+                    // pending item uses Spotify metadata and cover
+                    return {
+                        id: null,
+                        title: st.title,
+                        author: st.author,
+                        thumb: st.thumb || memPl.cover || '',
+                        source: 'youtube',
+                        originalId: st.spotifyId
+                    };
+                });
+                if (typeof renderQueue === 'function') renderQueue(hydrated, memPl.name || '');
+                // mantener el mini-now y controles en coherencia
+                if (typeof refreshIndicators === 'function') refreshIndicators();
+            }
+        }
+    } catch (e) {
+        console.warn('Hydration UI error:', e);
+    }
+
     await updateDoc(jobRef, { 
         done: newResolvedCount,
         lastUpdated: serverTimestamp(),
