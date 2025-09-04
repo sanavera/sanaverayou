@@ -615,15 +615,35 @@ html, body { background-color: var(--bg); }
   margin-top: auto; /* Alinea al fondo */
 }
 
-.playlist-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 4px;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* MODIFICACIÓN: Estilos para Marquesina en Títulos Largos */
+.playlist-title-wrapper {
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 100%;
 }
+.playlist-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    line-height: 1.3;
+    display: inline-block; /* Comportamiento por defecto */
+}
+/* La clase .is-overflowing se añade con JS cuando el texto es muy largo */
+.playlist-title-wrapper.is-overflowing .playlist-title {
+    display: inline-flex;
+    will-change: transform;
+    animation: marquee 10s linear infinite;
+}
+.playlist-title-wrapper.is-overflowing .playlist-title span {
+    padding-right: 20px; /* Espacio entre el texto original y su clon */
+}
+@keyframes marquee {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-50%); } /* Se desplaza la mitad (longitud de un span) */
+}
+/* FIN DE MODIFICACIÓN */
+
 
 .creator-line {
   display: flex;
