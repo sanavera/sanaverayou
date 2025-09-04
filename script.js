@@ -33,7 +33,7 @@ const youtubeMusicLogoSvg = () => `
 /* ========= Estado ========= */
 let items = [];
 let favs  = [];
-let communityPlaylists = [];
+let communityPlaylists = []; // Playlists de la comunidad (Firebase)
 let queue = null;
 let queueType = null;
 let qIdx = -1;
@@ -41,46 +41,33 @@ let currentTrack = null;
 let viewingPlaylistId = null;
 let currentQueueTitle = "";
 
-// --- Contenido dinámico de Spotify para la página de inicio ---
-let featuredPlaylists = [];
-let newReleases = [];
-let recommendedSongs = [];
-
 let isShuffle = false;
 let repeatMode = 'none'; // 'none', 'one', 'all'
 
 let ytPlayer = null, YT_READY = false, timer = null;
-let db;
-let resolverJobUnsubscribe = null;
+let db; // Instancia de Firestore
+let resolverJobUnsubscribe = null; // Unsubscriber for the job listener
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
 const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
+let featuredPlaylists = [];
+let newReleases = [];
+let recommendedSongs = [];
 
-// --- Listas de reproducción recomendadas (Hardcoded) ---
+
+// --- Listas de reproducción locales ---
 const recommendedPlaylists = {
-  p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
-    title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  p2: {
-    ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
-    title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  cumbia: {
-    ids: ['UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQ6svFb8_0', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c'],
-    title: 'Cumbias del Recuerdo',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  }
+  p1: { ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'], title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar', creator: 'Luis Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  p2: { ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWImi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'], title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia', creator: 'Luis Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  cumbia: { ids: ['UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQ6svFb8_0', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c'], title: 'Cumbias del Recuerdo', creator: 'Luis Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  reggaeton: { ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'], title: 'Noche de Reggaetón', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  reggae: { ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', 'ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'], title: 'Vibras de Reggae', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  pop: { ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'], title: 'Éxitos Pop', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  rock_int: { ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'], title: 'Himnos del Rock', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  bachata: { ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'], title: 'Corazón de Bachata', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' },
+  international: { ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkAD0TPrJA', '0-EF60neguk'], title: 'Clásicos 70/80/90s', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist', source: 'youtube' }
 };
 
 /* ========= Persistencia de Estado ========= */
@@ -171,7 +158,7 @@ function applyTheme(theme){
   document.documentElement.style.colorScheme = (theme==="light"?"light":"dark");
 }
 function initTheme(){
-  const saved = localStorage.getItem(THEME_KEY) || "dark";
+  const saved = localStorage.getItem(THEKEY) || "dark";
   applyTheme(saved);
   $("#themeToggle")?.addEventListener("click", ()=>{
     const cur = document.documentElement.getAttribute("data-theme") || "dark";
@@ -198,7 +185,7 @@ async function getSpotifyToken() {
         const data = await response.json();
         spotifyToken = {
             value: data.access_token,
-            expires: Date.now() + (data.expires_in * 1000) - 60000
+            expires: Date.now() + (data.expires_in * 1000) - 60000 // Refresh 1 min before expiry
         };
         return spotifyToken.value;
     } catch (e) {
@@ -214,76 +201,84 @@ async function spotifyApiFetch(endpoint) {
         const response = await fetch(`https://api.spotify.com/v1/${endpoint}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!response.ok) throw new Error(`Spotify API error: ${response.statusText}`);
-        return await response.json();
+        if (!response.ok) throw new Error(`Spotify API error for ${endpoint}: ${response.statusText}`);
+        return response.json();
     } catch (e) {
-        console.error(`Error fetching from Spotify API (${endpoint}):`, e);
+        console.error(`Error fetching ${endpoint}:`, e);
         return null;
     }
 }
 
 async function fetchFeaturedPlaylists() {
-    const data = await spotifyApiFetch('browse/featured-playlists?limit=10');
-    return data?.playlists?.items?.map(p => ({
-        source: 'spotify',
-        type: 'spotify_playlist',
+    const data = await spotifyApiFetch('browse/featured-playlists?country=AR&locale=es_AR&limit=10');
+    return data?.playlists?.items.map(p => ({
         id: p.id,
-        title: p.name,
-        creator: p.owner.display_name,
-        thumb: p.images?.[0]?.url,
-        tracks: []
+        name: p.name,
+        author: p.owner.display_name,
+        thumb: p.images?.[0]?.url || '',
+        type: 'playlist',
+        source: 'spotify'
     })) || [];
 }
 
 async function fetchNewReleases() {
-    const data = await spotifyApiFetch('browse/new-releases?limit=10');
-    return data?.albums?.items?.map(a => ({
-        source: 'spotify',
-        type: 'spotify_album',
+    const data = await spotifyApiFetch('browse/new-releases?country=AR&limit=10');
+    return data?.albums?.items.map(a => ({
         id: a.id,
-        title: a.name,
+        name: a.name,
         author: a.artists.map(art => art.name).join(', '),
-        thumb: a.images?.[0]?.url,
-        isAlbum: true,
-        tracks: []
+        thumb: a.images?.[0]?.url || '',
+        type: 'album',
+        source: 'spotify'
     })) || [];
 }
 
 async function fetchRecommendations() {
-    const seed_artists = '4q3ewBCX7sLwd24euuV69X,7iK8PXO48WeuP03g8YR51W,1vCWHaC5f2uS3yhpwWbIA6'; // Bad Bunny, Taylor Swift, Drake
-    const data = await spotifyApiFetch(`recommendations?limit=20&seed_artists=${seed_artists}`);
-    return data?.tracks?.map(track => ({
+    // Seed with relevant Latin American genres
+    const data = await spotifyApiFetch('recommendations?seed_genres=latin,cumbia,reggaeton,rock-nacional&limit=20&market=AR');
+    return data?.tracks?.map(t => ({
+        id: t.id,
+        title: t.name,
+        author: t.artists.map(a => a.name).join(', '),
+        thumb: t.album.images?.[0]?.url || '',
         source: 'spotify',
-        type: 'spotify_track',
-        id: track.id,
-        title: track.name,
-        author: track.artists.map(a => a.name).join(', '),
-        thumb: track.album.images?.[0]?.url || ''
+        type: 'track'
     })) || [];
 }
 
 async function fetchSpotifyPlaylist(playlistId) {
-    const data = await spotifyApiFetch(`playlists/${playlistId}`);
-    if (!data) return null;
-    return {
-        id: data.id,
-        name: data.name,
-        author: data.owner.display_name,
-        thumb: data.images?.[0]?.url || '',
-        tracks: data.tracks.items.map(({track}) => track ? {
-            source: 'spotify',
-            type: 'spotify_track',
-            id: track.id,
-            title: track.name,
-            author: track.artists.map(a => a.name).join(', '),
-            thumb: track.album.images?.[0]?.url || ''
-        } : null).filter(Boolean)
-    };
+    const token = await getSpotifyToken();
+    if (!token) return null;
+
+    try {
+        const data = await spotifyApiFetch(`playlists/${playlistId}`);
+        if (!data) return null;
+
+        return {
+            id: data.id,
+            name: data.name,
+            author: data.owner.display_name,
+            thumb: data.images?.[0]?.url || '',
+            tracks: data.tracks.items.map(({track}) => track ? {
+                source: 'spotify',
+                type: 'spotify_track',
+                id: track.id,
+                title: track.name,
+                author: track.artists.map(a => a.name).join(', '),
+                thumb: track.album.images?.[0]?.url || ''
+            } : null).filter(Boolean)
+        };
+    } catch (e) {
+        console.error("Error fetching Spotify playlist:", e);
+        return null;
+    }
 }
+
 
 /* ========= Lógica de Scraping de YouTube (Reemplazo de API) ========= */
 const uniq = a => [...new Set(a)];
 
+// Función de reintento para peticiones fetch
 async function withRetry(fn, retries = 2, delay = 300) {
     for (let i = 0; i <= retries; i++) {
         try {
@@ -327,54 +322,44 @@ async function scrapeYoutubeIdForNthResult(query, index = 0) {
         const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]));
         if (!ids || ids.length <= index) {
             console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
-            return null;
+            return null; // No se encontraron suficientes resultados
         }
-        return ids[index];
+        return ids[index]; // Devuelve solo el ID del video
     });
 }
 
-// CORREGIDO: Función de búsqueda principal más robusta y eficiente
+// Función de scraping para el buscador principal (usa noembed)
 async function scrapeYoutube(query, limit = 20) {
     return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const html = await fetch(endpoint).then(r => {
+        const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
             if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
             return r.text();
         });
 
-        const match = html.match(/var ytInitialData = (.*?);<\/script>/);
-        if (!match || !match[1]) {
-            console.warn("ytInitialData not found, falling back to legacy scraping.");
-            const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
-            return ids.length > 0 ? await fetchVideoDetailsByIds(ids) : [];
-        }
-
-        try {
-            const data = JSON.parse(match[1]);
-            const contents = data.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents;
-            
-            const results = [];
-            for (const item of contents) {
-                if (item.videoRenderer && results.length < limit) {
-                    const video = item.videoRenderer;
-                    if (!video.lengthText || video.lengthText.simpleText === '0:00') continue;
-
-                    results.push({
-                        id: video.videoId,
-                        title: cleanTitle(video.title.runs[0].text),
-                        thumb: video.thumbnail.thumbnails.pop().url,
-                        author: cleanAuthor(video.longBylineText.runs[0].text),
-                        source: 'youtube', type: 'youtube_video',
-                        isTopic: /topic/i.test(video.longBylineText.runs[0].text || "")
-                    });
-                }
-            }
-            return results;
-        } catch (e) {
-            console.error("Failed to parse ytInitialData, falling back to legacy.", e);
-            const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
-            return ids.length > 0 ? await fetchVideoDetailsByIds(ids) : [];
-        }
+        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
+        if (!ids.length) return [];
+        
+        const metadataPromises = ids.map(id => 
+            fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+                .then(r => r.json())
+                .then(meta => {
+                    if (meta.error) return null;
+                    return {
+                        id,
+                        title: cleanTitle(meta.title || `Video ${id}`),
+                        thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                        author: cleanAuthor(meta.author_name || "YouTube"),
+                        source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
+                    };
+                })
+                .catch(() => ({ // Fallback si noembed falla
+                    id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                    author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
+                }))
+        );
+        
+        return (await Promise.all(metadataPromises)).filter(Boolean);
     });
 }
 
@@ -392,13 +377,11 @@ async function fetchVideoDetailsByIds(ids) {
                     title: cleanTitle(meta.title || `Video ${id}`),
                     thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
                     author: cleanAuthor(meta.author_name || "YouTube"),
-                    source: 'youtube', type: 'youtube_video',
-                    isTopic: /topic/i.test(meta.author_name || "")
+                    source: 'youtube', type: 'youtube_video'
                 };
             })
             .catch(() => ({
-                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, author: "YouTube",
-                source: 'youtube', type: 'youtube_video', isTopic: false
+                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, author: "YouTube", source: 'youtube', type: 'youtube_video'
             }))
     );
     return (await Promise.all(metadataPromises)).filter(Boolean);
@@ -459,7 +442,8 @@ async function startSearch(query){
   const resultsEl = $("#results");
   if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
   updateHomeGridVisibility();
-  
+  $('#search-filters')?.classList.add('hide'); // Ocultar filtros siempre
+
   try {
     const videoResults = await scrapeYoutube(query, 20);
     if (searchAbort.signal.aborted) return;
@@ -494,7 +478,6 @@ function dedupeById(arr){
 /* ========= Render resultados ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
-  root.innerHTML = ''; // Limpiar resultados anteriores
   for(const it of chunk){
     const item = document.createElement("article");
     item.className = "result-item";
@@ -502,9 +485,7 @@ function appendResults(chunk){
     item.dataset.trackId = it.id;
 
     let logo = youtubeLogoSvg();
-    if (it.source === 'spotify') {
-        logo = spotifyLogoSvg();
-    } else if (it.isTopic) {
+    if (it.isTopic) {
         logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
     }
     
@@ -543,12 +524,10 @@ function appendResults(chunk){
 
 
 async function handleResultClick(event, item, forcePlay = false) {
-    if (event.target.closest(".more")) return;
+    if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return;
 
-    if (item.source === 'youtube') {
+    if (item.type === 'youtube_video') {
         playFromSearch(item.id, true);
-    } else if (item.source === 'spotify') {
-        await playSpotifyTrack(item);
     }
 }
 
@@ -556,10 +535,12 @@ async function playSpotifyTrack(track) {
     showToast("Buscando en YouTube...");
     const ytEquivalent = await findYoutubeEquivalent(track);
     if (ytEquivalent) {
-        setQueue([ytEquivalent], "search", 0);
+        setQueue([ytEquivalent], "spotify_track", 0);
         viewingPlaylistId = null;
-        playCurrent(true);
+        currentQueueTitle = "Canción";
+        renderQueue([ytEquivalent], currentQueueTitle);
         switchView('view-player');
+        playCurrent(true);
     } else {
         showToast("No se pudo encontrar un video para esta canción.", true);
     }
@@ -567,7 +548,7 @@ async function playSpotifyTrack(track) {
 
 async function findYoutubeEquivalent(track) {
     if (!track || !track.title) return null;
-    const { videoId } = await resolveTrack(track);
+    const videoId = await scrapeYoutubeUrlOnly(`${track.author} ${track.title}`);
     if (!videoId) return null;
 
     return {
@@ -577,122 +558,121 @@ async function findYoutubeEquivalent(track) {
         thumb: track.thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
         source: 'youtube',
         type: 'youtube_video',
-        isTopic: false, 
-        originalId: track.id || track.spotifyId,
+        originalId: track.id,
     };
 }
 
-/* ========= Home grid ========= */
+
+async function playSpotifyPlaylistOrAlbum(item) {
+    showToast(`Cargando "${item.name}"...`);
+    const endpoint = item.type === 'album' ? `albums/${item.id}/tracks` : `playlists/${item.id}/tracks`;
+    const data = await spotifyApiFetch(endpoint);
+    let tracks = data?.items;
+    if(!tracks) { 
+        showToast("No se pudo cargar la playlist.", true); 
+        return; 
+    }
+
+    if(item.type === 'playlist') tracks = tracks.map(t => t.track).filter(Boolean);
+    
+    const formattedTracks = tracks.map(t => ({
+        id: t.id, 
+        title: t.name, 
+        author: t.artists.map(a => a.name).join(', '),
+        thumb: (item.type === 'album' ? item.thumb : t.album?.images?.[0]?.url) || item.thumb,
+        source: 'spotify', 
+        type: 'track'
+    }));
+
+    const resolvePromises = formattedTracks.map(findYoutubeEquivalent);
+    const resolvedTracks = (await Promise.all(resolvePromises)).filter(Boolean);
+
+    if(resolvedTracks.length === 0) {
+        showToast("No se encontraron videos para esta lista.", true);
+        return;
+    }
+
+    setQueue(resolvedTracks, "spotify_playlist", 0);
+    viewingPlaylistId = item.id;
+    currentQueueTitle = item.name;
+    renderQueue(resolvedTracks, currentQueueTitle);
+    switchView('view-player');
+    playCurrent(true);
+}
+
+
+/* ========= Home (Inicio) ========= */
 function renderSection(title, items, renderFn) {
     if (!items || items.length === 0) return '';
     return `
         <section class="home-category">
-            <header class="home-head">
-                <h3 class="home-title">${title}</h3>
-            </header>
-            <div class="home-grid">
-                ${items.map(renderFn).join('')}
-            </div>
-        </section>
-    `;
+            <header class="home-head"><h3 class="home-title">${title}</h3></header>
+            <div class="home-grid">${items.map(item => renderFn(item)).join('')}</div>
+        </section>`;
 }
 
-function renderPlaylistCard(playlist) {
-    let trackCount = playlist.trackCount || playlist.tracks?.length || playlist.spotifyTracks?.length || 0;
-    if (playlist.isRecommended) {
-        trackCount = playlist.data.length;
-    }
-    if (trackCount === 0 && !playlist.isAlbum) return '';
+function renderPlaylistCard(p) {
+    const logo = p.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg();
+    const coverHtml = p.type === 'album'
+        ? `<img class="album-cover" src="${p.thumb}" alt="Cover">`
+        : `<div class="collage-container">${(p.data && p.data.length > 0 ? p.data.slice(0,4).map(t => t.thumb) : Array(4).fill(p.thumb || '')) .map(src => `<img src="${src || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}" alt="">`).join('')}</div>`;
 
-    let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
-    if (covers.length === 0 && (playlist.thumb || playlist.cover)) {
-        covers.push(playlist.thumb || playlist.cover);
-    }
-    while (covers.length < 4 && !playlist.isAlbum) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-    
-    const logo = playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg();
-    const titleText = playlist.title || playlist.name;
-
-    const cardHtml = `
-        <article class="playlist-card" data-id="${playlist.id}" data-type="${playlist.type || 'playlist'}">
-            ${playlist.isAlbum ? 
-                `<img src="${playlist.thumb}" class="album-cover" alt="Album art for ${titleText}">` :
-                `<div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>`
-            }
+    return `
+        <article class="playlist-card" data-id="${p.id || p.title}" data-type="${p.type}" data-source="${p.source}">
+            ${coverHtml}
             <div class="playlist-meta">
-                <div class="playlist-title-wrapper">
-                    <h4 class="playlist-title">${titleText}</h4>
-                </div>
-                <div class="creator-line">${logo}<span>${playlist.isAlbum ? (playlist.author || 'Varios Artistas') : `por ${playlist.creator}`}</span></div>
+                <div class="playlist-title-wrapper"><h4 class="playlist-title">${p.name || p.title}</h4></div>
+                <div class="creator-line">${logo}<span>${p.author || p.creator}</span></div>
             </div>
         </article>`;
-    return cardHtml;
 }
 
-function renderSongCard(song) {
+function renderSongCard(track) {
     return `
-        <article class="result-item as-card" data-track-id="${song.id}" data-type="${song.type}">
-            <div class="thumb-wrap">
-                <img class="thumb" loading="lazy" src="${song.thumb}" alt="">
-                <button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-            </div>
-            <div class="meta">
-                <div class="title-line"><span class="title-text">${song.title}</span></div>
-                <div class="subtitle">${cleanAuthor(song.author) || ""}</div>
-            </div>
-        </article>
-    `;
+        <article class="result-item as-card" data-id="${track.id}" data-type="${track.type}" data-source="${track.source}">
+            <div class="thumb-wrap"><img class="thumb" loading="lazy" src="${track.thumb}" alt=""><button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button></div>
+            <div class="meta"><div class="title-line"><span class="title-text">${track.title}</span></div><div class="subtitle">${cleanAuthor(track.author)}</div></div>
+        </article>`;
 }
 
 async function handleHomeCardClick(e) {
-    const card = e.target.closest('.playlist-card, .result-item');
+    const card = e.target.closest('[data-id]');
     if (!card) return;
 
-    const id = card.dataset.id || card.dataset.trackId;
-    const type = card.dataset.type;
+    const { id, type, source } = card.dataset;
+    
+    // Prevent event bubbling for play button clicks
+    if (e.target.closest('.card-play')) {
+        e.stopPropagation();
+    }
 
-    if (type === 'spotify_playlist' || type === 'spotify_album') {
-        showToast("Cargando canciones...");
-        const playlistData = await fetchSpotifyPlaylist(id);
-        if (playlistData && playlistData.tracks.length > 0) {
-            const youtubeTracks = await Promise.all(playlistData.tracks.map(findYoutubeEquivalent));
-            const validTracks = youtubeTracks.filter(Boolean);
-            if (validTracks.length > 0) {
-                setQueue(validTracks, 'spotify_playlist', 0);
-                viewingPlaylistId = id;
-                currentQueueTitle = playlistData.name;
-                renderQueue(validTracks, playlistData.name);
-                switchView('view-player');
-                playCurrent(true);
-            } else {
-                showToast("No se encontraron videos para esta playlist.", true);
-            }
-        } else {
-            showToast("No se pudo cargar la playlist.", true);
-        }
-    } else if (type === 'spotify_track') {
-        const song = recommendedSongs.find(s => s.id === id);
-        if (song) await playSpotifyTrack(song);
-    } else { // Playlists locales o de Firebase
-        const localPlaylist = Object.values(recommendedPlaylists).find(p => p.title === id);
-        if (localPlaylist) {
-            setQueue(localPlaylist.data, 'recommended', 0);
-            viewingPlaylistId = null;
-            currentQueueTitle = localPlaylist.title;
-            renderQueue(localPlaylist.data, localPlaylist.title);
+    if (type === 'track') {
+        const track = recommendedSongs.find(t => t.id === id);
+        if (track) playSpotifyTrack(track);
+    } else if (type === 'playlist' && source === 'youtube') {
+         const pl = Object.values(recommendedPlaylists).find(p => p.title === id);
+        if (pl && pl.data.length > 0) {
+            setQueue(pl.data, 'recommended', 0);
+            currentQueueTitle = pl.title;
+            renderQueue(pl.data, pl.title);
             switchView('view-player');
             playCurrent(true);
         } else {
-            await showPlaylistInPlayer(id);
+            showToast("Playlist no está lista, intente de nuevo.", true);
         }
+    } else if ((type === 'playlist' || type === 'album') && source === 'spotify') {
+        const item = [...featuredPlaylists, ...newReleases].find(i => i.id === id);
+        if (item) playSpotifyPlaylistOrAlbum(item);
+    } else if (type === 'playlist' && source !== 'spotify' && source !== 'youtube') { // Firebase playlists
+        await showPlaylistInPlayer(id);
     }
 }
 
 
 function updateHomeGridVisibility(){
   const home = $("#allPlaylistsContainer"); if(!home) return;
-  const shouldShow = (items.length===0 && !$(".loading-indicator"));
-  home.classList.toggle("hide", !shouldShow);
+  const shouldShow = (items.length===0 && !$("#results .loading-indicator"));
+  home.style.display = shouldShow ? 'block' : 'none';
 }
 
 /* ========= Favoritos ========= */
@@ -835,9 +815,10 @@ async function savePlaylistCopy(originalPlaylist) {
             creator: creator,
             isPublic: false,
             updatedAt: serverTimestamp(),
-            originalOwnerId: originalPlaylist.ownerUserId || null,
-            ownerUserId: 'current_user_id',
+            originalOwnerId: originalPlaylist.ownerUserId || null, // Optional reference
+            ownerUserId: 'current_user_id', // Replace with actual user ID if auth exists
         };
+        // Do not copy resolver state fields
         delete newPlaylistData.id;
         delete newPlaylistData.resolverJobId;
         delete newPlaylistData.status;
@@ -915,8 +896,6 @@ function renderPlaylists() {
         grid.appendChild(card);
     });
 }
-
-
 $("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
 $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
 $("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
@@ -931,33 +910,21 @@ $("#createPlConfirm").onclick = async () => {
         $("#newPlName").value = ""; $("#newPlCreator").value = ""; $("#createPlaylistSheet").classList.remove("show");
     } catch (e) { console.error("Error creating playlist: ", e); showToast("Hubo un error al crear la playlist.", true); }
 };
+
 /* ========= Sheets & Toasts ========= */
 function showToast(message, isError = false) {
     let toast = document.getElementById('sy-toast');
     if (!toast) {
         toast = document.createElement('div');
         toast.id = 'sy-toast';
-        toast.style.position = 'fixed';
-        toast.style.bottom = '80px';
-        toast.style.left = '50%';
-        toast.style.transform = 'translateX(-50%)';
-        toast.style.padding = '10px 20px';
-        toast.style.background = isError ? '#b91c1c' : '#333';
-        toast.style.color = 'white';
-        toast.style.borderRadius = '8px';
-        toast.style.zIndex = '10000';
-        toast.style.transition = 'opacity 0.3s, bottom 0.3s';
-        toast.style.opacity = '0';
         document.body.appendChild(toast);
     }
     toast.textContent = message;
-    toast.style.background = isError ? '#b91c1c' : '#333';
-    toast.style.opacity = '1';
-    toast.style.bottom = '90px';
+    toast.className = 'show';
+    if(isError) toast.classList.add('error');
     
     setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.bottom = '80px';
+        toast.className = toast.className.replace('show', '');
     }, 3000);
 }
 
@@ -1085,24 +1052,18 @@ function playCurrent(autoplay=false){
   updateUIOnTrackChange();
 }
 function playFromSearch(trackId, autoplay=false) {
-    const videoItems = items.filter(it => it.source === 'youtube');
+    const videoItems = items.filter(it => it.source === 'youtube' && it.type === 'youtube_video');
     const videoIndex = videoItems.findIndex(v => v.id === trackId);
 
     if (videoIndex > -1) {
         setQueue(videoItems, "search", videoIndex);
         viewingPlaylistId = null;
-        currentQueueTitle = "Resultados de Búsqueda";
-        renderQueue(videoItems, currentQueueTitle);
         playCurrent(autoplay);
     }
 }
 function playFromFav(track, autoplay=false){
   const i = favs.findIndex(f=>f.id===track.id);
-  setQueue(favs, "favs", Math.max(i,0)); 
-  viewingPlaylistId = null; 
-  currentQueueTitle = "Favoritos";
-  renderQueue(favs, currentQueueTitle);
-  playCurrent(autoplay);
+  setQueue(favs, "favs", Math.max(i,0)); viewingPlaylistId = null; playCurrent(autoplay);
 }
 function playFromPlaylist(plId, i, autoplay=false){
   const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
@@ -1110,17 +1071,23 @@ function playFromPlaylist(plId, i, autoplay=false){
   
   const tracks = (pl.tracks || []).filter(t => t && t.id);
   if (tracks.length === 0) {
-      showToast("Esta playlist no tiene canciones para reproducir.", true);
+      showToast("Esta playlist no tiene canciones resueltas para reproducir.", true);
       return;
   }
   
   setQueue(tracks, "playlist", i);
-  currentQueueTitle = pl.name;
-  renderQueue(tracks, currentQueueTitle);
   playCurrent(autoplay);
   renderPlaylists();
 }
-
+function playPlaylist(id){
+  const pl = communityPlaylists.find(p=>p.id===id); if(!pl) return;
+  const playableTracks = (pl.tracks || []).filter(t => t && t.id);
+  if(!playableTracks.length) {
+      showToast("Esta playlist no tiene canciones resueltas.", true);
+      return;
+  }
+  playFromPlaylist(pl.id, 0, true);
+}
 function togglePlay(){
   if(!YT_READY || !currentTrack) return;
   const st = ytPlayer.getPlayerState();
@@ -1130,29 +1097,26 @@ $("#npPlay")?.addEventListener("click", togglePlay);
 $("#miniPlay")?.addEventListener("click", togglePlay);
 
 async function removeFromPlaylist(plId, trackId) {
-    const pl = communityPlaylists.find(p => p && p.id === plId);
+    const pl = communityPlaylists.find(p => p.id === plId);
     if (!pl) return;
 
-    const { db, doc, updateDoc, setDoc, serverTimestamp } = sy_fs();
-    const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
+    const { doc, updateDoc, serverTimestamp } = window.firebase;
+    const plRef = doc(db, "playlists", plId);
 
-    const payload = {
-      tracks: updatedTracks,
-      resolvedCount: updatedTracks.length,
-      updatedAt: serverTimestamp ? serverTimestamp() : Date.now()
-    };
-
-    sy_syncRemovalRealtime(plId, trackId);
+    const updatedTracks = (pl.tracks || []).filter(t => t.id !== trackId);
 
     try {
-      const plRef = doc(db, 'playlists', plId);
-      await updateDoc(plRef, payload);
-      showToast('Canción eliminada.');
+        await updateDoc(plRef, {
+            tracks: updatedTracks,
+            updatedAt: serverTimestamp()
+        });
+        showToast("Canción eliminada de la playlist.");
     } catch (e) {
-      console.error('Error removing song:', e);
-      showToast('No se pudo quitar la canción.', true);
+        console.error("Error removing song from playlist:", e);
+        showToast("No se pudo eliminar la canción.", true);
     }
 }
+
 
 /* Mini reproductor */
 function updateMiniNow(){
@@ -1271,14 +1235,29 @@ function renderQueue(queueItems, title) {
     const titleEl = header.querySelector('#queueTitle');
     if (titleEl) titleEl.textContent = title;
     
-    const ul = panel.querySelector("#queueList");
+    if ((queueType === 'youtube_playlist' || queueType === 'spotify_playlist_unresolved' || queueType === 'spotify_playlist') && queue?.length > 0) {
+        const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
+        if (pl && !isMyPlaylist(pl.id)) {
+            const saveBtn = document.createElement('button');
+            saveBtn.id = 'btnSavePlaylist';
+            saveBtn.className = 'pill';
+            saveBtn.textContent = 'Guardar Copia';
+            saveBtn.onclick = () => savePlaylistCopy(pl);
+            header.appendChild(saveBtn);
+        }
+    }
+    
+    const ul = $("#queueList");
     if (!ul) return;
     ul.innerHTML = "";
+
+    const isUserPlaylist = queueType === 'playlist';
+    if (!isUserPlaylist && queueType !== 'spotify_playlist_unresolved') viewingPlaylistId = null;
 
     (queueItems || []).forEach((t, i) => {
         const li = document.createElement("li");
         li.className = "queue-item";
-        li.dataset.trackId = t.id || `spotify_${t.spotifyId}`;
+        li.dataset.trackId = t.id || `spotify_${t.originalId}`;
         const isResolved = !!t.id;
 
         li.innerHTML = `
@@ -1340,6 +1319,7 @@ async function showPlaylistInPlayer(plId) {
         if (pl.status !== 'resolving') {
             startResolverJob(plId);
         } else {
+            console.log("Job is already running for this playlist. Attaching listener.");
             const { doc, onSnapshot } = window.firebase;
             const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
             if (resolverJobUnsubscribe) resolverJobUnsubscribe();
@@ -1359,7 +1339,7 @@ async function showPlaylistInPlayer(plId) {
     if (!tracksToPlay || tracksToPlay.length === 0) {
         if (pl.source === 'spotify') {
              showToast(`Playlist "${pl.name}" aún no tiene canciones importadas.`, true);
-             startResolverJob(pl.id);
+             startResolverJob(pl.id); // Offer to start job
         } else {
              showToast(`La playlist "${pl.name}" está vacía.`, true);
         }
@@ -1383,9 +1363,18 @@ function hideQueuePanel(){
     renderPlaylists(); 
 }
 
+// MODIFICACIÓN: Lógica para Reasignar Fuente con indicador visual
 async function reassignTrackSource(playlistId, oldTrackId) {
     const itemEl = document.querySelector(`.queue-item[data-track-id="${oldTrackId}"]`);
-    showToast("Buscando nueva fuente...");
+    const subtitleEl = itemEl ? itemEl.querySelector('.subtitle') : null;
+    const originalSubtitle = subtitleEl ? subtitleEl.textContent : '';
+
+    if (itemEl && subtitleEl) {
+        subtitleEl.textContent = 'Reasignando...';
+        itemEl.classList.add('is-reassigning');
+    } else {
+        showToast("Buscando nueva fuente...");
+    }
 
     try {
         const pl = communityPlaylists.find(p => p.id === playlistId);
@@ -1401,27 +1390,36 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         const newVideoId = await scrapeYoutubeIdForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
 
         if (newVideoId) {
-            const updatedTrack = { ...track, id: newVideoId, reassignIndex: nextReassignIndex };
+            const updatedTrack = {
+                ...track,
+                id: newVideoId, // Solo se actualiza el ID del video
+                reassignIndex: nextReassignIndex
+            };
+
             const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
 
             const { doc, updateDoc, serverTimestamp } = window.firebase;
             const plRef = doc(db, "playlists", playlistId);
-            await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+            await updateDoc(plRef, {
+                tracks: updatedTracks,
+                updatedAt: serverTimestamp()
+            });
 
             if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
                 const queueIndex = queue.findIndex(t => t.id === oldTrackId);
                 if (queueIndex !== -1) {
                     queue[queueIndex] = updatedTrack;
+                    // Si la canción reasignada es la actual, la reproducimos
                     if (currentTrack && currentTrack.id === oldTrackId) {
                         currentTrack = updatedTrack;
                         playCurrent(true);
                     }
                 }
             }
-            showToast("Fuente reasignada.");
+            showToast("Fuente reasignada. Reproduciendo nueva versión.");
         } else {
-            showToast("No se encontraron más versiones.", true);
+            showToast("No se encontraron más versiones. Se reiniciará la búsqueda.", true);
             const updatedTrack = { ...track, reassignIndex: 0 };
              const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
@@ -1430,24 +1428,36 @@ async function reassignTrackSource(playlistId, oldTrackId) {
             await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
         }
     } catch (e) {
-        console.error("Error en la reasignación:", e);
+        console.error("Error en la reasignación de fuente:", e);
         showToast("Error al reasignar la fuente.", true);
+    } finally {
+        if (itemEl && subtitleEl) {
+            subtitleEl.textContent = originalSubtitle;
+            itemEl.classList.remove('is-reassigning');
+        }
     }
 }
+
 
 /* ========= Menú tres puntitos global ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
     if (!btn) return;
+
     const itemEl = btn.closest(".result-item, .fav-item, .queue-item");
     if (!itemEl) return;
 
     let track;
     const trackId = itemEl.dataset.trackId;
 
-    if (itemEl.classList.contains("result-item")) track = items.find(x => x.id === trackId);
-    else if (itemEl.classList.contains("fav-item")) track = favs.find(f => f.id === trackId);
-    else if (itemEl.classList.contains("queue-item")) track = queue.find(t => t.id === trackId);
+    if (itemEl.classList.contains("result-item")) {
+        track = items.find(x => x.id === trackId);
+    } else if (itemEl.classList.contains("fav-item")) {
+        track = favs.find(f => f.id === trackId);
+    } else if (itemEl.classList.contains("queue-item")) {
+        track = queue.find(t => t.id === trackId);
+    }
+
     if (!track) return;
 
     const actions = [
@@ -1459,6 +1469,7 @@ document.addEventListener("click", async (e) => {
         actions.push({ id: "reassign", label: "Reasignar fuente" });
         actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
     }
+
     actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
     openActionSheet({
@@ -1467,8 +1478,12 @@ document.addEventListener("click", async (e) => {
         onAction: (act) => {
             if (act === "fav") toggleFav(track);
             if (act === "pl") openPlaylistSheet(track);
-            if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
-            if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
+            if (act === "delete") {
+                removeFromPlaylist(viewingPlaylistId, track.id);
+            }
+            if (act === "reassign") {
+                reassignTrackSource(viewingPlaylistId, track.id);
+            }
         }
     });
 });
@@ -1535,7 +1550,7 @@ window.addEventListener("scroll", heroScrollInvalidate, { passive:true }); windo
 let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if(!('mediaSession' in navigator)||!track)return;
-  try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:currentQueueTitle||'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){ console.error("Media Session Error:", e)}
+  try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:queueType==='playlist'?(communityPlaylists.find(p=>p.id===viewingPlaylistId)?.name||''):'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){ console.error("Media Session Error:", e)}
   if(!mediaSessionHandlersSet){
     mediaSessionHandlersSet=true;
     const s=fn=>()=>{try{fn()}catch(e){console.error("Media Session Action Error:", e)}};
@@ -1544,11 +1559,22 @@ function updateMediaSession(track){
         navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay()));
         navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev()));
         navigator.mediaSession.setActionHandler('nexttrack',s(()=>next()));
-        navigator.mediaSession.setActionHandler('seekbackward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true) }));
-        navigator.mediaSession.setActionHandler('seekforward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true) }));
-        navigator.mediaSession.setActionHandler('seekto',s(d=>{ if(!YT_READY||!d||typeof d.seekTime!=='number')return; ytPlayer.seekTo(d.seekTime,true) }));
+        navigator.mediaSession.setActionHandler('seekbackward',s(d=>{
+            const o=d.seekOffset||10;
+            if(!YT_READY)return;
+            ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true)
+        }));
+        navigator.mediaSession.setActionHandler('seekforward',s(d=>{
+            const o=d.seekOffset||10;
+            if(!YT_READY)return;
+            ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true)
+        }));
+        navigator.mediaSession.setActionHandler('seekto',s(d=>{
+            if(!YT_READY||!d||typeof d.seekTime!=='number')return;
+            ytPlayer.seekTo(d.seekTime,true)
+        }));
     }catch(e){console.error("Error setting Media Session handlers:", e)}
-  }  try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch(e){}
+}  try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch(e){}
 }
 /* ===== Android bridge (AIDE WebView) ===== */
 function canUseAndroidBridge(){ try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; } }
@@ -1574,28 +1600,55 @@ async function boot(){
     communityPlaylists.forEach(newPl => {
         const oldPl = oldPlaylists.get(newPl.id);
         const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
+        
         if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
             const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
-            const wasPlayingTrackRemoved = currentTrack && !newPlayableTracks.some(t => t.id === currentTrack.id);
+            const currentTrackId = currentTrack ? currentTrack.id : null;
+            let tracksToShow = newPl.tracks || [];
+            if (newPl.source === 'spotify') {
+                tracksToShow = (newPl.tracks || Array(newPl.spotifyTracks.length).fill(null)).map((track, index) => {
+                    if (track) return track;
+                    if (newPl.spotifyTracks && newPl.spotifyTracks[index]) {
+                        const spotifyTrack = newPl.spotifyTracks[index];
+                        return { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPl.cover };
+                    }
+                    return null;
+                }).filter(Boolean);
+            }
+            renderQueue(tracksToShow, newPl.name);
+
+            if (newPlayableTracks.length === 0) {
+                if (ytPlayer) ytPlayer.stopVideo();
+                currentTrack = null; queue = []; qIdx = -1;
+                updateUIOnTrackChange();
+                return; 
+            }
+
+            const wasPlayingTrackRemoved = currentTrackId && !newPlayableTracks.some(t => t.id === currentTrackId);
             if (wasPlayingTrackRemoved) {
                 let nextIndex = qIdx;
-                if (nextIndex >= newPlayableTracks.length) nextIndex = newPlayableTracks.length - 1;
+                if (nextIndex >= newPlayableTracks.length) {
+                    nextIndex = newPlayableTracks.length - 1;
+                }
                 setQueue(newPlayableTracks, 'playlist', nextIndex);
-                if (newPlayableTracks.length > 0) playCurrent(true);
-                else { currentTrack = null; queue = []; updateUIOnTrackChange(); }
+                playCurrent(true); 
             } else {
-                let newCurrentIndex = currentTrack ? newPlayableTracks.findIndex(t => t.id === currentTrack.id) : qIdx;
+                let newCurrentIndex = qIdx;
+                if (currentTrackId) {
+                    newCurrentIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
+                }
                 setQueue(newPlayableTracks, 'playlist', newCurrentIndex);
             }
         }
     });
+
     renderPlaylists(); 
     renderHomePageContent();
   });
 
   checkForActiveImportJob();
-  
-  // Cargar todo el contenido para el inicio en paralelo
+
+  // Fetch local and Spotify data in parallel
   const [featured, releases, recs, ...localResults] = await Promise.all([
       fetchFeaturedPlaylists(),
       fetchNewReleases(),
@@ -1606,10 +1659,8 @@ async function boot(){
   featuredPlaylists = featured;
   newReleases = releases;
   recommendedSongs = recs;
-  Object.keys(recommendedPlaylists).forEach((key, index) => {
-      recommendedPlaylists[key].data = localResults[index] || [];
-  });
-
+  Object.keys(recommendedPlaylists).forEach((key, i) => { recommendedPlaylists[key].data = localResults[i] || []; });
+  
   renderHomePageContent();
   updateHomeGridVisibility();
 
@@ -1636,11 +1687,20 @@ function renderHomePageContent() {
     html += renderSection('Nuestras Playlists', localPlaylists, renderPlaylistCard);
     html += renderSection('Canciones Recomendadas', recommendedSongs, renderSongCard);
     
-    container.innerHTML = html || '<div class="loading-indicator"><p>No hay nada nuevo por aquí.</p></div>';
+    container.innerHTML = html || '<div class="loading-indicator"><p>Cargando contenido...</p></div>';
     
-    // Asignar un único listener de eventos al contenedor principal
-    container.removeEventListener('click', handleHomeCardClick); // Prevenir duplicados
+    container.removeEventListener('click', handleHomeCardClick);
     container.addEventListener('click', handleHomeCardClick);
+    
+    // Logic for marquee on long titles
+    $$('.playlist-title-wrapper').forEach(wrapper => {
+      const titleEl = wrapper.querySelector('.playlist-title');
+      if (titleEl.scrollWidth > wrapper.clientWidth) {
+          wrapper.classList.add('is-overflowing');
+          const originalText = titleEl.textContent;
+          titleEl.innerHTML = `<span>${originalText}</span><span aria-hidden="true">${originalText}</span>`;
+      }
+    });
 }
 
 boot();
@@ -1649,13 +1709,24 @@ window.addEventListener('beforeunload', savePlayerState);
 window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 
 /* ========== Spotify Import & Resolver Logic ========== */
-// ... (El resto del código de importación y resolución que ya está correcto) ...
+
 const trackCache = new Map();
-function normalize(str) { if (!str) return ''; return str.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ').trim(); }
-function getTrackKey(artist, title) { return `${normalize(artist)}|${normalize(title)}`; }
+
+function normalize(str) {
+  if (!str) return '';
+  return str.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function getTrackKey(artist, title) {
+    return `${normalize(artist)}|${normalize(title)}`;
+}
+
 async function resolveTrack(track) {
     const trackKey = getTrackKey(track.author, track.title);
-    if (trackCache.has(trackKey)) return { videoId: trackCache.get(trackKey), error: null };
+    if (trackCache.has(trackKey)) {
+        return { videoId: trackCache.get(trackKey), error: null };
+    }
+
     const query = `${track.author} ${track.title}`;
     try {
         const videoId = await scrapeYoutubeUrlOnly(query);
@@ -1668,230 +1739,485 @@ async function resolveTrack(track) {
         return { videoId: null, error: e.message };
     }
 }
+
 async function checkForActiveImportJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
+
     try {
         const { jobId, playlistId } = JSON.parse(activeJobInfo);
-        if (!jobId) { localStorage.removeItem('sy_active_import_job'); return; }
+        if (!jobId) {
+            localStorage.removeItem('sy_active_import_job');
+            return;
+        }
+
+        console.log(`Resuming listener for job: ${jobId}`);
         viewingPlaylistId = playlistId;
+
         const { doc, onSnapshot } = window.firebase;
         const jobRef = doc(db, "resolverJobs", jobId);
         if (resolverJobUnsubscribe) resolverJobUnsubscribe();
+
         resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
-            if (!docSnap.exists()) { hideResolverModal(); return; }
+            if (!docSnap.exists()) {
+                hideResolverModal(); // Also removes from localStorage
+                return;
+            }
             const job = { id: docSnap.id, ...docSnap.data() };
             updateResolverModal(job);
-            if (['canceled', 'done', 'error'].includes(job.status)) hideResolverModal();
+            if (['canceled', 'done', 'error'].includes(job.status)) {
+                hideResolverModal(); // Also removes from localStorage
+            }
         });
-    } catch (e) { localStorage.removeItem('sy_active_import_job'); }
+    } catch (e) {
+        console.error("Failed to parse or resume active job:", e);
+        localStorage.removeItem('sy_active_import_job');
+    }
 }
+
 async function startResolverJob(playlistId) {
     const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = window.firebase;
     const plRef = doc(db, "playlists", playlistId);
+    
     const plDoc = await getDoc(plRef);
-    if (!plDoc.exists()) return;
+    if (!plDoc.exists()) {
+        console.error("Playlist not found for resolver job:", playlistId);
+        return;
+    }
     const playlist = { id: plDoc.id, ...plDoc.data() };
+
     let jobId = playlist.resolverJobId;
+    let jobData;
     const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
-    if (jobDoc && jobDoc.exists() && jobDoc.data().status === 'running') { localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId })); return; }
-    else jobId = `job_${playlistId}_${Date.now()}`;
-    await updateDoc(plRef, { resolverJobId: jobId });
+    
+    if (jobDoc && jobDoc.exists()) {
+        jobData = jobDoc.data();
+        if (jobData.status === 'running') {
+            console.log("Job already running, listener will handle it.");
+            localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
+            return;
+        }
+    } else {
+        jobId = `job_${playlistId}_${Date.now()}`;
+        await updateDoc(plRef, { resolverJobId: jobId });
+    }
+    
     const jobRef = doc(db, "resolverJobs", jobId);
-    await setDoc(jobRef, { playlistRef: plRef.path, status: 'queued', total: playlist.spotifyTracks.length, done: playlist.resolvedCount || 0, errors: [], lastUpdated: serverTimestamp() }, { merge: true });
+    
+    jobData = {
+        playlistRef: plRef.path,
+        status: 'queued',
+        total: playlist.spotifyTracks.length,
+        done: playlist.resolvedCount || 0,
+        errors: [],
+        lastUpdated: serverTimestamp()
+    };
+    await setDoc(jobRef, jobData, { merge: true });
+    
     await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
     await updateDoc(plRef, { status: 'resolving' });
+    
     localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
+    
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
         if (!docSnap.exists()) return;
         const job = { id: docSnap.id, ...docSnap.data() };
         updateResolverModal(job);
-        if (['canceled', 'done', 'error'].includes(job.status)) hideResolverModal();
+        if (['canceled', 'done', 'error'].includes(job.status)) {
+            hideResolverModal();
+        }
     });
+
     runJobBatch(playlistId, jobRef);
 }
+
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
     const plRef = doc(db, "playlists", playlistId);
+    
     const jobDoc = await getDoc(jobRef);
-    if (!jobDoc.exists() || jobDoc.data().status !== 'running') { if (jobDoc.data()?.status !== 'canceled') hideResolverModal(); return; }
+    if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
+        console.log("Job stopped or cancelled.");
+        if (jobDoc.data()?.status !== 'canceled') {
+           hideResolverModal();
+        }
+        return;
+    }
+    
     const plDoc = await getDoc(plRef);
     if (!plDoc.exists()) return;
-    const playlist = plDoc.data(), job = jobDoc.data(), BATCH_SIZE = 3;
+
+    const playlist = plDoc.data();
+    const job = jobDoc.data();
+    const BATCH_SIZE = 3; // Max 3 scrapers at a time
+    
     const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
     const unresolvedIndices = [];
-    for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) if (tracksArray[i] === null) unresolvedIndices.push(i);
+    for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) {
+        if (tracksArray[i] === null) {
+            unresolvedIndices.push(i);
+        }
+    }
+    
     if (unresolvedIndices.length === 0) {
         const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
         await updateDoc(plRef, { status: finalStatus });
         await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
-        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
+        const message = finalStatus === 'resolved' 
+            ? `Importación completa: ${playlist.name}`
+            : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`;
+        showToast(message, finalStatus === 'partial');
+        try {
+            const plIndex = communityPlaylists.findIndex(p => p && p.id === playlistId);
+            if (plIndex >= 0) {
+                const memPl = communityPlaylists[plIndex];
+                const hydrated = (memPl.spotifyTracks || []).map((st, i) => memPl.tracks?.[i] && memPl.tracks[i].id ? memPl.tracks[i] : {
+                    id: null, title: st.title, author: st.author, thumb: st.thumb || memPl.cover || '',
+                    source: 'youtube', originalId: st.spotifyId
+                });
+                if (typeof viewingPlaylistId !== 'undefined' && viewingPlaylistId === playlistId) {
+                    if (typeof renderQueue === 'function') renderQueue(hydrated, memPl.name || '');
+                    if (typeof refreshIndicators === 'function') refreshIndicators();
+                }
+            }
+        } catch(e){ console.warn('Final UI refresh error:', e); }
+
         return;
     }
+
     const tracksToProcess = unresolvedIndices.map(index => playlist.spotifyTracks[index]);
-    const results = await Promise.all(tracksToProcess.map(track => resolveTrack(track)));
+    const promises = tracksToProcess.map(track => resolveTrack(track));
+    const results = await Promise.all(promises);
+
     const currentPlDoc = await getDoc(plRef);
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
     let errorsInBatch = [];
+
     results.forEach((result, i) => {
         const originalIndex = unresolvedIndices[i];
         if (result.videoId) {
             const spotifyTrack = playlist.spotifyTracks[originalIndex];
-            updatedTracks[originalIndex] = { id: result.videoId, title: spotifyTrack.title, author: spotifyTrack.author, thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`, source: 'youtube', originalId: spotifyTrack.spotifyId };
-        } else if (result.error) errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+            updatedTracks[originalIndex] = {
+                id: result.videoId, title: spotifyTrack.title, author: spotifyTrack.author,
+                thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
+                source: 'youtube', originalId: spotifyTrack.spotifyId 
+            };
+        } else if (result.error) {
+            errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+        }
     });
+    
     const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
+    
     await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
-    await updateDoc(jobRef, { done: newResolvedCount, lastUpdated: serverTimestamp(), errors: [...(job.errors || []), ...errorsInBatch] });
+    try {
+        const plIndex = (typeof communityPlaylists !== 'undefined' && Array.isArray(communityPlaylists)) ? communityPlaylists.findIndex(p => p && p.id === playlistId) : -1;
+        if (plIndex >= 0) {
+            const memPl = communityPlaylists[plIndex];
+            memPl.tracks = updatedTracks; memPl.resolvedCount = newResolvedCount;
+            memPl.status = (newResolvedCount >= (memPl.spotifyTracks?.length || newResolvedCount)) ? 'resolved' : 'resolving';
+
+            const sameView = (typeof queueType !== 'undefined' && typeof viewingPlaylistId !== 'undefined' && viewingPlaylistId === playlistId);
+            if (sameView) {
+                const hydrated = (memPl.spotifyTracks || []).map((st, i) => {
+                    const t = updatedTracks[i];
+                    if (t && t.id) return t;
+                    return { id: null, title: st.title, author: st.author, thumb: st.thumb || memPl.cover || '', source: 'youtube', originalId: st.spotifyId };
+                });
+                if (typeof renderQueue === 'function') renderQueue(hydrated, memPl.name || '');
+                if (typeof refreshIndicators === 'function') refreshIndicators();
+            }
+        }
+    } catch (e) {
+        console.warn('Hydration UI error:', e);
+    }
+
+    await updateDoc(jobRef, { 
+        done: newResolvedCount,
+        lastUpdated: serverTimestamp(),
+        errors: [...(job.errors || []), ...errorsInBatch]
+    });
+
     setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
 }
+
+
 async function cancelResolverJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
+    
     try {
         const { playlistId, jobId } = JSON.parse(activeJobInfo);
         const { doc, updateDoc, serverTimestamp } = window.firebase;
         const jobRef = doc(db, "resolverJobs", jobId);
         const plRef = doc(db, "playlists", playlistId);
+        
         await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
         await updateDoc(plRef, { status: 'partial' });
+        
         showToast("Importación cancelada.", true);
+        hideResolverModal(); // Also clears localStorage
+    } catch(e) {
+        console.error("Error cancelling job:", e);
         hideResolverModal();
-    } catch (e) { hideResolverModal(); }
+    }
 }
+
+
+/* ========== Resolver Mini Modal ========== */
 function updateResolverModal(job) {
     let modal = document.getElementById('resolver-modal');
-    if (!job || !['running', 'paused', 'queued'].includes(job.status)) { hideResolverModal(); return; }
+    if (!job || !['running', 'paused', 'queued'].includes(job.status)) {
+        hideResolverModal();
+        return;
+    }
+
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'resolver-modal';
         document.body.appendChild(modal);
-        modal.innerHTML = `<div class="resolver-content"><p>Importando playlist...</p><div class="resolver-progress-bar"><div class="resolver-progress"></div></div><span class="resolver-counter"></span><button class="resolver-cancel">Cancelar</button></div>`;
+        modal.innerHTML = `
+            <div class="resolver-content">
+                <p>Importando playlist...</p>
+                <div class="resolver-progress-bar">
+                    <div class="resolver-progress"></div>
+                </div>
+                <span class="resolver-counter"></span>
+                <button class="resolver-cancel">Cancelar</button>
+            </div>
+        `;
         modal.querySelector('.resolver-cancel').onclick = cancelResolverJob;
     }
-    const playlistId = job.playlistRef.split('/').pop();
+
+    const playlistPath = job.playlistRef;
+    const playlistId = playlistPath.split('/').pop();
     const pl = communityPlaylists.find(p => p.id === playlistId);
-    const resolved = job.done || 0, total = job.total || 0;
+
+    const resolved = job.done || 0;
+    const total = job.total || 0;
     if (total === 0) return;
+    
+    const progress = (resolved / total) * 100;
+    
     modal.querySelector('p').textContent = `Importando: ${pl ? pl.name : 'playlist'}...`;
-    modal.querySelector('.resolver-progress').style.width = `${(resolved / total) * 100}%`;
+    modal.querySelector('.resolver-progress').style.width = `${progress}%`;
     modal.querySelector('.resolver-counter').textContent = `${resolved} / ${total}`;
 }
+
 function hideResolverModal() {
     const modal = document.getElementById('resolver-modal');
-    if (modal) modal.remove();
-    if (resolverJobUnsubscribe) { resolverJobUnsubscribe(); resolverJobUnsubscribe = null; }
+    if (modal) {
+        modal.remove();
+    }
+    if (resolverJobUnsubscribe) {
+        resolverJobUnsubscribe();
+        resolverJobUnsubscribe = null;
+    }
     localStorage.removeItem('sy_active_import_job');
 }
+
+/* ========== Spotify Import UI & Logic (Optimizado) ========== */
 function sy_initSpotifyImportUI() {
   const playlistsView = document.getElementById('view-playlists');
   if (!playlistsView) return;
   const header = playlistsView.querySelector('.section-head');
+  const grid = playlistsView.querySelector('#plList');
+  if (!grid) return;
   if (playlistsView.querySelector('#syBtnImportSpotify')) return;
+  const bar = document.createElement('div');
+  bar.className = 'sy-pl-toolbar';
   const btn = document.createElement('button');
   btn.id = 'syBtnImportSpotify';
-  btn.className = 'pill';
-  btn.innerHTML = `<svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em" style="vertical-align: -0.15em; margin-right: 8px;"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg> Importar de Spotify`;
-  header.querySelector('.pl-actions').appendChild(btn);
+  btn.className = 'pill accent';
+  btn.type = 'button';
+  btn.innerHTML = `<svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em" style="margin-right: 8px;"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg> Importar desde Spotify`;
+  if (header && header.parentElement === playlistsView) {
+    playlistsView.insertBefore(bar, header.nextElementSibling || grid);
+  } else {
+    playlistsView.insertBefore(bar, grid);
+  }
+  bar.appendChild(btn);
   btn.addEventListener('click', sy_openSpotifyImportModal);
 }
+
 function sy_openSpotifyImportModal() {
   if (document.getElementById('sySpotifyModal')) return sy_showModal('sySpotifyModal', true);
+
   const modal = document.createElement('div');
   modal.id = 'sySpotifyModal';
   modal.className = 'sy-modal';
-  modal.innerHTML = `<div class="sy-modal__overlay" data-close="1"></div><div class="sy-modal__card" role="dialog"><div class="sy-modal__header"><h3>Importar de Spotify</h3></div><div class="sy-modal__body" id="sySmBody"><p class="muted">Ingresa tu ID de usuario de Spotify.</p><label class="sy-field"><span>ID de Usuario</span><input id="sySmInput" type="text" placeholder="ej. 123456789"></label><div class="sy-actions"><button class="sheet-item ghost" id="sySmCancel">Cancelar</button><button class="sheet-item pill" id="sySmFetch">Buscar</button></div><div class="sy-spinner" id="sySmSpinner" hidden>Cargando…</div><div id="sySmResults" class="sy-pl-results" hidden></div></div></div>`;
+  modal.innerHTML = `
+    <div class="sy-modal__overlay" data-close="1"></div>
+    <div class="sy-modal__card" role="dialog" aria-modal="true" aria-labelledby="sySmTitle">
+      <div class="sy-modal__header"><h3 id="sySmTitle">Importar playlists desde Spotify</h3></div>
+      <div class="sy-modal__body" id="sySmBody">
+        <p class="muted">Ingresá tu usuario de Spotify o el enlace a tu perfil para buscar tus listas públicas.</p>
+        <label class="sy-field"><span>Usuario o URL de perfil</span><input id="sySmInput" type="text" placeholder="ej. luchosanavera o https://..." autocomplete="off"></label>
+        <div class="sy-actions"><button class="btn" id="sySmCancel">Cancelar</button><button class="btn accent" id="sySmFetch">Buscar</button></div>
+        <div class="sy-spinner" id="sySmSpinner" hidden>Cargando…</div>
+        <div id="sySmResults" class="sy-pl-results" hidden></div>
+      </div>
+    </div>
+  `;
   document.body.appendChild(modal);
+  
   modal.addEventListener('click', (e)=>{ if (e.target.dataset.close) sy_showModal('sySpotifyModal', false); });
-  $('#sySmCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
-  $('#sySmFetch').onclick = sy_fetchSpotifyUserPlaylists;
+  document.getElementById('sySmCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
+  document.getElementById('sySmFetch').onclick = sy_fetchSpotifyUserPlaylists;
+  
   sy_showModal('sySpotifyModal', true);
+  setTimeout(()=> document.getElementById('sySmInput')?.focus(), 60);
 }
-function sy_showModal(id, show) { const el = $(`#${id}`); if(el){ el.classList.toggle('show',!!show); document.body.classList.toggle('sy-modal-open',!!show); } }
+
+function sy_showModal(id, show) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('show', !!show);
+  document.body.classList.toggle('sy-modal-open', !!show);
+}
+
+function sy_parseSpotifyUserId(input) {
+  if (!input) return null;
+  const cleanedInput = input.trim().split('?')[0];
+  const spotifyUserRegex = /open\.spotify\.com\/(?:user|profile)\/([a-zA-Z0-9]+)/;
+  const match = cleanedInput.match(spotifyUserRegex);
+  if (match && match[1]) return match[1];
+  if (!cleanedInput.includes('/') && !cleanedInput.includes(':')) return cleanedInput;
+  return null;
+}
+
 async function sy_fetchSpotifyUserPlaylists() {
-    const userId = $('#sySmInput').value.trim();
-    const spinner = $('#sySmSpinner'), results = $('#sySmResults');
-    results.hidden = true; results.innerHTML = ''; spinner.hidden = false;
-    if (!userId) { spinner.hidden = true; results.innerHTML = `<p class="muted">ID de usuario no válido.</p>`; results.hidden = false; return; }
-    try {
-        const token = await getSpotifyToken(); 
-        let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
-        const all = [];
-        while (url) {
-            const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token }});
-            if (!r.ok) throw new Error('Error de API de Spotify: ' + r.status);
-            const d = await r.json();
-            all.push(...(d.items||[]));
-            url = d.next;
-        }
-        if (all.length === 0) { results.innerHTML = `<p class="muted">No se encontraron playlists públicas.</p>`; results.hidden = false; spinner.hidden = true; return; }
-        sy_renderSpotifyPlaylistsSelection(userId, all);
-    } catch (e) { results.innerHTML = `<div class="sy-error">No se pudieron obtener las playlists.<br><small>${e.message}</small></div>`; results.hidden = false;
-    } finally { spinner.hidden = true; }
+  const input = document.getElementById('sySmInput').value.trim();
+  const userId = sy_parseSpotifyUserId(input);
+  const spinner = document.getElementById('sySmSpinner');
+  const results = document.getElementById('sySmResults');
+  results.hidden = true; results.innerHTML = ''; spinner.hidden = false;
+
+  if (!userId) {
+    spinner.hidden = true;
+    results.innerHTML = `<p class="muted">Formato de usuario o URL no válido.</p>`;
+    results.hidden = false; return;
+  }
+
+  try {
+    const token = await getSpotifyToken(); 
+    let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
+    const all = [];
+    while (url) {
+      const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token }});
+      if (!r.ok) {
+         if (r.status === 404) throw new Error(`Usuario <strong>${userId}</strong> no encontrado.`);
+         throw new Error('Error de API de Spotify: ' + r.status);
+      }
+      const d = await r.json();
+      all.push(...(d.items||[]));
+      url = d.next;
+    }
+    if (all.length === 0) {
+      results.innerHTML = `<p class="muted">No se encontraron playlists públicas para <strong>${userId}</strong>.</p>`;
+      results.hidden = false; spinner.hidden = true; return;
+    }
+    sy_renderSpotifyPlaylistsSelection(userId, all);
+  } catch (e) {
+    results.innerHTML = `<div class="sy-error">No se pudieron obtener las playlists. <br><small>${e.message}</small></div>`;
+    results.hidden = false;
+  } finally {
+    spinner.hidden = true;
+  }
 }
+
 function sy_renderSpotifyPlaylistsSelection(userId, list) {
-    const results = $('#sySmResults'); results.hidden = false;
-    results.innerHTML = `<div class="sy-pl-head"><label class="sy-checkall"><input type="checkbox" id="syPlAll" checked> <span>Seleccionar todo</span></label></div><div class="sy-pl-list">${list.map(p=>`<label class="sy-pl-row"><input type="checkbox" class="sy-pl-check" data-plid="${p.id}" data-plname="${String(p.name).replace(/"/g,'&quot;')}" data-cover="${(p.images?.[0]?.url||'').replace(/"/g,'&quot;')}" checked><img src="${p.images?.[0]?.url||''}" alt=""><div class="sy-pl-meta"><div class="sy-pl-name">${p.name}</div><div class="sy-pl-sub">${p.tracks.total} temas</div></div></label>`).join('')}</div><div class="sy-actions"><button class="sheet-item ghost" id="syPlCancel">Cerrar</button><button class="sheet-item pill" id="syPlImport">Importar</button></div>`;
-    $('#syPlCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
-    $('#syPlAll').onchange = (e)=> $$('#sySmResults .sy-pl-check').forEach(ch => ch.checked = e.target.checked);
-    $('#syPlImport').onclick = async ()=> {
-        const btn = $('#syPlImport'); btn.disabled = true; btn.textContent = 'Importando...';
-        const selected = $$('#sySmResults .sy-pl-check:checked').map(ch => ({ spotifyId: ch.dataset.plid, name: ch.dataset.plname, creator: userId, cover: ch.dataset.cover }));
-        if (selected.length > 0) await sy_processAndSavePlaylists(selected, results);
-        else { showToast('No seleccionaste ninguna playlist.', true); btn.disabled = false; btn.textContent = 'Importar'; }
-    };
+  const results = document.getElementById('sySmResults');
+  results.hidden = false;
+  
+  const checks = list.map(p => `
+      <label class="sy-pl-row">
+        <input type="checkbox" class="sy-pl-check" data-plid="${p.id}" data-plname="${String(p.name).replace(/"/g,'&quot;')}" data-tracks="${p.tracks?.total||0}" data-cover="${p.images?.[0]?.url.replace(/"/g,'&quot;')||''}" checked>
+        <img src="${p.images?.[0]?.url||''}" alt="" loading="lazy">
+        <div class="sy-pl-meta"><div class="sy-pl-name">${p.name||'Sin nombre'}</div><div class="sy-pl-sub">${p.tracks?.total||0} temas</div></div>
+      </label>`).join('');
+
+  results.innerHTML = `
+    <div class="sy-pl-head"><label class="sy-checkall"><input type="checkbox" id="syPlAll" checked><span>Seleccionar todo (${list.length})</span></label></div>
+    <div class="sy-pl-list">${checks}</div>
+    <div class="sy-actions"><button class="btn" id="syPlCancel">Cerrar</button><button class="btn accent" id="syPlImport">Importar</button></div>
+  `;
+
+  document.getElementById('syPlCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
+  document.getElementById('syPlAll').onchange = e => $$('#sySmResults .sy-pl-check').forEach(ch => ch.checked = e.target.checked);
+  document.getElementById('syPlImport').onclick = async ()=> {
+    const btn = document.getElementById('syPlImport');
+    btn.disabled = true; btn.textContent = 'Importando...';
+    const selected = Array.from($$('#sySmResults .sy-pl-check:checked'));
+    if (selected.length === 0) { 
+      showToast('No seleccionaste ninguna playlist.', true);
+      btn.disabled = false; btn.textContent = 'Importar'; return; 
+    }
+    const payload = selected.map(ch => ({ spotifyId: ch.dataset.plid, name: ch.dataset.plname, creator: userId, cover: ch.dataset.cover }));
+    await sy_processAndSavePlaylists(payload, results);
+  };
 }
+
 async function fetchAllSpotifyPlaylistTracks(playlistId) {
-    const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`;
+    let allTracks = [], url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`;
     while (url) {
         try {
-            const r = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!r.ok) throw new Error('Could not get songs');
-            const d = await r.json();
-            allTracks.push(...(d.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean)));
-            url = d.next;
+            const data = await spotifyApiFetch(url.replace('https://api.spotify.com/v1/', ''));
+            const tracks = data.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean);
+            allTracks.push(...tracks);
+            url = data.next;
         } catch (e) { url = null; }
-    } return allTracks;
+    }
+    return allTracks;
 }
+
 async function sy_processAndSavePlaylists(list, resultsContainer) {
+    if (!window.firebase || !db) { resultsContainer.innerHTML = '<div class="sy-error">Error: DB no disponible.</div>'; return; }
     const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
-    let imported = 0, updated = 0;
+    const col = collection(db, 'playlists');
+    let importedCount = 0, updatedCount = 0;
+    const btn = document.getElementById('syPlImport');
+
     try {
-        for (const pl of list) {
+        for (let i = 0; i < list.length; i++) {
+            const pl = list[i];
+            btn.textContent = `Procesando ${i + 1}/${list.length}...`;
             const spotifyTracks = await fetchAllSpotifyPlaylistTracks(pl.spotifyId);
             if(spotifyTracks.length === 0) continue;
-            const q = query(collection(db, 'playlists'), where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
+
+            const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
             const snapshot = await getDocs(q);
+            
+            const payload = {
+                name: pl.name, spotifyTracks, trackCount: spotifyTracks.length,
+                updatedAt: serverTimestamp(), cover: pl.cover || null
+            };
+
             if (snapshot.empty) {
-                const docRef = await addDoc(collection(db, 'playlists'), { name: pl.name, creator: pl.creator, isPublic: false, cover: pl.cover, source: 'spotify', spotifyId: pl.spotifyId, spotifyTracks, trackCount: spotifyTracks.length, tracks: Array(spotifyTracks.length).fill(null), status: 'unresolved', resolvedCount: 0, updatedAt: serverTimestamp(), ownerUserId: "current_user_id_placeholder" });
+                const docRef = await addDoc(col, {
+                    ...payload, creator: pl.creator, isPublic: false, source: 'spotify',
+                    spotifyId: pl.spotifyId, tracks: Array(spotifyTracks.length).fill(null),
+                    status: 'unresolved', resolvedCount: 0, ownerUserId: "current_user_id_placeholder"
+                });
                 addMyPlaylistId(docRef.id);
-                imported++;
+                importedCount++;
             } else {
-                await updateDoc(doc(db, 'playlists', snapshot.docs[0].id), { spotifyTracks, trackCount: spotifyTracks.length, updatedAt: serverTimestamp() });
-                updated++;
+                const docRef = doc(db, 'playlists', snapshot.docs[0].id);
+                await updateDoc(docRef, payload);
+                updatedCount++;
             }
         }
-        resultsContainer.innerHTML = `<div class="sy-success">¡Listo!<br>${imported} importadas.<br>${updated} actualizadas.</div>`;
+        resultsContainer.innerHTML = `<div class="sy-success">¡Completado!<br>${importedCount} importadas.<br>${updatedCount} actualizadas.</div>`;
         setTimeout(() => sy_showModal('sySpotifyModal', false), 2500);
-    } catch (e) { resultsContainer.innerHTML = `<div class="sy-error">Ocurrió un error.</div>`; }
-}
-document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
-function sy_fs() { const f = (window.firebase || {}); return { db: (typeof db !== 'undefined' ? db : window.db), doc: f.doc, updateDoc: f.updateDoc, setDoc: f.setDoc, serverTimestamp: f.serverTimestamp }; }
-function sy_syncRemovalRealtime(plId, removedTrackId) {
-  try {
-    const pl = communityPlaylists.find(p => p && p.id === plId); if (!pl) return;
-    pl.tracks = (pl.tracks || []).filter(t => t && t.id !== removedTrackId);
-    pl.resolvedCount = (pl.tracks || []).length;
-    const sameView = queueType === 'playlist' && viewingPlaylistId === plId;
-    if (sameView) {
-      const wasCurrent = currentTrack && currentTrack.id === removedTrackId;
-      queue = (pl.tracks || []).filter(t => t && t.id);
-      if (wasCurrent) { ytPlayer.stopVideo(); currentTrack = null; qIdx = queue.length ? 0 : -1; }
-      else if (currentTrack) qIdx = queue.findIndex(t => t.id === currentTrack.id);
-      renderQueue(queue, pl.name || '');
-      updateUIOnTrackChange();
+    } catch (e) {
+        resultsContainer.innerHTML = `<div class="sy-error">Ocurrió un error.</div>`;
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Importar'; }
     }
-  } catch (err) {}
 }
+
+document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
+window.addEventListener('hashchange', sy_initSpotifyImportUI);
+document.addEventListener('click', (e)=>{ if (e.target.closest('[data-view="view-playlists"]')) setTimeout(sy_initSpotifyImportUI, 50); });
