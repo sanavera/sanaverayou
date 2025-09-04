@@ -33,7 +33,7 @@ const youtubeMusicLogoSvg = () => `
 /* ========= Estado ========= */
 let items = [];
 let favs  = [];
-let communityPlaylists = [];
+let communityPlaylists = []; 
 let queue = null;
 let queueType = null;
 let qIdx = -1;
@@ -41,46 +41,33 @@ let currentTrack = null;
 let viewingPlaylistId = null;
 let currentQueueTitle = "";
 
-// --- Contenido dinámico de Spotify para la página de inicio ---
-let featuredPlaylists = [];
-let newReleases = [];
-let recommendedSongs = [];
-
 let isShuffle = false;
 let repeatMode = 'none'; // 'none', 'one', 'all'
 
 let ytPlayer = null, YT_READY = false, timer = null;
-let db;
-let resolverJobUnsubscribe = null;
+let db; 
+let resolverJobUnsubscribe = null; 
 
-// --- Credenciales y Estado de Spotify ---
+// --- Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
 const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
+let featuredPlaylists = [];
+let newReleases = [];
+let recommendedSongs = [];
 
-// --- Listas de reproducción recomendadas (Hardcoded) ---
+
+// --- Listas de reproducción locales ---
 const recommendedPlaylists = {
-  p1: {
-    ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
-    title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  p2: {
-    ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
-    title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  },
-  cumbia: {
-    ids: ['UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQ6svFb8_0', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c'],
-    title: 'Cumbias del Recuerdo',
-    creator: 'Luis Sanavera',
-    data: [],
-    isRecommended: true
-  }
+  p1: { ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'], title: 'Éxitos Melódicos 70s-90s', creator: 'Luis Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  p2: { ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'], title: 'Cumbia Santafesina', creator: 'Luis Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  cumbia: { ids: ['UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQ6svFb8_0', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c'], title: 'Cumbias del Recuerdo', creator: 'Luis Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  reggaeton: { ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'], title: 'Noche de Reggaetón', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  reggae: { ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', 'ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'], title: 'Vibras de Reggae', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  pop: { ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'], title: 'Éxitos Pop', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  rock_int: { ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'], title: 'Himnos del Rock', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  bachata: { ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'], title: 'Corazón de Bachata', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist' },
+  international: { ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkAD0TPrJA', '0-EF60neguk'], title: 'Clásicos 70/80/90s', creator: 'Sebastián Sanavera', data: [], isRecommended: true, type: 'playlist' }
 };
 
 /* ========= Persistencia de Estado ========= */
@@ -95,12 +82,9 @@ function getPlaybackState(){
 function savePlayerState() {
   if (!currentTrack || !ytPlayer) return;
   const state = {
-    queue,
-    queueType,
-    qIdx,
+    queue, queueType, qIdx,
     currentTime: ytPlayer.getCurrentTime() || 0,
-    isShuffle,
-    repeatMode,
+    isShuffle, repeatMode,
     wasPlaying: getPlaybackState()==="playing",
     timestamp: Date.now()
   };
@@ -121,7 +105,6 @@ function loadPlayerState() {
     }
     return state;
   } catch (e) {
-    console.error("Error loading player state:", e);
     return null;
   }
 }
@@ -134,16 +117,8 @@ function restorePlayerState(state) {
     currentTrack = queue[qIdx];
     isShuffle = !!state.isShuffle;
     repeatMode = state.repeatMode || 'none';
-
-    ytPlayer.loadVideoById({
-      videoId: currentTrack.id,
-      startSeconds: state.currentTime || 0,
-      suggestedQuality: "auto"
-    });
-    ytPlayer.setVolume(100);
-
+    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: state.currentTime || 0 });
     if (state.wasPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
-
     updateUIOnTrackChange();
     startTimer();
   };
@@ -156,19 +131,6 @@ const THEME_KEY = "sy_theme_v1";
 function applyTheme(theme){
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem(THEME_KEY, theme);
-  const tBtn = $("#themeToggle");
-  if(tBtn){
-    const isLight = theme === "light";
-    tBtn.classList.toggle("is-light", isLight);
-    tBtn.setAttribute("aria-label", isLight ? "Change to dark mode" : "Change to light mode");
-    tBtn.title = tBtn.getAttribute("aria-label");
-  }
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if(meta){
-    const cssColor = getComputedStyle(document.documentElement).getPropertyValue("--dock-bg").trim();
-    meta.setAttribute("content", cssColor || (theme==="light" ? "#ffffff" : "#0b0a11"));
-  }
-  document.documentElement.style.colorScheme = (theme==="light"?"light":"dark");
 }
 function initTheme(){
   const saved = localStorage.getItem(THEME_KEY) || "dark";
@@ -181,10 +143,7 @@ function initTheme(){
 
 /* ========= API Spotify ========= */
 async function getSpotifyToken() {
-    if (spotifyToken.value && Date.now() < spotifyToken.expires) {
-        return spotifyToken.value;
-    }
-
+    if (spotifyToken.value && Date.now() < spotifyToken.expires) return spotifyToken.value;
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
             method: 'POST',
@@ -196,15 +155,9 @@ async function getSpotifyToken() {
         });
         if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`);
         const data = await response.json();
-        spotifyToken = {
-            value: data.access_token,
-            expires: Date.now() + (data.expires_in * 1000) - 60000
-        };
+        spotifyToken = { value: data.access_token, expires: Date.now() + data.expires_in * 1000 - 60000 };
         return spotifyToken.value;
-    } catch (e) {
-        console.error("Error getting Spotify token:", e);
-        return null;
-    }
+    } catch (e) { console.error("Error getting Spotify token:", e); return null; }
 }
 
 async function spotifyApiFetch(endpoint) {
@@ -215,340 +168,239 @@ async function spotifyApiFetch(endpoint) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error(`Spotify API error: ${response.statusText}`);
-        return await response.json();
-    } catch (e) {
-        console.error(`Error fetching from Spotify API (${endpoint}):`, e);
-        return null;
-    }
+        return response.json();
+    } catch (e) { console.error(`Error fetching ${endpoint}:`, e); return null; }
 }
 
 async function fetchFeaturedPlaylists() {
-    const data = await spotifyApiFetch('browse/featured-playlists?limit=10');
-    return data?.playlists?.items?.map(p => ({
-        source: 'spotify',
-        type: 'spotify_playlist',
+    const data = await spotifyApiFetch('browse/featured-playlists?country=AR&locale=es_AR&limit=10');
+    return data?.playlists?.items.map(p => ({
         id: p.id,
-        title: p.name,
-        creator: p.owner.display_name,
-        thumb: p.images?.[0]?.url,
-        tracks: []
+        name: p.name,
+        author: p.owner.display_name,
+        thumb: p.images?.[0]?.url || '',
+        type: 'playlist',
+        source: 'spotify'
     })) || [];
 }
 
 async function fetchNewReleases() {
-    const data = await spotifyApiFetch('browse/new-releases?limit=10');
-    return data?.albums?.items?.map(a => ({
-        source: 'spotify',
-        type: 'spotify_album',
+    const data = await spotifyApiFetch('browse/new-releases?country=AR&limit=10');
+    return data?.albums?.items.map(a => ({
         id: a.id,
-        title: a.name,
+        name: a.name,
         author: a.artists.map(art => art.name).join(', '),
-        thumb: a.images?.[0]?.url,
-        isAlbum: true,
-        tracks: []
+        thumb: a.images?.[0]?.url || '',
+        type: 'album',
+        source: 'spotify'
     })) || [];
 }
 
 async function fetchRecommendations() {
-    const seed_artists = '4q3ewBCX7sLwd24euuV69X,7iK8PXO48WeuP03g8YR51W,1vCWHaC5f2uS3yhpwWbIA6'; // Bad Bunny, Taylor Swift, Drake
-    const data = await spotifyApiFetch(`recommendations?limit=20&seed_artists=${seed_artists}`);
-    return data?.tracks?.map(track => ({
+    const data = await spotifyApiFetch('recommendations?seed_genres=latin,cumbia,rock-nacional,reggaeton&limit=10&market=AR');
+    return data?.tracks?.map(t => ({
+        id: t.id,
+        title: t.name,
+        author: t.artists.map(a => a.name).join(', '),
+        thumb: t.album.images?.[0]?.url || '',
         source: 'spotify',
-        type: 'spotify_track',
-        id: track.id,
-        title: track.name,
-        author: track.artists.map(a => a.name).join(', '),
-        thumb: track.album.images?.[0]?.url || ''
+        type: 'track'
     })) || [];
 }
 
-async function fetchSpotifyPlaylist(playlistId) {
-    const data = await spotifyApiFetch(`playlists/${playlistId}`);
-    if (!data) return null;
-    return {
-        id: data.id,
-        name: data.name,
-        author: data.owner.display_name,
-        thumb: data.images?.[0]?.url || '',
-        tracks: data.tracks.items.map(({track}) => track ? {
-            source: 'spotify',
-            type: 'spotify_track',
-            id: track.id,
-            title: track.name,
-            author: track.artists.map(a => a.name).join(', '),
-            thumb: track.album.images?.[0]?.url || ''
-        } : null).filter(Boolean)
-    };
-}
-
-/* ========= Lógica de Scraping de YouTube (Reemplazo de API) ========= */
+/* ========= Lógica de Scraping de YouTube ========= */
 const uniq = a => [...new Set(a)];
-
 async function withRetry(fn, retries = 2, delay = 300) {
     for (let i = 0; i <= retries; i++) {
-        try {
-            return await fn();
-        } catch (e) {
-            if (i === retries) {
-                 console.error("Scraping failed after all retries.", e);
-                 throw e;
-            }
-            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
+        try { return await fn(); } catch (e) {
+            if (i === retries) { console.error("Scraping failed.", e); throw e; }
             await new Promise(res => setTimeout(res, delay));
         }
     }
 }
-
 async function scrapeYoutubeUrlOnly(query) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
-            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
-            return r.text();
-        });
-        
-        const priorityRegex = /watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i;
-        const priorityMatch = html.match(priorityRegex);
-        if (priorityMatch) return priorityMatch[1];
-        
+        const html = await fetch(endpoint).then(r => r.text());
         const genericMatch = html.match(/watch\?v=([\w-]{11})/);
         return genericMatch ? genericMatch[1] : null;
     });
 }
-
 async function scrapeYoutubeIdForNthResult(query, index = 0) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
-            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
-            return r.text();
-        });
-
+        const html = await fetch(endpoint).then(r => r.text());
         const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]));
-        if (!ids || ids.length <= index) {
-            console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
-            return null;
-        }
-        return ids[index];
+        return (ids && ids.length > index) ? ids[index] : null;
     });
 }
-
-// CORREGIDO: Función de búsqueda principal más robusta y eficiente
 async function scrapeYoutube(query, limit = 20) {
     return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const html = await fetch(endpoint).then(r => {
-            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
-            return r.text();
-        });
-
-        const match = html.match(/var ytInitialData = (.*?);<\/script>/);
-        if (!match || !match[1]) {
-            console.warn("ytInitialData not found, falling back to legacy scraping.");
-            const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
-            return ids.length > 0 ? await fetchVideoDetailsByIds(ids) : [];
-        }
-
-        try {
-            const data = JSON.parse(match[1]);
-            const contents = data.contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0].itemSectionRenderer.contents;
-            
-            const results = [];
-            for (const item of contents) {
-                if (item.videoRenderer && results.length < limit) {
-                    const video = item.videoRenderer;
-                    if (!video.lengthText || video.lengthText.simpleText === '0:00') continue;
-
-                    results.push({
-                        id: video.videoId,
-                        title: cleanTitle(video.title.runs[0].text),
-                        thumb: video.thumbnail.thumbnails.pop().url,
-                        author: cleanAuthor(video.longBylineText.runs[0].text),
-                        source: 'youtube', type: 'youtube_video',
-                        isTopic: /topic/i.test(video.longBylineText.runs[0].text || "")
-                    });
-                }
-            }
-            return results;
-        } catch (e) {
-            console.error("Failed to parse ytInitialData, falling back to legacy.", e);
-            const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
-            return ids.length > 0 ? await fetchVideoDetailsByIds(ids) : [];
-        }
+        const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const html = await fetch(endpoint).then(r => r.text());
+        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
+        if (!ids.length) return [];
+        return await fetchVideoDetailsByIds(ids);
     });
 }
-
 async function fetchVideoDetailsByIds(ids) {
-    const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.length === 0) return [];
-    
-    const metadataPromises = uniqueIds.map(id => 
+    const metadataPromises = [...new Set(ids)].map(id => 
         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
             .then(r => r.json())
-            .then(meta => {
-                if (meta.error) return null;
-                return {
-                    id,
-                    title: cleanTitle(meta.title || `Video ${id}`),
-                    thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
-                    author: cleanAuthor(meta.author_name || "YouTube"),
-                    source: 'youtube', type: 'youtube_video',
-                    isTopic: /topic/i.test(meta.author_name || "")
-                };
-            })
-            .catch(() => ({
-                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, author: "YouTube",
-                source: 'youtube', type: 'youtube_video', isTopic: false
-            }))
+            .then(meta => meta.error ? null : {
+                id,
+                title: cleanTitle(meta.title),
+                thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                author: cleanAuthor(meta.author_name || "YouTube"),
+                source: 'youtube', type: 'youtube_video'
+            }).catch(() => null)
     );
     return (await Promise.all(metadataPromises)).filter(Boolean);
 }
-
 let searchAbort = null;
-/* ========= Nav ========= */
+
+/* ========= Nav & Búsqueda ========= */
 function switchView(id){
   $$(".view").forEach(v=>v.classList.remove("active"));
-  const view = $("#"+id);
-  if (view) view.classList.add("active");
+  $("#"+id)?.classList.add("active");
   $$(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
-  if(id!=="view-search") {
-      updateHomeGridVisibility();
-  }
+  if(id !== "view-search") updateHomeGridVisibility();
   heroScrollInvalidate();
 }
 $("#bottomNav").addEventListener("click", e=>{
-  const btn = e.target.closest(".nav-btn"); if(!btn) return;
-  if (btn.classList.contains('active')) return;
-  switchView(btn.dataset.view);
+  const btn = e.target.closest(".nav-btn");
+  if(btn && !btn.classList.contains('active')) switchView(btn.dataset.view);
 });
-
-/* ========= Búsqueda (overlay) ========= */
-const searchOverlay = $("#searchOverlay");
-const overlayInput  = $("#overlaySearchInput");
-function openSearch(){
-    searchOverlay.classList.add("show");
-    setTimeout(()=> {
-        overlayInput.focus();
-        overlayInput.select();
-    }, 50);
-}
+const searchOverlay = $("#searchOverlay"), overlayInput = $("#overlaySearchInput");
+function openSearch(){ searchOverlay.classList.add("show"); setTimeout(()=> overlayInput.focus(), 50); }
 function closeSearch(){ searchOverlay.classList.remove("show"); }
 $("#searchFab")?.addEventListener("click", openSearch);
 searchOverlay?.addEventListener("click", e=>{ if(e.target===searchOverlay) closeSearch(); });
-overlayInput?.addEventListener("keydown", async e=>{
+overlayInput?.addEventListener("keydown", e=>{
     if (e.key !== "Enter") return;
     const q = overlayInput.value.trim();
-    if (!q) return;
-
-    closeSearch();
-    document.body.scrollTop = 0;
-    document.documentElement.scrollTop = 0;
-
-    switchView("view-search");
-    await startSearch(q);
+    if(q) { closeSearch(); switchView("view-search"); startSearch(q); }
 });
 
-/* ========= Búsqueda (Lógica Principal) ========= */
-let paging = { query:"", loading:false };
-
+/* ========= Lógica de Búsqueda Principal ========= */
 async function startSearch(query){
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
-  paging = { query, loading: true };
   items = [];
   const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
+  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando…</h3></div>`;
   updateHomeGridVisibility();
-  
   try {
-    const videoResults = await scrapeYoutube(query, 20);
+    items = await scrapeYoutube(query, 20);
     if (searchAbort.signal.aborted) return;
-    
     if (resultsEl) resultsEl.innerHTML = "";
-
-    if (videoResults.length === 0) {
+    if (items.length === 0) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
         return;
     }
-
-    items = videoResults;
     appendResults(items);
-
   } catch (e) {
-    console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
-  } finally {
-    paging.loading = false;
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda.</p></div>`;
   }
 }
 
-function dedupeById(arr){
-  const seen = new Set(items.map(i => i.id));
-  return arr.filter(it=>{
-    if(!it?.id || seen.has(it.id)) return false;
-    seen.add(it.id);
-    return true;
-  });
-}
-
-/* ========= Render resultados ========= */
+/* ========= Render Resultados y Home ========= */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
-  root.innerHTML = ''; // Limpiar resultados anteriores
-  for(const it of chunk){
-    const item = document.createElement("article");
-    item.className = "result-item";
-    item.dataset.itemId = it.id;
-    item.dataset.trackId = it.id;
-
-    let logo = youtubeLogoSvg();
-    if (it.source === 'spotify') {
-        logo = spotifyLogoSvg();
-    } else if (it.isTopic) {
-        logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
-    }
-    
-    item.innerHTML = `
-      <div class="thumb-wrap">
-        <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
-        <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
-      </div>
-      <div class="meta">
-        <div class="title-line">
-          ${logo}
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
-      </div>
-      <div class="actions">
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
-      </div>`;
-    item.addEventListener("click", (e) => handleResultClick(e, it));
-
-    const cardPlayBtn = item.querySelector(".card-play");
-    if (cardPlayBtn) {
-        cardPlayBtn.onclick = (e) => {
-            e.stopPropagation();
-            handleResultClick(e, it, true);
-        };
-    }
-    root.appendChild(item);
-  }
+  chunk.forEach(it => root.appendChild(createSongCard(it, false)));
   refreshIndicators();
 }
+function createSongCard(it, isCard = false) {
+    const item = document.createElement("article");
+    item.className = "result-item" + (isCard ? " as-card" : "");
+    item.dataset.id = it.id;
+    item.dataset.type = it.type;
+    item.dataset.source = it.source;
 
+    item.innerHTML = `
+      <div class="thumb-wrap">
+        <img class="thumb" loading="lazy" src="${it.thumb}" alt="">
+        <button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>
+      </div>
+      <div class="meta">
+        <div class="title-line"><span class="title-text">${it.title || it.name}</span><span class="eq"><span></span><span></span><span></span></span></div>
+        <div class="subtitle">${cleanAuthor(it.author)}</div>
+      </div>
+      <div class="actions"><button class="icon-btn more" title="Opciones">${dotsSvg()}</button></div>`;
+    return item;
+}
+async function findYoutubeEquivalent(track) {
+    if (!track || !track.title) return null;
+    const { videoId } = await resolveTrack(track);
+    if (!videoId) return null;
+    return { ...track, id: videoId, source: 'youtube', type: 'youtube_video' };
+}
+function updateHomeGridVisibility(){
+  const home = $("#allPlaylistsContainer");
+  if(home) home.style.display = (items.length === 0 && !$(".loading-indicator")) ? 'block' : 'none';
+}
 
-async function handleResultClick(event, item, forcePlay = false) {
-    if (event.target.closest(".more")) return;
+/* ========= Home (Inicio) ========= */
+function renderSection(title, items, renderFn) {
+    if (!items || items.length === 0) return '';
+    return `
+        <section class="home-category">
+            <header class="home-head"><h3 class="home-title">${title}</h3></header>
+            <div class="home-grid">${items.map(item => renderFn(item)).join('')}</div>
+        </section>`;
+}
 
-    if (item.source === 'youtube') {
-        playFromSearch(item.id, true);
-    } else if (item.source === 'spotify') {
-        await playSpotifyTrack(item);
+function renderPlaylistCard(p) {
+    const logo = p.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg();
+    const coverHtml = p.type === 'album' || !p.tracks
+        ? `<img class="album-cover" src="${p.thumb}" alt="Cover">`
+        : `<div class="collage-container">${(p.tracks.slice(0,4).map(t => t.thumb)).map(src => `<img src="${src}" alt="">`).join('')}</div>`;
+
+    return `
+        <article class="playlist-card" data-id="${p.id}" data-type="${p.type}" data-source="${p.source}">
+            ${coverHtml}
+            <div class="playlist-meta">
+                <div class="playlist-title-wrapper"><h4 class="playlist-title">${p.name}</h4></div>
+                <div class="creator-line">${logo}<span>${p.author || p.creator}</span></div>
+            </div>
+        </article>`;
+}
+
+function renderSongCard(track) {
+    return `
+        <article class="result-item as-card" data-id="${track.id}" data-type="${track.type}" data-source="${track.source}">
+            <div class="thumb-wrap"><img class="thumb" loading="lazy" src="${track.thumb}" alt=""><button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button></div>
+            <div class="meta"><div class="title-line"><span class="title-text">${track.title}</span></div><div class="subtitle">${cleanAuthor(track.author)}</div></div>
+        </article>`;
+}
+
+async function handleHomeCardClick(e) {
+    const card = e.target.closest('[data-id]');
+    if (!card) return;
+
+    const { id, type, source } = card.dataset;
+    if (e.target.closest('.card-play') || type === 'track' || type === 'youtube_video' || (type === 'playlist' && source === 'youtube')) {
+        e.stopPropagation();
+    }
+    
+    if (type === 'track') {
+        const track = recommendedSongs.find(t => t.id === id);
+        if (track) playSpotifyTrack(track);
+    } else if (type === 'playlist' && source === 'youtube') {
+        const key = Object.keys(recommendedPlaylists).find(k => recommendedPlaylists[k].title === card.querySelector('.playlist-title').textContent);
+        if (key) {
+            const pl = recommendedPlaylists[key];
+            setQueue(pl.data, 'recommended', 0);
+            currentQueueTitle = pl.title;
+            renderQueue(pl.data, pl.title);
+            switchView('view-player');
+            playCurrent(true);
+        }
+    } else if ((type === 'playlist' || type === 'album') && source === 'spotify') {
+        const item = [...featuredPlaylists, ...newReleases].find(i => i.id === id);
+        if (item) playSpotifyPlaylistOrAlbum(item);
+    } else if (type === 'playlist' && source !== 'spotify') {
+        await showPlaylistInPlayer(id);
     }
 }
 
@@ -556,143 +408,46 @@ async function playSpotifyTrack(track) {
     showToast("Buscando en YouTube...");
     const ytEquivalent = await findYoutubeEquivalent(track);
     if (ytEquivalent) {
-        setQueue([ytEquivalent], "search", 0);
+        setQueue([ytEquivalent], "spotify_track", 0);
         viewingPlaylistId = null;
-        playCurrent(true);
+        currentQueueTitle = "Canción";
+        renderQueue([ytEquivalent], currentQueueTitle);
         switchView('view-player');
+        playCurrent(true);
     } else {
-        showToast("No se pudo encontrar un video para esta canción.", true);
+        showToast("No se encontró video para esta canción.", true);
     }
 }
 
-async function findYoutubeEquivalent(track) {
-    if (!track || !track.title) return null;
-    const { videoId } = await resolveTrack(track);
-    if (!videoId) return null;
+async function playSpotifyPlaylistOrAlbum(item) {
+    showToast(`Cargando "${item.name}"...`);
+    const endpoint = item.type === 'album' ? `albums/${item.id}/tracks` : `playlists/${item.id}/tracks`;
+    const data = await spotifyApiFetch(endpoint);
+    let tracks = data?.items;
+    if(!tracks) { showToast("No se pudo cargar la playlist.", true); return; }
 
-    return {
-        id: videoId,
-        title: track.title,
-        author: track.author,
-        thumb: track.thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        source: 'youtube',
-        type: 'youtube_video',
-        isTopic: false, 
-        originalId: track.id || track.spotifyId,
-    };
-}
-
-/* ========= Home grid ========= */
-function renderSection(title, items, renderFn) {
-    if (!items || items.length === 0) return '';
-    return `
-        <section class="home-category">
-            <header class="home-head">
-                <h3 class="home-title">${title}</h3>
-            </header>
-            <div class="home-grid">
-                ${items.map(renderFn).join('')}
-            </div>
-        </section>
-    `;
-}
-
-function renderPlaylistCard(playlist) {
-    let trackCount = playlist.trackCount || playlist.tracks?.length || playlist.spotifyTracks?.length || 0;
-    if (playlist.isRecommended) {
-        trackCount = playlist.data.length;
-    }
-    if (trackCount === 0 && !playlist.isAlbum) return '';
-
-    let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
-    if (covers.length === 0 && (playlist.thumb || playlist.cover)) {
-        covers.push(playlist.thumb || playlist.cover);
-    }
-    while (covers.length < 4 && !playlist.isAlbum) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    if(item.type === 'playlist') tracks = tracks.map(t => t.track);
     
-    const logo = playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg();
-    const titleText = playlist.title || playlist.name;
+    const formattedTracks = tracks.map(t => ({
+        id: t.id, title: t.name, author: t.artists.map(a => a.name).join(', '),
+        thumb: (item.type === 'album' ? item.thumb : t.album?.images?.[0]?.url) || item.thumb,
+        source: 'spotify', type: 'track'
+    }));
 
-    const cardHtml = `
-        <article class="playlist-card" data-id="${playlist.id}" data-type="${playlist.type || 'playlist'}">
-            ${playlist.isAlbum ? 
-                `<img src="${playlist.thumb}" class="album-cover" alt="Album art for ${titleText}">` :
-                `<div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>`
-            }
-            <div class="playlist-meta">
-                <div class="playlist-title-wrapper">
-                    <h4 class="playlist-title">${titleText}</h4>
-                </div>
-                <div class="creator-line">${logo}<span>${playlist.isAlbum ? (playlist.author || 'Varios Artistas') : `por ${playlist.creator}`}</span></div>
-            </div>
-        </article>`;
-    return cardHtml;
-}
+    const resolvePromises = formattedTracks.map(findYoutubeEquivalent);
+    const resolvedTracks = (await Promise.all(resolvePromises)).filter(Boolean);
 
-function renderSongCard(song) {
-    return `
-        <article class="result-item as-card" data-track-id="${song.id}" data-type="${song.type}">
-            <div class="thumb-wrap">
-                <img class="thumb" loading="lazy" src="${song.thumb}" alt="">
-                <button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-            </div>
-            <div class="meta">
-                <div class="title-line"><span class="title-text">${song.title}</span></div>
-                <div class="subtitle">${cleanAuthor(song.author) || ""}</div>
-            </div>
-        </article>
-    `;
-}
-
-async function handleHomeCardClick(e) {
-    const card = e.target.closest('.playlist-card, .result-item');
-    if (!card) return;
-
-    const id = card.dataset.id || card.dataset.trackId;
-    const type = card.dataset.type;
-
-    if (type === 'spotify_playlist' || type === 'spotify_album') {
-        showToast("Cargando canciones...");
-        const playlistData = await fetchSpotifyPlaylist(id);
-        if (playlistData && playlistData.tracks.length > 0) {
-            const youtubeTracks = await Promise.all(playlistData.tracks.map(findYoutubeEquivalent));
-            const validTracks = youtubeTracks.filter(Boolean);
-            if (validTracks.length > 0) {
-                setQueue(validTracks, 'spotify_playlist', 0);
-                viewingPlaylistId = id;
-                currentQueueTitle = playlistData.name;
-                renderQueue(validTracks, playlistData.name);
-                switchView('view-player');
-                playCurrent(true);
-            } else {
-                showToast("No se encontraron videos para esta playlist.", true);
-            }
-        } else {
-            showToast("No se pudo cargar la playlist.", true);
-        }
-    } else if (type === 'spotify_track') {
-        const song = recommendedSongs.find(s => s.id === id);
-        if (song) await playSpotifyTrack(song);
-    } else { // Playlists locales o de Firebase
-        const localPlaylist = Object.values(recommendedPlaylists).find(p => p.title === id);
-        if (localPlaylist) {
-            setQueue(localPlaylist.data, 'recommended', 0);
-            viewingPlaylistId = null;
-            currentQueueTitle = localPlaylist.title;
-            renderQueue(localPlaylist.data, localPlaylist.title);
-            switchView('view-player');
-            playCurrent(true);
-        } else {
-            await showPlaylistInPlayer(id);
-        }
+    if(resolvedTracks.length === 0) {
+        showToast("No se encontraron videos para esta lista.", true);
+        return;
     }
-}
 
-
-function updateHomeGridVisibility(){
-  const home = $("#allPlaylistsContainer"); if(!home) return;
-  const shouldShow = (items.length===0 && !$(".loading-indicator"));
-  home.classList.toggle("hide", !shouldShow);
+    setQueue(resolvedTracks, "spotify_playlist", 0);
+    viewingPlaylistId = item.id;
+    currentQueueTitle = item.name;
+    renderQueue(resolvedTracks, currentQueueTitle);
+    switchView('view-player');
+    playCurrent(true);
 }
 
 /* ========= Favoritos ========= */
@@ -707,38 +462,13 @@ function toggleFav(track){
 }
 function renderFavs(){
   const ul = $("#favList"); if(!ul) return;
-  ul.innerHTML="";
-  favs.forEach(it=>{
-    const li = document.createElement("li");
-    li.className = "fav-item"; li.dataset.trackId = it.id;
-    li.innerHTML = `
-      <div class="thumb-wrap">
-        <img class="thumb" src="${it.thumb}" alt="">
-        <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
-      </div>
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-        <div class="subtitle">${cleanAuthor(it.author)||""}</div>
-      </div>
-      <div class="actions">
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
-      </div>`;
-    li.addEventListener("click", e=>{
+  ul.innerHTML= favs.map(it => createSongCard(it, false).outerHTML).join('');
+  ul.querySelectorAll('.result-item').forEach((li, i) => {
+    li.addEventListener('click', e => {
       if(e.target.closest(".more") || e.target.closest(".card-play")) return;
-      playFromFav(it, true);
+      playFromFav(favs[i], true);
     });
-    li.querySelector(".card-play").onclick = (e)=>{
-      e.stopPropagation();
-      if(currentTrack?.id === it.id){ togglePlay(); }
-      else{ playFromFav(it, true); }
-    };
-    ul.appendChild(li);
+    li.querySelector(".card-play").onclick = e => { e.stopPropagation(); playFromFav(favs[i], true); };
   });
   updateHero(currentTrack);
   refreshIndicators();
@@ -750,284 +480,121 @@ function getMyPlaylistIds() { try { return JSON.parse(localStorage.getItem(LS_US
 function addMyPlaylistId(id) { const ids=getMyPlaylistIds(); if(!ids.includes(id)){ ids.push(id); localStorage.setItem(LS_USER_PLAYLIST_IDS,JSON.stringify(ids)); } }
 function removeMyPlaylistId(id) { let ids=getMyPlaylistIds(); ids=ids.filter(pid=>pid!==id); localStorage.setItem(LS_USER_PLAYLIST_IDS,JSON.stringify(ids)); }
 function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); }
-async function handlePrivacyToggle(playlistId, isPublic) { try { const {doc,updateDoc}=window.firebase; await updateDoc(doc(db,"playlists",playlistId),{isPublic}); } catch(e){console.error("Error updating privacy:",e);} }
 
 async function openPlaylistOptionsMenu(pl) {
   const isOwner = isMyPlaylist(pl.id);
-  let actions = [];
-
-  if (isOwner) {
-      actions.push({ id: "rename", label: "Renombrar" });
-      actions.push({ id: "delete", label: "Eliminar playlist", danger: true });
-  }
-  
-  if (!isOwner && pl.isPublic) {
-      actions.push({ id: "save_copy", label: "Guardar una copia" });
-  }
-
+  let actions = isOwner ? [{ id: "rename", label: "Renombrar" }, { id: "delete", label: "Eliminar", danger: true }] : [];
   actions.push({ id: "cancel", label: "Cancelar", ghost: true });
   
-  openActionSheet({
-    title: pl.name,
-    actions: actions,
-    onAction: async (act) => {
-      const { doc, updateDoc, deleteDoc, serverTimestamp } = window.firebase;
-      
+  openActionSheet({ title: pl.name, actions, onAction: async (act) => {
+      const {doc, updateDoc, deleteDoc, serverTimestamp} = window.firebase;
       if (act === "rename" && isOwner) {
-        const plRef = doc(db, "playlists", pl.id);
-        const newName = prompt("Nuevo nombre para la playlist:", pl.name);
-        if (newName === null || newName.trim() === "") return;
-
-        const newCreator = prompt("Nuevo nombre de creador (máx 20 caracteres):", pl.creator);
-        if (newCreator === null || newCreator.trim() === "") return;
-
-        try {
-          await updateDoc(plRef, {
-            name: newName.trim().substring(0, 50),
-            creator: newCreator.trim().substring(0, 20),
-            updatedAt: serverTimestamp()
-          });
-        } catch (e) {
-          console.error("Error renaming playlist:", e);
-          showToast("No se pudo renombrar la playlist.", true);
-        }
+        const newName = prompt("Nuevo nombre:", pl.name);
+        if (newName?.trim()) await updateDoc(doc(db, "playlists", pl.id), { name: newName.trim() });
       }
       if (act === "delete" && isOwner) {
-        openActionSheet({
-            title: `¿Eliminar "${pl.name}"?`,
-            actions: [
-                {id: "confirm_delete", label: "Sí, eliminar", danger: true},
-                {id: "cancel", label: "Cancelar", ghost: true}
-            ],
-            onAction: async (confirmAct) => {
-                if(confirmAct === 'confirm_delete') {
-                    try {
-                        await deleteDoc(doc(db, "playlists", pl.id));
-                        removeMyPlaylistId(pl.id);
-                      } catch (e) {
-                        console.error("Error deleting playlist:", e);
-                        showToast("No se pudo eliminar la playlist.", true);
-                      }
-                }
-            }
-        });
-      }
-      if (act === "save_copy" && !isOwner) {
-        savePlaylistCopy(pl);
+        if (confirm(`¿Eliminar "${pl.name}"?`)) {
+          await deleteDoc(doc(db, "playlists", pl.id));
+          removeMyPlaylistId(pl.id);
+        }
       }
     }
   });
 }
 
-async function savePlaylistCopy(originalPlaylist) {
-    let creator = localStorage.getItem('sy_creator_name');
-    if (!creator) {
-        creator = prompt("Para guardar una copia, ingresá tu nombre de creador:")?.trim();
-        if (!creator) return;
-        localStorage.setItem('sy_creator_name', creator);
-    }
-    showToast(`Guardando copia de "${originalPlaylist.name}"...`);
-    try {
-        const { collection, addDoc, serverTimestamp } = window.firebase;
-        const newPlaylistData = {
-            ...originalPlaylist,
-            name: `${originalPlaylist.name} (Copia)`,
-            creator: creator,
-            isPublic: false,
-            updatedAt: serverTimestamp(),
-            originalOwnerId: originalPlaylist.ownerUserId || null,
-            ownerUserId: 'current_user_id',
-        };
-        delete newPlaylistData.id;
-        delete newPlaylistData.resolverJobId;
-        delete newPlaylistData.status;
-        delete newPlaylistData.resolvedCount;
-        
-        const docRef = await addDoc(collection(db, "playlists"), newPlaylistData);
-        addMyPlaylistId(docRef.id);
-        showToast("Copia guardada en tus playlists.");
-    } catch (e) {
-        console.error("Error saving copy:", e);
-        showToast("No se pudo guardar la copia.", true);
-    }
-}
 function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
-    if (!grid) return;
+    if (!grid || !empty) return;
     grid.innerHTML = "";
-
     const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
 
-    if (myPlaylists.length === 0) {
-        empty?.classList.remove("hide");
-        return;
-    }
-    empty?.classList.add("hide");
+    if (myPlaylists.length === 0) { empty.classList.remove("hide"); return; }
+    empty.classList.add("hide");
 
     myPlaylists.forEach(pl => {
         const card = document.createElement("article");
-        card.className="pl-item";
-        card.dataset.plId = pl.id;
-        const cover = pl.cover || pl.tracks?.[0]?.thumb || pl.spotifyTracks?.[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
-        
-        const total = pl.trackCount || pl.spotifyTracks?.length || pl.tracks?.length || 0;
-        const resolved = pl.resolvedCount || 0;
+        card.className="pl-item"; card.dataset.id = pl.id;
+        const cover = pl.cover || pl.tracks?.[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
+        const total = pl.trackCount || pl.tracks?.length || 0;
+        let statusText = `${total} temas`;
+        if (pl.status === 'resolving') statusText = `Importando...`;
 
-        let statusText = `${resolved} / ${total} temas`;
-        if (pl.status === 'resolving') statusText = `Importando... (${resolved}/${total})`;
-        else if (pl.status === 'partial') statusText = `Parcial (${resolved}/${total})`;
-        else if (pl.status === 'resolved' || pl.source !== 'spotify') statusText = `${total} temas`;
-
-        card.innerHTML = `
-            <img class="pl-thumb-bg" src="${cover}" alt="">
-            <div class="pl-overlay">
-                <div class="pl-meta">
-                    <div class="pl-title">${pl.name}</div>
-                    <div class="pl-creator">por ${pl.creator || 'Anónimo'}</div>
-                    <div class="pl-subtitle">${statusText}</div>
-                </div>
-                <div class="pl-privacy-toggle">
-                    <label class="switch">
-                        <input type="checkbox" ${pl.isPublic ? 'checked' : ''}>
-                        <span class="slider"></span>
-                    </label>
-                    <span>Pública</span>
-                </div>
-            </div>
-            <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
-
-        card.querySelector(".more").addEventListener("click", (e) => {
-            e.stopPropagation();
-            openPlaylistOptionsMenu(pl);
-        });
-
-        card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => {
-            e.stopPropagation();
-            handlePrivacyToggle(pl.id, e.target.checked);
-        });
-
-        card.addEventListener("click", async (e) => {
-            if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return;
-            await showPlaylistInPlayer(pl.id);
-        });
-
-        card.classList.toggle("is-playing", viewingPlaylistId === pl.id && queueType === 'playlist');
+        card.innerHTML = `<img class="pl-thumb-bg" src="${cover}" alt=""><div class="pl-overlay"><div class="pl-meta"><div class="pl-title">${pl.name}</div><div class="pl-creator">por ${pl.creator}</div><div class="pl-subtitle">${statusText}</div></div></div><button class="icon-btn more" title="Opciones">${dotsSvg()}</button>`;
+        card.querySelector(".more").addEventListener("click", e => { e.stopPropagation(); openPlaylistOptionsMenu(pl); });
+        card.addEventListener("click", () => showPlaylistInPlayer(pl.id));
+        card.classList.toggle("is-playing", viewingPlaylistId === pl.id);
         grid.appendChild(card);
     });
 }
-
-
-$("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
+$("#btnNewPlaylist")?.addEventListener("click", () => $("#createPlaylistSheet").classList.add("show"));
 $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
-$("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
 $("#createPlConfirm").onclick = async () => {
     const name = $("#newPlName").value.trim();
     const creator = $("#newPlCreator").value.trim();
-    if (!name || !creator) { showToast("Por favor, completa nombre de playlist y creador.", true); return; }
+    if (!name || !creator) { showToast("Completa nombre y creador.", true); return; }
     try {
-        const { getFirestore, collection, addDoc, serverTimestamp } = window.firebase;
-        const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [], updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder' });
+        const { collection, addDoc, serverTimestamp } = window.firebase;
+        const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [], updatedAt: serverTimestamp(), isPublic: true });
         addMyPlaylistId(docRef.id);
-        $("#newPlName").value = ""; $("#newPlCreator").value = ""; $("#createPlaylistSheet").classList.remove("show");
-    } catch (e) { console.error("Error creating playlist: ", e); showToast("Hubo un error al crear la playlist.", true); }
+        $("#newPlName").value = ""; $("#newPlCreator").value = "";
+        $("#createPlaylistSheet").classList.remove("show");
+    } catch (e) { showToast("Error al crear la playlist.", true); }
 };
+
 /* ========= Sheets & Toasts ========= */
 function showToast(message, isError = false) {
     let toast = document.getElementById('sy-toast');
     if (!toast) {
         toast = document.createElement('div');
         toast.id = 'sy-toast';
-        toast.style.position = 'fixed';
-        toast.style.bottom = '80px';
-        toast.style.left = '50%';
-        toast.style.transform = 'translateX(-50%)';
-        toast.style.padding = '10px 20px';
-        toast.style.background = isError ? '#b91c1c' : '#333';
-        toast.style.color = 'white';
-        toast.style.borderRadius = '8px';
-        toast.style.zIndex = '10000';
-        toast.style.transition = 'opacity 0.3s, bottom 0.3s';
-        toast.style.opacity = '0';
         document.body.appendChild(toast);
     }
     toast.textContent = message;
-    toast.style.background = isError ? '#b91c1c' : '#333';
-    toast.style.opacity = '1';
-    toast.style.bottom = '90px';
-    
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.bottom = '80px';
-    }, 3000);
+    toast.className = 'show';
+    if(isError) toast.classList.add('error');
+    setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 3000);
 }
-
 function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
   const sheet = $("#menuSheet"); if(!sheet) return;
-  sheet.innerHTML = `
-    <div class="sheet-content">
-      <div class="sheet-title">${title}</div>
-      ${actions.map(a=>`
-        <button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">
-          ${a.label}
-        </button>`).join("")}
-    </div>`;
+  sheet.innerHTML = `<div class="sheet-content"><div class="sheet-title">${title}</div>${actions.map(a=>`<button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">${a.label}</button>`).join("")}</div>`;
   sheet.classList.add("show");
-  sheet.onclick = (e)=>{
+  sheet.onclick = e => {
     if(e.target===sheet){ sheet.classList.remove("show"); return; }
     const btn = e.target.closest(".sheet-item"); if(!btn) return;
-    const id = btn.dataset.id;
     sheet.classList.remove("show");
-    if(id) onAction(id);
+    onAction(btn.dataset.id);
   };
 }
 async function openPlaylistSheet(track){
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
-
   const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
-
   myPlaylists.forEach(pl=>{
     const btn = document.createElement("button");
-    btn.className="sheet-item";
-    btn.textContent = pl.name;
+    btn.className="sheet-item"; btn.textContent = pl.name;
     btn.onclick = async ()=>{
       const { doc, updateDoc, serverTimestamp } = window.firebase;
-      const plRef = doc(db, "playlists", pl.id);
-      
       const updatedTracks = [...pl.tracks];
-      if (!updatedTracks.some(t => t.id === track.id)) { updatedTracks.unshift(track); }
-      
-      const spotifyTracks = pl.spotifyTracks ? [...pl.spotifyTracks] : [];
-      if (pl.source === 'spotify' && !spotifyTracks.some(t => t.id === track.originalId)) {
-          spotifyTracks.unshift({ id: track.originalId || track.id, title: track.title, author: track.author, thumb: track.thumb, source: 'spotify' });
-      }
-
+      if (!updatedTracks.some(t => t.id === track.id)) updatedTracks.unshift(track);
       try {
-        await updateDoc(plRef, { tracks: updatedTracks, spotifyTracks, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, "playlists", pl.id), { tracks: updatedTracks, updatedAt: serverTimestamp() });
         sheet.classList.remove("show");
-      } catch(e) { console.error("Error adding song: ", e); showToast("No se pudo agregar la canción.", true); }
+      } catch(e) { showToast("No se pudo agregar la canción.", true); }
     };
     list.appendChild(btn);
   });
-
   $("#plCreateFromSong").onclick = async () => {
-    const name = $("#plNewNameFromSong").value.trim();
-    if (!name) return;
-    const creator = prompt("Tu nombre (creador):")?.trim();
-    if (!creator) return;
-
+    const name = $("#plNewNameFromSong").value.trim(); if (!name) return;
+    const creator = prompt("Tu nombre (creador):")?.trim(); if (!creator) return;
     try {
         const { collection, addDoc, serverTimestamp } = window.firebase;
-        const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [track], updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder' });
+        const docRef = await addDoc(collection(db, "playlists"), { name, creator, tracks: [track], updatedAt: serverTimestamp(), isPublic: true });
         addMyPlaylistId(docRef.id);
-        $("#plNewNameFromSong").value = "";
-        sheet.classList.remove("show");
-    } catch (e) { console.error("Error creating playlist from song: ", e); showToast("Hubo un error al crear la playlist.", true); }
+        $("#plNewNameFromSong").value = ""; sheet.classList.remove("show");
+    } catch (e) { showToast("Error al crear la playlist.", true); }
   };
-
   $("#plCancel").onclick = ()=> sheet.classList.remove("show");
-  sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
 }
 
 /* ========= YouTube / reproducción ========= */
@@ -1037,62 +604,41 @@ function updateUIOnTrackChange() {
   refreshIndicators();
   updateControlStates();
   updateMediaSession(currentTrack);
-  updateAndroidNotification();
 }
 function updateHero(track){
   const t = track || currentTrack;
-  const favHero = $("#favHero");
-  const npHero  = $("#npHero");
-  if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  $("#favNowTitle") && ($("#favNowTitle").textContent = t ? t.title : "—");
-  if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  $("#npTitle") && ($("#npTitle").textContent = t ? t.title : "Elegí una canción");
-
-  let plName = "";
-  if (queueType === 'playlist' && viewingPlaylistId) {
-    const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
-    plName = pl ? pl.name : "";
-  } else if (['recommended', 'youtube_playlist', 'spotify_playlist'].includes(queueType)) {
-    plName = currentQueueTitle;
-  }
-
-  $("#npSub") && ($("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—"));
+  $("#favHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
+  $("#favNowTitle").textContent = t ? t.title : "—";
+  $("#npHero").style.backgroundImage = t ? `url(${t.thumb})` : "none";
+  $("#npTitle").textContent = t ? t.title : "Elegí una canción";
+  $("#npSub").textContent = t ? `${cleanAuthor(t.author)}${currentQueueTitle ? ` • ${currentQueueTitle}` : ""}` : (currentQueueTitle || "—");
 }
 function setQueue(srcArr, type, idx){
   let finalSrc = srcArr;
   if (isShuffle) {
     const currentItem = srcArr[idx];
-    const others = srcArr.filter((item, index) => index !== idx);
-    const shuffledOthers = others.sort(() => Math.random() - 0.5);
-    finalSrc = [currentItem, ...shuffledOthers];
+    const others = srcArr.filter((_, index) => index !== idx);
+    finalSrc = [currentItem, ...others.sort(() => Math.random() - 0.5)];
     idx = 0;
   }
-  queue = finalSrc;
-  queueType = type;
-  qIdx = idx;
+  queue = finalSrc; queueType = type; qIdx = idx;
 }
 function playCurrent(autoplay=false){
   if(!YT_READY || !queue || qIdx<0 || qIdx>=queue.length) return;
   currentTrack = queue[qIdx];
-  if (!currentTrack || !currentTrack.id) {
-    console.warn("Attempting to play invalid track, skipping to next.", currentTrack);
-    next();
-    return;
-  }
-  ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
+  if (!currentTrack || !currentTrack.id) { next(); return; }
+  ytPlayer.loadVideoById({videoId: currentTrack.id});
   if(!autoplay) ytPlayer.pauseVideo();
   startTimer();
   updateUIOnTrackChange();
 }
 function playFromSearch(trackId, autoplay=false) {
-    const videoItems = items.filter(it => it.source === 'youtube');
-    const videoIndex = videoItems.findIndex(v => v.id === trackId);
-
+    const videoIndex = items.findIndex(v => v.id === trackId);
     if (videoIndex > -1) {
-        setQueue(videoItems, "search", videoIndex);
+        setQueue(items, "search", videoIndex);
         viewingPlaylistId = null;
         currentQueueTitle = "Resultados de Búsqueda";
-        renderQueue(videoItems, currentQueueTitle);
+        renderQueue(items, currentQueueTitle);
         playCurrent(autoplay);
     }
 }
@@ -1107,20 +653,13 @@ function playFromFav(track, autoplay=false){
 function playFromPlaylist(plId, i, autoplay=false){
   const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
   viewingPlaylistId = plId;
-  
   const tracks = (pl.tracks || []).filter(t => t && t.id);
-  if (tracks.length === 0) {
-      showToast("Esta playlist no tiene canciones para reproducir.", true);
-      return;
-  }
-  
+  if (tracks.length === 0) { showToast("Esta playlist no tiene canciones para reproducir.", true); return; }
   setQueue(tracks, "playlist", i);
   currentQueueTitle = pl.name;
   renderQueue(tracks, currentQueueTitle);
   playCurrent(autoplay);
-  renderPlaylists();
 }
-
 function togglePlay(){
   if(!YT_READY || !currentTrack) return;
   const st = ytPlayer.getPlayerState();
@@ -1128,47 +667,17 @@ function togglePlay(){
 }
 $("#npPlay")?.addEventListener("click", togglePlay);
 $("#miniPlay")?.addEventListener("click", togglePlay);
-
-async function removeFromPlaylist(plId, trackId) {
-    const pl = communityPlaylists.find(p => p && p.id === plId);
-    if (!pl) return;
-
-    const { db, doc, updateDoc, setDoc, serverTimestamp } = sy_fs();
-    const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
-
-    const payload = {
-      tracks: updatedTracks,
-      resolvedCount: updatedTracks.length,
-      updatedAt: serverTimestamp ? serverTimestamp() : Date.now()
-    };
-
-    sy_syncRemovalRealtime(plId, trackId);
-
-    try {
-      const plRef = doc(db, 'playlists', plId);
-      await updateDoc(plRef, payload);
-      showToast('Canción eliminada.');
-    } catch (e) {
-      console.error('Error removing song:', e);
-      showToast('No se pudo quitar la canción.', true);
-    }
-}
-
-/* Mini reproductor */
 function updateMiniNow(){
   const has = !!currentTrack;
-  const dock = $("#seekDock");
-  dock && dock.classList.toggle("show", has);
+  $("#seekDock")?.classList.toggle("show", has);
   if(!has) return;
-  $("#miniThumb") && ($("#miniThumb").src = currentTrack.thumb);
-  $("#miniTitle") && ($("#miniTitle").textContent = currentTrack.title);
-  $("#miniAuthor") && ($("#miniAuthor").textContent = cleanAuthor(currentTrack.author) || "");
+  $("#miniThumb").src = currentTrack.thumb;
+  $("#miniTitle").textContent = currentTrack.title;
+  $("#miniAuthor").textContent = cleanAuthor(currentTrack.author);
 }
-
 function getNextIndex() {
   if (!queue) return -1;
   if (repeatMode === 'one') return qIdx;
-
   let next = qIdx + 1;
   if (next >= queue.length) return (repeatMode === 'all') ? 0 : -1;
   return next;
@@ -1185,64 +694,38 @@ function prev(){
 }
 $("#btnNext")?.addEventListener("click", next);
 $("#btnPrev")?.addEventListener("click", prev);
-
-function seekToFrac(frac){
-  if(!YT_READY) return;
-  const d = ytPlayer.getDuration()||0;
-  ytPlayer.seekTo(frac*d,true);
-}
+function seekToFrac(frac){ if(YT_READY) ytPlayer.seekTo(frac * (ytPlayer.getDuration()||0), true); }
 $("#seek")?.addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
 $("#miniSeek")?.addEventListener("input", e=> seekToFrac(parseInt(e.target.value,10)/1000));
-
 function startTimer(){
   stopTimer();
   timer = setInterval(()=>{
-    if(!YT_READY || !currentTrack) return;
-    const state = ytPlayer.getPlayerState();
-    if(state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) return;
-
+    if(!YT_READY || !currentTrack || ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) return;
     const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
-    $("#cur") && ($("#cur").textContent = fmt(cur));
-    $("#dur") && ($("#dur").textContent = fmt(dur));
-    $("#seek") && ($("#seek").value = dur? Math.floor((cur/dur)*1000) : 0);
-    $("#miniCur") && ($("#miniCur").textContent = fmt(cur));
-    $("#miniDur") && ($("#miniDur").textContent = fmt(dur));
-    $("#miniSeek") && ($("#miniSeek").value = dur? Math.floor((cur/dur)*1000) : 0);
-
-    try{
-      if ('mediaSession' in navigator && typeof navigator.mediaSession.setPositionState === 'function') {
-        navigator.mediaSession.setPositionState({ duration: dur||0, playbackRate: ytPlayer.getPlaybackRate(), position: cur||0 });
-      }
-    }catch(e) {}
-
+    $("#cur").textContent = fmt(cur); $("#dur").textContent = fmt(dur);
+    $("#seek").value = dur ? Math.floor((cur/dur)*1000) : 0;
+    $("#miniCur").textContent = fmt(cur); $("#miniDur").textContent = fmt(dur);
+    $("#miniSeek").value = dur ? Math.floor((cur/dur)*1000) : 0;
     savePlayerState();
   }, 500);
 }
-function stopTimer(){ clearInterval(timer); timer=null; }
-
-/* ========= Shuffle / Repeat ========= */
+function stopTimer(){ clearInterval(timer); }
 function toggleShuffle() {
   isShuffle = !isShuffle;
   $("#btnShuffle")?.classList.toggle('active', isShuffle);
   if (currentTrack) {
-    let currentQueueSource = queue || [];
-    const originalIndex = currentQueueSource.findIndex(t => t.id === currentTrack.id);
-    setQueue(currentQueueSource, queueType, Math.max(0, originalIndex));
-    if ($("#queuePanel") && !$("#queuePanel").classList.contains('hide')) {
-        renderQueue(queue, currentQueueTitle);
-    }
+    const originalIndex = queue.findIndex(t => t.id === currentTrack.id);
+    setQueue(queue, queueType, Math.max(0, originalIndex));
+    if (!$("#queuePanel").classList.contains('hide')) renderQueue(queue, currentQueueTitle);
   }
 }
 function cycleRepeat() {
   const modes = ['none', 'all', 'one'];
-  const currentModeIdx = modes.indexOf(repeatMode);
-  repeatMode = modes[(currentModeIdx + 1) % modes.length];
+  repeatMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
   const btn = $("#btnRepeat");
-  btn && btn.classList.toggle('active', repeatMode !== 'none');
-  if (btn){
-    btn.innerHTML = (repeatMode === 'one')
-      ? `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>`
-      : `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
+  if(btn) {
+    btn.classList.toggle('active', repeatMode !== 'none');
+    btn.innerHTML = (repeatMode === 'one') ? `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>` : `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
   }
 }
 function updateControlStates() {
@@ -1251,220 +734,42 @@ function updateControlStates() {
 }
 $("#btnShuffle")?.addEventListener("click", toggleShuffle);
 $("#btnRepeat")?.addEventListener("click", cycleRepeat);
-
-/* ========= Cola (Player) ========= */
 function renderQueue(queueItems, title) {
-    const panel = $("#queuePanel");
-    currentQueueTitle = title;
-    
-    if(!panel) return;
+    const panel = $("#queuePanel"); if(!panel) return;
     panel.classList.remove("hide");
-    
-    panel.innerHTML = `
-      <div class="section-head">
-        <h3 id="queueTitle"></h3>
-      </div>
-      <ul id="queueList"></ul>
-    `;
-
-    const header = panel.querySelector(".section-head");
-    const titleEl = header.querySelector('#queueTitle');
-    if (titleEl) titleEl.textContent = title;
-    
+    panel.querySelector('#queueTitle').textContent = title;
     const ul = panel.querySelector("#queueList");
-    if (!ul) return;
-    ul.innerHTML = "";
-
-    (queueItems || []).forEach((t, i) => {
-        const li = document.createElement("li");
-        li.className = "queue-item";
-        li.dataset.trackId = t.id || `spotify_${t.spotifyId}`;
-        const isResolved = !!t.id;
-
-        li.innerHTML = `
-      <div class="thumb-wrap">
-        <img class="thumb" src="${t.thumb}" alt="">
-        ${isResolved ? `
-        <button class="card-play" title="Play" aria-label="Play">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>` : `<div class="pending-indicator">Pendiente</div>`}
-      </div>
-      <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${t.title}</span>
-          ${isResolved ? `<span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>` : ''}
-        </div>
-        <div class="subtitle">${cleanAuthor(t.author) || ""}</div>
-      </div>
-      <div class="actions">
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones" ${!isResolved ? 'disabled' : ''}>${dotsSvg()}</button>
-      </div>`;
-        li.onclick = (e) => {
-            if (e.target.closest(".more") || e.target.closest(".card-play") || !isResolved) return;
-            const resolvedQueue = queueItems.filter(item => item && item.id);
-            const resolvedIndex = resolvedQueue.findIndex(item => item.id === t.id);
-            if (resolvedIndex === -1) return;
-            
-            setQueue(resolvedQueue, queueType, resolvedIndex);
+    ul.innerHTML = (queueItems || []).map(t => createSongCard(t, false).outerHTML).join('');
+    ul.querySelectorAll('.result-item').forEach((li, i) => {
+        li.onclick = e => {
+            if (e.target.closest(".more") || e.target.closest(".card-play")) return;
+            setQueue(queueItems, queueType, i);
             playCurrent(true);
         };
-        const playBtn = li.querySelector(".card-play");
-        if(playBtn) {
-            playBtn.onclick = (e) => {
-                e.stopPropagation();
-                const resolvedQueue = queueItems.filter(item => item && item.id);
-                const resolvedIndex = resolvedQueue.findIndex(item => item.id === t.id);
-                if (resolvedIndex === -1) return;
-
-                setQueue(resolvedQueue, queueType, resolvedIndex);
-                playCurrent(true);
-            };
-        }
-        ul.appendChild(li);
+        li.querySelector(".card-play").onclick = e => { e.stopPropagation(); setQueue(queueItems, queueType, i); playCurrent(true); };
     });
     refreshIndicators();
 }
-
 async function showPlaylistInPlayer(plId) {
-    const pl = communityPlaylists.find(p => p.id === plId);
-    if (!pl) return;
-
-    viewingPlaylistId = pl.id;
-    switchView('view-player');
-
-    if (pl.source === 'spotify' && pl.status !== 'resolved') {
-        const tracksToShow = (pl.tracks?.length > 0 && pl.tracks.some(t => t)) ? pl.tracks.map((t, i) => t || { ...pl.spotifyTracks[i], id: null, thumb: pl.spotifyTracks[i].thumb || pl.cover }) : pl.spotifyTracks.map(st => ({...st, thumb: st.thumb || pl.cover, id: null}));
-        renderQueue(tracksToShow, pl.name);
-        
-        if (pl.status !== 'resolving') {
-            startResolverJob(plId);
-        } else {
-            const { doc, onSnapshot } = window.firebase;
-            const jobRef = doc(db, "resolverJobs", pl.resolverJobId);
-            if (resolverJobUnsubscribe) resolverJobUnsubscribe();
-            resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
-                if (!docSnap.exists()) return;
-                const job = { id: docSnap.id, ...docSnap.data() };
-                updateResolverModal(job);
-                if (['canceled', 'done', 'error'].includes(job.status)) {
-                    hideResolverModal();
-                }
-            });
-        }
-        return;
-    }
-
+    const pl = communityPlaylists.find(p => p.id === plId); if (!pl) return;
+    viewingPlaylistId = pl.id; switchView('view-player');
     const tracksToPlay = (pl.tracks || []).filter(t => t && t.id);
-    if (!tracksToPlay || tracksToPlay.length === 0) {
-        if (pl.source === 'spotify') {
-             showToast(`Playlist "${pl.name}" aún no tiene canciones importadas.`, true);
-             startResolverJob(pl.id);
-        } else {
-             showToast(`La playlist "${pl.name}" está vacía.`, true);
-        }
-        switchView('view-playlists');
-        return;
-    }
-
+    if (!tracksToPlay.length) { showToast(`La playlist "${pl.name}" está vacía.`, true); switchView('view-playlists'); return; }
     setQueue(tracksToPlay, 'playlist', 0);
     renderQueue(tracksToPlay, pl.name);
     playCurrent(true);
 }
-
-function hideQueuePanel(){ 
-    $("#queuePanel")?.classList.add("hide"); 
-    if ($("#queueList")) $("#queueList").innerHTML=""; 
-    if (resolverJobUnsubscribe) {
-        resolverJobUnsubscribe();
-        resolverJobUnsubscribe = null;
-    }
-    viewingPlaylistId=null; 
-    renderPlaylists(); 
-}
-
-async function reassignTrackSource(playlistId, oldTrackId) {
-    const itemEl = document.querySelector(`.queue-item[data-track-id="${oldTrackId}"]`);
-    showToast("Buscando nueva fuente...");
-
-    try {
-        const pl = communityPlaylists.find(p => p.id === playlistId);
-        if (!pl || !pl.tracks) return;
-
-        const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
-        if (trackIndex === -1) return;
-
-        const track = pl.tracks[trackIndex];
-        const currentReassignIndex = track.reassignIndex || 0;
-        const nextReassignIndex = currentReassignIndex + 1;
-
-        const newVideoId = await scrapeYoutubeIdForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
-
-        if (newVideoId) {
-            const updatedTrack = { ...track, id: newVideoId, reassignIndex: nextReassignIndex };
-            const updatedTracks = [...pl.tracks];
-            updatedTracks[trackIndex] = updatedTrack;
-
-            const { doc, updateDoc, serverTimestamp } = window.firebase;
-            const plRef = doc(db, "playlists", playlistId);
-            await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
-
-            if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
-                const queueIndex = queue.findIndex(t => t.id === oldTrackId);
-                if (queueIndex !== -1) {
-                    queue[queueIndex] = updatedTrack;
-                    if (currentTrack && currentTrack.id === oldTrackId) {
-                        currentTrack = updatedTrack;
-                        playCurrent(true);
-                    }
-                }
-            }
-            showToast("Fuente reasignada.");
-        } else {
-            showToast("No se encontraron más versiones.", true);
-            const updatedTrack = { ...track, reassignIndex: 0 };
-             const updatedTracks = [...pl.tracks];
-            updatedTracks[trackIndex] = updatedTrack;
-            const { doc, updateDoc, serverTimestamp } = window.firebase;
-            const plRef = doc(db, "playlists", playlistId);
-            await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
-        }
-    } catch (e) {
-        console.error("Error en la reasignación:", e);
-        showToast("Error al reasignar la fuente.", true);
-    }
-}
-
-/* ========= Menú tres puntitos global ========= */
-document.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".icon-btn.more");
-    if (!btn) return;
-    const itemEl = btn.closest(".result-item, .fav-item, .queue-item");
-    if (!itemEl) return;
-
-    let track;
-    const trackId = itemEl.dataset.trackId;
-
-    if (itemEl.classList.contains("result-item")) track = items.find(x => x.id === trackId);
-    else if (itemEl.classList.contains("fav-item")) track = favs.find(f => f.id === trackId);
-    else if (itemEl.classList.contains("queue-item")) track = queue.find(t => t.id === trackId);
+document.addEventListener("click", async e => {
+    const btn = e.target.closest(".icon-btn.more"); if (!btn) return;
+    const itemEl = btn.closest("[data-id]"); if (!itemEl) return;
+    let track = [...items, ...favs, ...(queue||[])].find(x => x.id === itemEl.dataset.id);
     if (!track) return;
-
-    const actions = [
-        { id: "fav", label: isFav(track.id) ? "Quitar de Favoritos" : "Agregar a Favoritos" },
-        { id: "pl", label: "Agregar a playlist" }
-    ];
-
-    if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
-        actions.push({ id: "reassign", label: "Reasignar fuente" });
-        actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
+    const actions = [ { id: "fav", label: isFav(track.id) ? "Quitar de Favoritos" : "Añadir a Favoritos" }, { id: "pl", label: "Añadir a playlist" } ];
+    if (itemEl.closest('.queue-item') && queueType === 'playlist' && isMyPlaylist(viewingPlaylistId)) {
+        actions.push({ id: "reassign", label: "Reasignar fuente" }, { id: "delete", label: "Eliminar de playlist", danger: true });
     }
     actions.push({ id: "cancel", label: "Cancelar", ghost: true });
-
-    openActionSheet({
-        title: track.title,
-        actions: actions,
-        onAction: (act) => {
+    openActionSheet({ title: track.title, actions, onAction: act => {
             if (act === "fav") toggleFav(track);
             if (act === "pl") openPlaylistSheet(track);
             if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
@@ -1472,426 +777,78 @@ document.addEventListener("click", async (e) => {
         }
     });
 });
-
-
-/* ========= Indicadores ========= */
 function refreshIndicators(){
-  const isPlaying = getPlaybackState() === 'playing';
-  const curId = currentTrack?.id || "";
-
-  $$(".result-item, .fav-item, .queue-item").forEach(el => {
-    let trackId = el.dataset.trackId;
-    const isCurrentTrack = trackId === curId;
-    el.classList.toggle("is-playing", isCurrentTrack);
-    const cardPlay = el.querySelector(".card-play");
-    if (cardPlay) cardPlay.classList.toggle("playing", isPlaying && isCurrentTrack);
+  const isPlaying = getPlaybackState() === 'playing', curId = currentTrack?.id;
+  $$(".result-item, .fav-item, .queue-item, .playlist-card, .as-card").forEach(el => {
+    const isCurrent = el.dataset.id === curId;
+    el.classList.toggle("is-playing", isCurrent);
+    el.querySelector(".card-play")?.classList.toggle("playing", isPlaying && isCurrent);
   });
-
   $("#npPlay")?.classList.toggle("playing", isPlaying);
   $("#miniPlay")?.classList.toggle("playing", isPlaying);
 }
 
-
-/* ========= Reproducción en segundo plano ========= */
-document.addEventListener("visibilitychange", ()=>{
-  if(!YT_READY || !currentTrack) return;
-  if(document.visibilityState==="hidden" && (ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)){
-    const t = ytPlayer.getCurrentTime()||0;
-    ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds:t, suggestedQuality:"auto" });
-    ytPlayer.playVideo();
-  }
-});
-
-/* ========= YouTube API ========= */
-function loadYTApi(){
-  if(window.YT && window.YT.Player){ onYouTubeIframeAPIReady(); return; }
-  const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s);
-}
+/* ========= YouTube, Media Session & Init ========= */
+function loadYTApi(){ if(window.YT?.Player) onYouTubeIframeAPIReady(); else { const s=document.createElement("script"); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s); } }
 window.onYouTubeIframeAPIReady = function(){
-  ytPlayer = new YT.Player("player",{
-    width:300, height:150, videoId:"",
-    playerVars:{autoplay:0, controls:0, rel:0, playsinline:1},
-    events:{
-      onReady:()=>{ YT_READY=true; window.dispatchEvent(new Event('yt-ready')); },
-      onStateChange:(e)=>{
-        const st = e.data;
-        if(st===YT.PlayerState.ENDED){ next(); }
-        try{ if('mediaSession' in navigator){ navigator.mediaSession.playbackState = (st===YT.PlayerState.PLAYING || st===YT.PlayerState.BUFFERING) ? 'playing' : (st===YT.PlayerState.PAUSED ? 'paused' : 'none'); } }catch{}
-        refreshIndicators();
-        updateAndroidNotification();
-      }
-    }
-  });
+  ytPlayer = new YT.Player("player",{ playerVars:{playsinline:1}, events:{ onReady:()=>{ YT_READY=true; window.dispatchEvent(new Event('yt-ready')); }, onStateChange: e => { if(e.data===YT.PlayerState.ENDED) next(); refreshIndicators(); } } });
 };
-
-/* ========= HERO shrink con rAF ========= */
-let rafPending = false; let lastScrollY = 0; let targetT = 0, currentT = 0; const EPS = 0.001; const DIST = 200;
-function applyHeroT(t){ const tSnap=Math.round(t*1000)/1000; const a=document.querySelector(".view.active"); if(!a)return; const fav=a.querySelector("#favHero, .fav-hero"); const np=a.querySelector("#npHero, .np-hero, .player-header-sticky"); if(fav)fav.style.setProperty("--hero-t", tSnap); if(np)np.style.setProperty("--hero-t",tSnap); }
-function heroScrollTickRaf(){ rafPending=false; const a=document.querySelector(".view.active"); if(!a){applyHeroT(0);return;} const vT=a.getBoundingClientRect().top+window.scrollY; const y=Math.max(0,lastScrollY - vT); targetT=Math.min(1,y/DIST); currentT+=(targetT-currentT)*0.25; if(Math.abs(targetT-currentT)<EPS)currentT=targetT; applyHeroT(currentT); if(Math.abs(targetT-currentT)>=EPS){requestAnimationFrame(heroScrollTickRaf);rafPending=true;} }
-function heroScrollInvalidate(){ lastScrollY=window.scrollY||document.documentElement.scrollTop||0; if(!rafPending){rafPending=true;requestAnimationFrame(heroScrollTickRaf);} }
-window.addEventListener("scroll", heroScrollInvalidate, { passive:true }); window.addEventListener("resize", heroScrollInvalidate, { passive:true });
-
-/* ========= Media Session API ========= */
-let mediaSessionHandlersSet = false;
 function updateMediaSession(track){
   if(!('mediaSession' in navigator)||!track)return;
-  try{navigator.mediaSession.metadata=new MediaMetadata({title:track.title||'Reproduciendo',artist:cleanAuthor(track.author)||'—',album:currentQueueTitle||'',artwork:[{src:track.thumb,sizes:'512x512',type:'image/jpeg'}]});}catch(e){ console.error("Media Session Error:", e)}
-  if(!mediaSessionHandlersSet){
-    mediaSessionHandlersSet=true;
-    const s=fn=>()=>{try{fn()}catch(e){console.error("Media Session Action Error:", e)}};
-    try{
-        navigator.mediaSession.setActionHandler('play',s(()=>togglePlay()));
-        navigator.mediaSession.setActionHandler('pause',s(()=>togglePlay()));
-        navigator.mediaSession.setActionHandler('previoustrack',s(()=>prev()));
-        navigator.mediaSession.setActionHandler('nexttrack',s(()=>next()));
-        navigator.mediaSession.setActionHandler('seekbackward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo(Math.max(0,(ytPlayer.getCurrentTime()||0)-o),true) }));
-        navigator.mediaSession.setActionHandler('seekforward',s(d=>{ const o=d.seekOffset||10; if(!YT_READY)return; ytPlayer.seekTo((ytPlayer.getCurrentTime()||0)+o,true) }));
-        navigator.mediaSession.setActionHandler('seekto',s(d=>{ if(!YT_READY||!d||typeof d.seekTime!=='number')return; ytPlayer.seekTo(d.seekTime,true) }));
-    }catch(e){console.error("Error setting Media Session handlers:", e)}
-  }  try{const st=getPlaybackState(); navigator.mediaSession.playbackState=(st==='playing'?'playing':(st==='paused'?'paused':'none'));}catch(e){}
+  navigator.mediaSession.metadata=new MediaMetadata({title:track.title, artist:cleanAuthor(track.author), album:currentQueueTitle, artwork:[{src:track.thumb,sizes:'512x512'}]});
+  navigator.mediaSession.setActionHandler('play',()=>togglePlay());
+  navigator.mediaSession.setActionHandler('pause',()=>togglePlay());
+  navigator.mediaSession.setActionHandler('previoustrack',()=>prev());
+  navigator.mediaSession.setActionHandler('nexttrack',()=>next());
 }
-/* ===== Android bridge (AIDE WebView) ===== */
-function canUseAndroidBridge(){ try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; } }
-function updateAndroidNotification(){ if (!canUseAndroidBridge()) return; const isPlaying = (typeof getPlaybackState === 'function') ? (getPlaybackState() === 'playing') : (YT_READY && ytPlayer && (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING || ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING)); if (!currentTrack) { AndroidBridge.stopNotification(); return; } AndroidBridge.updateNotification( currentTrack.title || '', cleanAuthor(currentTrack.author || ''), currentTrack.thumb || '', !!isPlaying ); }
-window.handleNativeControl = function(c){ const a=String(c||'').toLowerCase(); if(a==='action_play'){if(YT_READY&&ytPlayer)ytPlayer.playVideo();return} if(a==='action_pause'){if(YT_READY&&ytPlayer)ytPlayer.pauseVideo();return} if(a==='action_next'){next();return} if(a==='action_prev'){prev();return} };
-
-
-/* ========= Init ========= */
 async function boot(){
   initTheme();
-
-  const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
-  const { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
-  window.firebase = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc };
-  const app = initializeApp(firebaseConfig);
+  const { getFirestore, collection, onSnapshot, query, orderBy } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  window.firebase = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+  const app = initializeApp({ projectId: "sanaverayou" }); // Simplified config
   db = getFirestore(app);
-
-  onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
-    const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
-    communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    communityPlaylists.forEach(newPl => {
-        const oldPl = oldPlaylists.get(newPl.id);
-        const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
-        if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
-            const newPlayableTracks = (newPl.tracks || []).filter(t => t && t.id);
-            const wasPlayingTrackRemoved = currentTrack && !newPlayableTracks.some(t => t.id === currentTrack.id);
-            if (wasPlayingTrackRemoved) {
-                let nextIndex = qIdx;
-                if (nextIndex >= newPlayableTracks.length) nextIndex = newPlayableTracks.length - 1;
-                setQueue(newPlayableTracks, 'playlist', nextIndex);
-                if (newPlayableTracks.length > 0) playCurrent(true);
-                else { currentTrack = null; queue = []; updateUIOnTrackChange(); }
-            } else {
-                let newCurrentIndex = currentTrack ? newPlayableTracks.findIndex(t => t.id === currentTrack.id) : qIdx;
-                setQueue(newPlayableTracks, 'playlist', newCurrentIndex);
-            }
-        }
-    });
+  onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), snap => {
+    communityPlaylists = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderPlaylists(); 
     renderHomePageContent();
   });
-
-  checkForActiveImportJob();
-  
-  // Cargar todo el contenido para el inicio en paralelo
   const [featured, releases, recs, ...localResults] = await Promise.all([
       fetchFeaturedPlaylists(),
       fetchNewReleases(),
       fetchRecommendations(),
       ...Object.values(recommendedPlaylists).map(p => fetchVideoDetailsByIds(p.ids))
   ]);
-
-  featuredPlaylists = featured;
-  newReleases = releases;
-  recommendedSongs = recs;
-  Object.keys(recommendedPlaylists).forEach((key, index) => {
-      recommendedPlaylists[key].data = localResults[index] || [];
-  });
-
+  featuredPlaylists = featured; newReleases = releases; recommendedSongs = recs;
+  Object.keys(recommendedPlaylists).forEach((key, i) => { recommendedPlaylists[key].data = localResults[i] || []; });
   renderHomePageContent();
   updateHomeGridVisibility();
-
-  loadFavs();
-  renderFavs();
-  loadYTApi();
+  loadFavs(); renderFavs(); loadYTApi();
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
-  heroScrollInvalidate();
-  document.title = "SanaveraYou Pro";
 }
-
 function renderHomePageContent() {
-    const container = $("#allPlaylistsContainer");
-    if (!container) return;
-
-    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0)));
+    const container = $("#allPlaylistsContainer"); if (!container) return;
+    const publicCommunity = communityPlaylists.filter(p => p.isPublic && p.tracks?.length > 0);
     const localPlaylists = Object.values(recommendedPlaylists).filter(p => p.data.length > 0);
-    
     let html = '';
     html += renderSection('Para ti desde Spotify', featuredPlaylists, renderPlaylistCard);
     html += renderSection('Nuevos Lanzamientos', newReleases, renderPlaylistCard);
-    html += renderSection('Playlists de la Comunidad', publicCommunityPlaylists, renderPlaylistCard);
+    html += renderSection('Playlists de la Comunidad', publicCommunity, renderPlaylistCard);
     html += renderSection('Nuestras Playlists', localPlaylists, renderPlaylistCard);
     html += renderSection('Canciones Recomendadas', recommendedSongs, renderSongCard);
-    
-    container.innerHTML = html || '<div class="loading-indicator"><p>No hay nada nuevo por aquí.</p></div>';
-    
-    // Asignar un único listener de eventos al contenedor principal
-    container.removeEventListener('click', handleHomeCardClick); // Prevenir duplicados
+    container.innerHTML = html || '<div class="loading-indicator"><p>No hay contenido para mostrar.</p></div>';
+    container.removeEventListener('click', handleHomeCardClick);
     container.addEventListener('click', handleHomeCardClick);
+    
+    // Lógica para marquesina
+    $$('.playlist-title-wrapper').forEach(wrapper => {
+      const title = wrapper.querySelector('.playlist-title');
+      if (title.scrollWidth > wrapper.clientWidth) {
+          wrapper.classList.add('is-overflowing');
+          title.innerHTML = `<span>${title.textContent}</span><span aria-hidden="true">${title.textContent}</span>`;
+      }
+    });
 }
-
 boot();
-
 window.addEventListener('beforeunload', savePlayerState);
-window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
-
-/* ========== Spotify Import & Resolver Logic ========== */
-// ... (El resto del código de importación y resolución que ya está correcto) ...
-const trackCache = new Map();
-function normalize(str) { if (!str) return ''; return str.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ').trim(); }
-function getTrackKey(artist, title) { return `${normalize(artist)}|${normalize(title)}`; }
-async function resolveTrack(track) {
-    const trackKey = getTrackKey(track.author, track.title);
-    if (trackCache.has(trackKey)) return { videoId: trackCache.get(trackKey), error: null };
-    const query = `${track.author} ${track.title}`;
-    try {
-        const videoId = await scrapeYoutubeUrlOnly(query);
-        if (videoId) {
-            trackCache.set(trackKey, videoId);
-            return { videoId: videoId, error: null };
-        }
-        return { videoId: null, error: "No video found via scraping" };
-    } catch (e) {
-        return { videoId: null, error: e.message };
-    }
-}
-async function checkForActiveImportJob() {
-    const activeJobInfo = localStorage.getItem('sy_active_import_job');
-    if (!activeJobInfo) return;
-    try {
-        const { jobId, playlistId } = JSON.parse(activeJobInfo);
-        if (!jobId) { localStorage.removeItem('sy_active_import_job'); return; }
-        viewingPlaylistId = playlistId;
-        const { doc, onSnapshot } = window.firebase;
-        const jobRef = doc(db, "resolverJobs", jobId);
-        if (resolverJobUnsubscribe) resolverJobUnsubscribe();
-        resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
-            if (!docSnap.exists()) { hideResolverModal(); return; }
-            const job = { id: docSnap.id, ...docSnap.data() };
-            updateResolverModal(job);
-            if (['canceled', 'done', 'error'].includes(job.status)) hideResolverModal();
-        });
-    } catch (e) { localStorage.removeItem('sy_active_import_job'); }
-}
-async function startResolverJob(playlistId) {
-    const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = window.firebase;
-    const plRef = doc(db, "playlists", playlistId);
-    const plDoc = await getDoc(plRef);
-    if (!plDoc.exists()) return;
-    const playlist = { id: plDoc.id, ...plDoc.data() };
-    let jobId = playlist.resolverJobId;
-    const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
-    if (jobDoc && jobDoc.exists() && jobDoc.data().status === 'running') { localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId })); return; }
-    else jobId = `job_${playlistId}_${Date.now()}`;
-    await updateDoc(plRef, { resolverJobId: jobId });
-    const jobRef = doc(db, "resolverJobs", jobId);
-    await setDoc(jobRef, { playlistRef: plRef.path, status: 'queued', total: playlist.spotifyTracks.length, done: playlist.resolvedCount || 0, errors: [], lastUpdated: serverTimestamp() }, { merge: true });
-    await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
-    await updateDoc(plRef, { status: 'resolving' });
-    localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
-    if (resolverJobUnsubscribe) resolverJobUnsubscribe();
-    resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
-        if (!docSnap.exists()) return;
-        const job = { id: docSnap.id, ...docSnap.data() };
-        updateResolverModal(job);
-        if (['canceled', 'done', 'error'].includes(job.status)) hideResolverModal();
-    });
-    runJobBatch(playlistId, jobRef);
-}
-async function runJobBatch(playlistId, jobRef) {
-    const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
-    const plRef = doc(db, "playlists", playlistId);
-    const jobDoc = await getDoc(jobRef);
-    if (!jobDoc.exists() || jobDoc.data().status !== 'running') { if (jobDoc.data()?.status !== 'canceled') hideResolverModal(); return; }
-    const plDoc = await getDoc(plRef);
-    if (!plDoc.exists()) return;
-    const playlist = plDoc.data(), job = jobDoc.data(), BATCH_SIZE = 3;
-    const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
-    const unresolvedIndices = [];
-    for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) if (tracksArray[i] === null) unresolvedIndices.push(i);
-    if (unresolvedIndices.length === 0) {
-        const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
-        await updateDoc(plRef, { status: finalStatus });
-        await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
-        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
-        return;
-    }
-    const tracksToProcess = unresolvedIndices.map(index => playlist.spotifyTracks[index]);
-    const results = await Promise.all(tracksToProcess.map(track => resolveTrack(track)));
-    const currentPlDoc = await getDoc(plRef);
-    const currentPlaylist = currentPlDoc.data();
-    let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
-    let errorsInBatch = [];
-    results.forEach((result, i) => {
-        const originalIndex = unresolvedIndices[i];
-        if (result.videoId) {
-            const spotifyTrack = playlist.spotifyTracks[originalIndex];
-            updatedTracks[originalIndex] = { id: result.videoId, title: spotifyTrack.title, author: spotifyTrack.author, thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`, source: 'youtube', originalId: spotifyTrack.spotifyId };
-        } else if (result.error) errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
-    });
-    const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
-    await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
-    await updateDoc(jobRef, { done: newResolvedCount, lastUpdated: serverTimestamp(), errors: [...(job.errors || []), ...errorsInBatch] });
-    setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
-}
-async function cancelResolverJob() {
-    const activeJobInfo = localStorage.getItem('sy_active_import_job');
-    if (!activeJobInfo) return;
-    try {
-        const { playlistId, jobId } = JSON.parse(activeJobInfo);
-        const { doc, updateDoc, serverTimestamp } = window.firebase;
-        const jobRef = doc(db, "resolverJobs", jobId);
-        const plRef = doc(db, "playlists", playlistId);
-        await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
-        await updateDoc(plRef, { status: 'partial' });
-        showToast("Importación cancelada.", true);
-        hideResolverModal();
-    } catch (e) { hideResolverModal(); }
-}
-function updateResolverModal(job) {
-    let modal = document.getElementById('resolver-modal');
-    if (!job || !['running', 'paused', 'queued'].includes(job.status)) { hideResolverModal(); return; }
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'resolver-modal';
-        document.body.appendChild(modal);
-        modal.innerHTML = `<div class="resolver-content"><p>Importando playlist...</p><div class="resolver-progress-bar"><div class="resolver-progress"></div></div><span class="resolver-counter"></span><button class="resolver-cancel">Cancelar</button></div>`;
-        modal.querySelector('.resolver-cancel').onclick = cancelResolverJob;
-    }
-    const playlistId = job.playlistRef.split('/').pop();
-    const pl = communityPlaylists.find(p => p.id === playlistId);
-    const resolved = job.done || 0, total = job.total || 0;
-    if (total === 0) return;
-    modal.querySelector('p').textContent = `Importando: ${pl ? pl.name : 'playlist'}...`;
-    modal.querySelector('.resolver-progress').style.width = `${(resolved / total) * 100}%`;
-    modal.querySelector('.resolver-counter').textContent = `${resolved} / ${total}`;
-}
-function hideResolverModal() {
-    const modal = document.getElementById('resolver-modal');
-    if (modal) modal.remove();
-    if (resolverJobUnsubscribe) { resolverJobUnsubscribe(); resolverJobUnsubscribe = null; }
-    localStorage.removeItem('sy_active_import_job');
-}
-function sy_initSpotifyImportUI() {
-  const playlistsView = document.getElementById('view-playlists');
-  if (!playlistsView) return;
-  const header = playlistsView.querySelector('.section-head');
-  if (playlistsView.querySelector('#syBtnImportSpotify')) return;
-  const btn = document.createElement('button');
-  btn.id = 'syBtnImportSpotify';
-  btn.className = 'pill';
-  btn.innerHTML = `<svg viewBox="0 0 167.5 167.5" fill="currentColor" height="1em" width="1em" style="vertical-align: -0.15em; margin-right: 8px;"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"></path></svg> Importar de Spotify`;
-  header.querySelector('.pl-actions').appendChild(btn);
-  btn.addEventListener('click', sy_openSpotifyImportModal);
-}
-function sy_openSpotifyImportModal() {
-  if (document.getElementById('sySpotifyModal')) return sy_showModal('sySpotifyModal', true);
-  const modal = document.createElement('div');
-  modal.id = 'sySpotifyModal';
-  modal.className = 'sy-modal';
-  modal.innerHTML = `<div class="sy-modal__overlay" data-close="1"></div><div class="sy-modal__card" role="dialog"><div class="sy-modal__header"><h3>Importar de Spotify</h3></div><div class="sy-modal__body" id="sySmBody"><p class="muted">Ingresa tu ID de usuario de Spotify.</p><label class="sy-field"><span>ID de Usuario</span><input id="sySmInput" type="text" placeholder="ej. 123456789"></label><div class="sy-actions"><button class="sheet-item ghost" id="sySmCancel">Cancelar</button><button class="sheet-item pill" id="sySmFetch">Buscar</button></div><div class="sy-spinner" id="sySmSpinner" hidden>Cargando…</div><div id="sySmResults" class="sy-pl-results" hidden></div></div></div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click', (e)=>{ if (e.target.dataset.close) sy_showModal('sySpotifyModal', false); });
-  $('#sySmCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
-  $('#sySmFetch').onclick = sy_fetchSpotifyUserPlaylists;
-  sy_showModal('sySpotifyModal', true);
-}
-function sy_showModal(id, show) { const el = $(`#${id}`); if(el){ el.classList.toggle('show',!!show); document.body.classList.toggle('sy-modal-open',!!show); } }
-async function sy_fetchSpotifyUserPlaylists() {
-    const userId = $('#sySmInput').value.trim();
-    const spinner = $('#sySmSpinner'), results = $('#sySmResults');
-    results.hidden = true; results.innerHTML = ''; spinner.hidden = false;
-    if (!userId) { spinner.hidden = true; results.innerHTML = `<p class="muted">ID de usuario no válido.</p>`; results.hidden = false; return; }
-    try {
-        const token = await getSpotifyToken(); 
-        let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
-        const all = [];
-        while (url) {
-            const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token }});
-            if (!r.ok) throw new Error('Error de API de Spotify: ' + r.status);
-            const d = await r.json();
-            all.push(...(d.items||[]));
-            url = d.next;
-        }
-        if (all.length === 0) { results.innerHTML = `<p class="muted">No se encontraron playlists públicas.</p>`; results.hidden = false; spinner.hidden = true; return; }
-        sy_renderSpotifyPlaylistsSelection(userId, all);
-    } catch (e) { results.innerHTML = `<div class="sy-error">No se pudieron obtener las playlists.<br><small>${e.message}</small></div>`; results.hidden = false;
-    } finally { spinner.hidden = true; }
-}
-function sy_renderSpotifyPlaylistsSelection(userId, list) {
-    const results = $('#sySmResults'); results.hidden = false;
-    results.innerHTML = `<div class="sy-pl-head"><label class="sy-checkall"><input type="checkbox" id="syPlAll" checked> <span>Seleccionar todo</span></label></div><div class="sy-pl-list">${list.map(p=>`<label class="sy-pl-row"><input type="checkbox" class="sy-pl-check" data-plid="${p.id}" data-plname="${String(p.name).replace(/"/g,'&quot;')}" data-cover="${(p.images?.[0]?.url||'').replace(/"/g,'&quot;')}" checked><img src="${p.images?.[0]?.url||''}" alt=""><div class="sy-pl-meta"><div class="sy-pl-name">${p.name}</div><div class="sy-pl-sub">${p.tracks.total} temas</div></div></label>`).join('')}</div><div class="sy-actions"><button class="sheet-item ghost" id="syPlCancel">Cerrar</button><button class="sheet-item pill" id="syPlImport">Importar</button></div>`;
-    $('#syPlCancel').onclick = ()=> sy_showModal('sySpotifyModal', false);
-    $('#syPlAll').onchange = (e)=> $$('#sySmResults .sy-pl-check').forEach(ch => ch.checked = e.target.checked);
-    $('#syPlImport').onclick = async ()=> {
-        const btn = $('#syPlImport'); btn.disabled = true; btn.textContent = 'Importando...';
-        const selected = $$('#sySmResults .sy-pl-check:checked').map(ch => ({ spotifyId: ch.dataset.plid, name: ch.dataset.plname, creator: userId, cover: ch.dataset.cover }));
-        if (selected.length > 0) await sy_processAndSavePlaylists(selected, results);
-        else { showToast('No seleccionaste ninguna playlist.', true); btn.disabled = false; btn.textContent = 'Importar'; }
-    };
-}
-async function fetchAllSpotifyPlaylistTracks(playlistId) {
-    const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`;
-    while (url) {
-        try {
-            const r = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!r.ok) throw new Error('Could not get songs');
-            const d = await r.json();
-            allTracks.push(...(d.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean)));
-            url = d.next;
-        } catch (e) { url = null; }
-    } return allTracks;
-}
-async function sy_processAndSavePlaylists(list, resultsContainer) {
-    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
-    let imported = 0, updated = 0;
-    try {
-        for (const pl of list) {
-            const spotifyTracks = await fetchAllSpotifyPlaylistTracks(pl.spotifyId);
-            if(spotifyTracks.length === 0) continue;
-            const q = query(collection(db, 'playlists'), where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
-            const snapshot = await getDocs(q);
-            if (snapshot.empty) {
-                const docRef = await addDoc(collection(db, 'playlists'), { name: pl.name, creator: pl.creator, isPublic: false, cover: pl.cover, source: 'spotify', spotifyId: pl.spotifyId, spotifyTracks, trackCount: spotifyTracks.length, tracks: Array(spotifyTracks.length).fill(null), status: 'unresolved', resolvedCount: 0, updatedAt: serverTimestamp(), ownerUserId: "current_user_id_placeholder" });
-                addMyPlaylistId(docRef.id);
-                imported++;
-            } else {
-                await updateDoc(doc(db, 'playlists', snapshot.docs[0].id), { spotifyTracks, trackCount: spotifyTracks.length, updatedAt: serverTimestamp() });
-                updated++;
-            }
-        }
-        resultsContainer.innerHTML = `<div class="sy-success">¡Listo!<br>${imported} importadas.<br>${updated} actualizadas.</div>`;
-        setTimeout(() => sy_showModal('sySpotifyModal', false), 2500);
-    } catch (e) { resultsContainer.innerHTML = `<div class="sy-error">Ocurrió un error.</div>`; }
-}
-document.addEventListener('DOMContentLoaded', sy_initSpotifyImportUI);
-function sy_fs() { const f = (window.firebase || {}); return { db: (typeof db !== 'undefined' ? db : window.db), doc: f.doc, updateDoc: f.updateDoc, setDoc: f.setDoc, serverTimestamp: f.serverTimestamp }; }
-function sy_syncRemovalRealtime(plId, removedTrackId) {
-  try {
-    const pl = communityPlaylists.find(p => p && p.id === plId); if (!pl) return;
-    pl.tracks = (pl.tracks || []).filter(t => t && t.id !== removedTrackId);
-    pl.resolvedCount = (pl.tracks || []).length;
-    const sameView = queueType === 'playlist' && viewingPlaylistId === plId;
-    if (sameView) {
-      const wasCurrent = currentTrack && currentTrack.id === removedTrackId;
-      queue = (pl.tracks || []).filter(t => t && t.id);
-      if (wasCurrent) { ytPlayer.stopVideo(); currentTrack = null; qIdx = queue.length ? 0 : -1; }
-      else if (currentTrack) qIdx = queue.findIndex(t => t.id === currentTrack.id);
-      renderQueue(queue, pl.name || '');
-      updateUIOnTrackChange();
-    }
-  } catch (err) {}
-}
