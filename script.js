@@ -355,7 +355,6 @@ async function scrapeYoutubeUrlOnly(query) {
             return r.text();
         });
         
-        // Prioritize official music videos or similar content
         const priorityRegex = /watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i;
         const priorityMatch = html.match(priorityRegex);
         if (priorityMatch) return priorityMatch[1];
@@ -365,8 +364,8 @@ async function scrapeYoutubeUrlOnly(query) {
     });
 }
 
-// NUEVA FUNCIÓN: Obtiene el N-ésimo resultado de video de YouTube para reasignación
-async function scrapeYoutubeForNthResult(query, index = 0) {
+// MODIFICACIÓN: Función optimizada que solo devuelve el ID del video para la reasignación
+async function scrapeYoutubeIdForNthResult(query, index = 0) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
         const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
@@ -377,27 +376,9 @@ async function scrapeYoutubeForNthResult(query, index = 0) {
         const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]));
         if (!ids || ids.length <= index) {
             console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
-            return null; // Not enough results found
+            return null; // No se encontraron suficientes resultados
         }
-        
-        const targetId = ids[index];
-
-        const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${targetId}`)
-            .then(r => r.json());
-
-        if (meta.error) {
-            console.error(`Noembed failed for video ID ${targetId}:`, meta.error);
-            return null;
-        }
-
-        return {
-            id: targetId,
-            title: cleanTitle(meta.title || `Video ${targetId}`),
-            thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${targetId}/hqdefault.jpg`),
-            author: cleanAuthor(meta.author_name || "YouTube"),
-            source: 'youtube', 
-            type: 'youtube_video'
-        };
+        return ids[index]; // Devuelve solo el ID del video
     });
 }
 
@@ -681,12 +662,11 @@ function renderPlaylistCard(playlist) {
     };
     container.appendChild(card);
 
-    // MODIFICACIÓN: Lógica para marquesina en títulos largos
+    // Lógica para marquesina en títulos largos
     const titleWrapper = card.querySelector('.playlist-title-wrapper');
     const titleEl = titleWrapper.querySelector('.playlist-title');
-    if (titleEl && titleEl.scrollWidth > titleWrapper.clientWidth) {
+    if (titleEl.scrollWidth > titleWrapper.clientWidth) {
         titleWrapper.classList.add('is-overflowing');
-        // Se duplica el contenido para un efecto de bucle suave y continuo
         titleEl.innerHTML = `<span>${titleText}</span><span aria-hidden="true">${titleText}</span>`;
     }
 }
@@ -1430,36 +1410,42 @@ function hideQueuePanel(){
     renderPlaylists(); 
 }
 
-// MODIFICACIÓN: Lógica para Reasignar Fuente
+// MODIFICACIÓN: Lógica para Reasignar Fuente con indicador visual
 async function reassignTrackSource(playlistId, oldTrackId) {
-    showToast("Buscando nueva fuente...");
-    const pl = communityPlaylists.find(p => p.id === playlistId);
-    if (!pl || !pl.tracks) return;
+    const itemEl = document.querySelector(`.queue-item[data-track-id="${oldTrackId}"]`);
+    const subtitleEl = itemEl ? itemEl.querySelector('.subtitle') : null;
+    const originalSubtitle = subtitleEl ? subtitleEl.textContent : '';
 
-    const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
-    if (trackIndex === -1) return;
+    if (itemEl && subtitleEl) {
+        subtitleEl.textContent = 'Reasignando...';
+        itemEl.classList.add('is-reassigning');
+    } else {
+        showToast("Buscando nueva fuente...");
+    }
 
-    const track = pl.tracks[trackIndex];
-    const currentReassignIndex = track.reassignIndex || 0;
-    const nextReassignIndex = currentReassignIndex + 1;
+    try {
+        const pl = communityPlaylists.find(p => p.id === playlistId);
+        if (!pl || !pl.tracks) return;
 
-    const newTrackData = await scrapeYoutubeForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
+        const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
+        if (trackIndex === -1) return;
 
-    if (newTrackData) {
-        // Se encontró una nueva versión
-        const updatedTrack = {
-            ...track, // Conserva datos como originalId si existe
-            id: newTrackData.id,
-            title: newTrackData.title,
-            author: newTrackData.author,
-            thumb: newTrackData.thumb,
-            reassignIndex: nextReassignIndex
-        };
+        const track = pl.tracks[trackIndex];
+        const currentReassignIndex = track.reassignIndex || 0;
+        const nextReassignIndex = currentReassignIndex + 1;
 
-        const updatedTracks = [...pl.tracks];
-        updatedTracks[trackIndex] = updatedTrack;
+        const newVideoId = await scrapeYoutubeIdForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
 
-        try {
+        if (newVideoId) {
+            const updatedTrack = {
+                ...track,
+                id: newVideoId, // Solo se actualiza el ID del video
+                reassignIndex: nextReassignIndex
+            };
+
+            const updatedTracks = [...pl.tracks];
+            updatedTracks[trackIndex] = updatedTrack;
+
             const { doc, updateDoc, serverTimestamp } = window.firebase;
             const plRef = doc(db, "playlists", playlistId);
             await updateDoc(plRef, {
@@ -1467,29 +1453,34 @@ async function reassignTrackSource(playlistId, oldTrackId) {
                 updatedAt: serverTimestamp()
             });
 
-            // Actualizar la cola de reproducción actual si es la misma playlist
             if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
-                queue[qIdx] = updatedTrack;
-                currentTrack = updatedTrack;
-                playCurrent(true); // Reproducir la nueva versión inmediatamente
+                const queueIndex = queue.findIndex(t => t.id === oldTrackId);
+                if (queueIndex !== -1) {
+                    queue[queueIndex] = updatedTrack;
+                    // Si la canción reasignada es la actual, la reproducimos
+                    if (currentTrack && currentTrack.id === oldTrackId) {
+                        currentTrack = updatedTrack;
+                        playCurrent(true);
+                    }
+                }
             }
             showToast("Fuente reasignada. Reproduciendo nueva versión.");
-        } catch (e) {
-            console.error("Error al actualizar la canción en Firebase:", e);
-            showToast("Error al guardar la nueva fuente.", true);
-        }
-    } else {
-        // No se encontraron más versiones, reiniciar el contador
-        showToast("No se encontraron más versiones. Se reiniciará la búsqueda.", true);
-        const updatedTrack = { ...track, reassignIndex: 0 };
-        const updatedTracks = [...pl.tracks];
-        updatedTracks[trackIndex] = updatedTrack;
-        try {
+        } else {
+            showToast("No se encontraron más versiones. Se reiniciará la búsqueda.", true);
+            const updatedTrack = { ...track, reassignIndex: 0 };
+             const updatedTracks = [...pl.tracks];
+            updatedTracks[trackIndex] = updatedTrack;
             const { doc, updateDoc, serverTimestamp } = window.firebase;
             const plRef = doc(db, "playlists", playlistId);
             await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
-        } catch (e) {
-            console.error("Error al reiniciar el índice de reasignación:", e);
+        }
+    } catch (e) {
+        console.error("Error en la reasignación de fuente:", e);
+        showToast("Error al reasignar la fuente.", true);
+    } finally {
+        if (itemEl && subtitleEl) {
+            subtitleEl.textContent = originalSubtitle;
+            itemEl.classList.remove('is-reassigning');
         }
     }
 }
@@ -1522,7 +1513,6 @@ document.addEventListener("click", async (e) => {
     ];
 
     if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
-        // MODIFICACIÓN: Se añade la nueva opción al menú
         actions.push({ id: "reassign", label: "Reasignar fuente" });
         actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
     }
@@ -1538,7 +1528,6 @@ document.addEventListener("click", async (e) => {
             if (act === "delete") {
                 removeFromPlaylist(viewingPlaylistId, track.id);
             }
-            // MODIFICACIÓN: Se maneja la acción de reasignar
             if (act === "reassign") {
                 reassignTrackSource(viewingPlaylistId, track.id);
             }
