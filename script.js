@@ -58,14 +58,14 @@ let spotifyToken = { value: null, expires: 0 };
 const recommendedPlaylists = {
   p1: {
     ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
-    title: 'Melódicos en Inglés',
+    title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar',
     creator: 'Luis Sanavera',
     data: [],
     isRecommended: true
   },
   p2: {
     ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
-    title: 'Cumbia estilo Santafesino',
+    title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia',
     creator: 'Luis Sanavera',
     data: [],
     isRecommended: true
@@ -365,6 +365,42 @@ async function scrapeYoutubeUrlOnly(query) {
     });
 }
 
+// NUEVA FUNCIÓN: Obtiene el N-ésimo resultado de video de YouTube para reasignación
+async function scrapeYoutubeForNthResult(query, index = 0) {
+    return withRetry(async () => {
+        const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
+            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
+            return r.text();
+        });
+
+        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]));
+        if (!ids || ids.length <= index) {
+            console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
+            return null; // Not enough results found
+        }
+        
+        const targetId = ids[index];
+
+        const meta = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${targetId}`)
+            .then(r => r.json());
+
+        if (meta.error) {
+            console.error(`Noembed failed for video ID ${targetId}:`, meta.error);
+            return null;
+        }
+
+        return {
+            id: targetId,
+            title: cleanTitle(meta.title || `Video ${targetId}`),
+            thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${targetId}/hqdefault.jpg`),
+            author: cleanAuthor(meta.author_name || "YouTube"),
+            source: 'youtube', 
+            type: 'youtube_video'
+        };
+    });
+}
+
 
 // Función de scraping para el buscador principal (usa noembed)
 async function scrapeYoutube(query, limit = 20) {
@@ -621,12 +657,17 @@ function renderPlaylistCard(playlist) {
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
+    const titleText = playlist.title || playlist.name;
+
     card.innerHTML = `
         <div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
         <div class="playlist-meta">
-            <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
+            <div class="playlist-title-wrapper">
+                <h4 class="playlist-title">${titleText}</h4>
+            </div>
             <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
         </div>`;
+
     card.onclick = async () => {
         if (playlist.isRecommended) {
             setQueue(playlist.data, 'recommended', 0);
@@ -639,6 +680,15 @@ function renderPlaylistCard(playlist) {
         }
     };
     container.appendChild(card);
+
+    // MODIFICACIÓN: Lógica para marquesina en títulos largos
+    const titleWrapper = card.querySelector('.playlist-title-wrapper');
+    const titleEl = titleWrapper.querySelector('.playlist-title');
+    if (titleEl && titleEl.scrollWidth > titleWrapper.clientWidth) {
+        titleWrapper.classList.add('is-overflowing');
+        // Se duplica el contenido para un efecto de bucle suave y continuo
+        titleEl.innerHTML = `<span>${titleText}</span><span aria-hidden="true">${titleText}</span>`;
+    }
 }
 
 
@@ -805,8 +855,6 @@ async function savePlaylistCopy(originalPlaylist) {
         showToast("No se pudo guardar la copia.", true);
     }
 }
-
-
 function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
     if (!grid) return;
@@ -1382,6 +1430,71 @@ function hideQueuePanel(){
     renderPlaylists(); 
 }
 
+// MODIFICACIÓN: Lógica para Reasignar Fuente
+async function reassignTrackSource(playlistId, oldTrackId) {
+    showToast("Buscando nueva fuente...");
+    const pl = communityPlaylists.find(p => p.id === playlistId);
+    if (!pl || !pl.tracks) return;
+
+    const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
+    if (trackIndex === -1) return;
+
+    const track = pl.tracks[trackIndex];
+    const currentReassignIndex = track.reassignIndex || 0;
+    const nextReassignIndex = currentReassignIndex + 1;
+
+    const newTrackData = await scrapeYoutubeForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
+
+    if (newTrackData) {
+        // Se encontró una nueva versión
+        const updatedTrack = {
+            ...track, // Conserva datos como originalId si existe
+            id: newTrackData.id,
+            title: newTrackData.title,
+            author: newTrackData.author,
+            thumb: newTrackData.thumb,
+            reassignIndex: nextReassignIndex
+        };
+
+        const updatedTracks = [...pl.tracks];
+        updatedTracks[trackIndex] = updatedTrack;
+
+        try {
+            const { doc, updateDoc, serverTimestamp } = window.firebase;
+            const plRef = doc(db, "playlists", playlistId);
+            await updateDoc(plRef, {
+                tracks: updatedTracks,
+                updatedAt: serverTimestamp()
+            });
+
+            // Actualizar la cola de reproducción actual si es la misma playlist
+            if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
+                queue[qIdx] = updatedTrack;
+                currentTrack = updatedTrack;
+                playCurrent(true); // Reproducir la nueva versión inmediatamente
+            }
+            showToast("Fuente reasignada. Reproduciendo nueva versión.");
+        } catch (e) {
+            console.error("Error al actualizar la canción en Firebase:", e);
+            showToast("Error al guardar la nueva fuente.", true);
+        }
+    } else {
+        // No se encontraron más versiones, reiniciar el contador
+        showToast("No se encontraron más versiones. Se reiniciará la búsqueda.", true);
+        const updatedTrack = { ...track, reassignIndex: 0 };
+        const updatedTracks = [...pl.tracks];
+        updatedTracks[trackIndex] = updatedTrack;
+        try {
+            const { doc, updateDoc, serverTimestamp } = window.firebase;
+            const plRef = doc(db, "playlists", playlistId);
+            await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+        } catch (e) {
+            console.error("Error al reiniciar el índice de reasignación:", e);
+        }
+    }
+}
+
+
 /* ========= Menú tres puntitos global ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
@@ -1409,6 +1522,8 @@ document.addEventListener("click", async (e) => {
     ];
 
     if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
+        // MODIFICACIÓN: Se añade la nueva opción al menú
+        actions.push({ id: "reassign", label: "Reasignar fuente" });
         actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
     }
 
@@ -1422,6 +1537,10 @@ document.addEventListener("click", async (e) => {
             if (act === "pl") openPlaylistSheet(track);
             if (act === "delete") {
                 removeFromPlaylist(viewingPlaylistId, track.id);
+            }
+            // MODIFICACIÓN: Se maneja la acción de reasignar
+            if (act === "reassign") {
+                reassignTrackSource(viewingPlaylistId, track.id);
             }
         }
     });
