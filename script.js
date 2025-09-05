@@ -58,14 +58,14 @@ let spotifyToken = { value: null, expires: 0 };
 const recommendedPlaylists = {
   p1: {
     ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'],
-    title: 'Melódicos en Inglés',
+    title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar',
     creator: 'Luis Sanavera',
     data: [],
     isRecommended: true
   },
   p2: {
     ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'],
-    title: 'Cumbia estilo Santafesino',
+    title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia',
     creator: 'Luis Sanavera',
     data: [],
     isRecommended: true
@@ -355,13 +355,30 @@ async function scrapeYoutubeUrlOnly(query) {
             return r.text();
         });
         
-        // Prioritize official music videos or similar content
         const priorityRegex = /watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i;
         const priorityMatch = html.match(priorityRegex);
         if (priorityMatch) return priorityMatch[1];
         
         const genericMatch = html.match(/watch\?v=([\w-]{11})/);
         return genericMatch ? genericMatch[1] : null;
+    });
+}
+
+// MODIFICACIÓN: Función optimizada que solo devuelve el ID del video para la reasignación
+async function scrapeYoutubeIdForNthResult(query, index = 0) {
+    return withRetry(async () => {
+        const endpoint = `https://r.jina.ai/http://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const html = await fetch(endpoint, { headers: { 'Accept': 'text/plain' } }).then(r => {
+            if (!r.ok) throw new Error(`Proxy failed with status ${r.status}`);
+            return r.text();
+        });
+
+        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]));
+        if (!ids || ids.length <= index) {
+            console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
+            return null; // No se encontraron suficientes resultados
+        }
+        return ids[index]; // Devuelve solo el ID del video
     });
 }
 
@@ -621,12 +638,17 @@ function renderPlaylistCard(playlist) {
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
+    const titleText = playlist.title || playlist.name;
+
     card.innerHTML = `
         <div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
         <div class="playlist-meta">
-            <h4 class="playlist-title">${playlist.title || playlist.name}</h4>
+            <div class="playlist-title-wrapper">
+                <h4 class="playlist-title">${titleText}</h4>
+            </div>
             <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
         </div>`;
+
     card.onclick = async () => {
         if (playlist.isRecommended) {
             setQueue(playlist.data, 'recommended', 0);
@@ -639,6 +661,14 @@ function renderPlaylistCard(playlist) {
         }
     };
     container.appendChild(card);
+
+    // Lógica para marquesina en títulos largos
+    const titleWrapper = card.querySelector('.playlist-title-wrapper');
+    const titleEl = titleWrapper.querySelector('.playlist-title');
+    if (titleEl.scrollWidth > titleWrapper.clientWidth) {
+        titleWrapper.classList.add('is-overflowing');
+        titleEl.innerHTML = `<span>${titleText}</span><span aria-hidden="true">${titleText}</span>`;
+    }
 }
 
 
@@ -805,8 +835,6 @@ async function savePlaylistCopy(originalPlaylist) {
         showToast("No se pudo guardar la copia.", true);
     }
 }
-
-
 function renderPlaylists() {
     const grid = $("#plList"), empty = $("#plEmpty");
     if (!grid) return;
@@ -1382,6 +1410,82 @@ function hideQueuePanel(){
     renderPlaylists(); 
 }
 
+// MODIFICACIÓN: Lógica para Reasignar Fuente con indicador visual
+async function reassignTrackSource(playlistId, oldTrackId) {
+    const itemEl = document.querySelector(`.queue-item[data-track-id="${oldTrackId}"]`);
+    const subtitleEl = itemEl ? itemEl.querySelector('.subtitle') : null;
+    const originalSubtitle = subtitleEl ? subtitleEl.textContent : '';
+
+    if (itemEl && subtitleEl) {
+        subtitleEl.textContent = 'Reasignando...';
+        itemEl.classList.add('is-reassigning');
+    } else {
+        showToast("Buscando nueva fuente...");
+    }
+
+    try {
+        const pl = communityPlaylists.find(p => p.id === playlistId);
+        if (!pl || !pl.tracks) return;
+
+        const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
+        if (trackIndex === -1) return;
+
+        const track = pl.tracks[trackIndex];
+        const currentReassignIndex = track.reassignIndex || 0;
+        const nextReassignIndex = currentReassignIndex + 1;
+
+        const newVideoId = await scrapeYoutubeIdForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
+
+        if (newVideoId) {
+            const updatedTrack = {
+                ...track,
+                id: newVideoId, // Solo se actualiza el ID del video
+                reassignIndex: nextReassignIndex
+            };
+
+            const updatedTracks = [...pl.tracks];
+            updatedTracks[trackIndex] = updatedTrack;
+
+            const { doc, updateDoc, serverTimestamp } = window.firebase;
+            const plRef = doc(db, "playlists", playlistId);
+            await updateDoc(plRef, {
+                tracks: updatedTracks,
+                updatedAt: serverTimestamp()
+            });
+
+            if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
+                const queueIndex = queue.findIndex(t => t.id === oldTrackId);
+                if (queueIndex !== -1) {
+                    queue[queueIndex] = updatedTrack;
+                    // Si la canción reasignada es la actual, la reproducimos
+                    if (currentTrack && currentTrack.id === oldTrackId) {
+                        currentTrack = updatedTrack;
+                        playCurrent(true);
+                    }
+                }
+            }
+            showToast("Fuente reasignada. Reproduciendo nueva versión.");
+        } else {
+            showToast("No se encontraron más versiones. Se reiniciará la búsqueda.", true);
+            const updatedTrack = { ...track, reassignIndex: 0 };
+             const updatedTracks = [...pl.tracks];
+            updatedTracks[trackIndex] = updatedTrack;
+            const { doc, updateDoc, serverTimestamp } = window.firebase;
+            const plRef = doc(db, "playlists", playlistId);
+            await updateDoc(plRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+        }
+    } catch (e) {
+        console.error("Error en la reasignación de fuente:", e);
+        showToast("Error al reasignar la fuente.", true);
+    } finally {
+        if (itemEl && subtitleEl) {
+            subtitleEl.textContent = originalSubtitle;
+            itemEl.classList.remove('is-reassigning');
+        }
+    }
+}
+
+
 /* ========= Menú tres puntitos global ========= */
 document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".icon-btn.more");
@@ -1409,6 +1513,7 @@ document.addEventListener("click", async (e) => {
     ];
 
     if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
+        actions.push({ id: "reassign", label: "Reasignar fuente" });
         actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
     }
 
@@ -1422,6 +1527,9 @@ document.addEventListener("click", async (e) => {
             if (act === "pl") openPlaylistSheet(track);
             if (act === "delete") {
                 removeFromPlaylist(viewingPlaylistId, track.id);
+            }
+            if (act === "reassign") {
+                reassignTrackSource(viewingPlaylistId, track.id);
             }
         }
     });
