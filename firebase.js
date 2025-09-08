@@ -365,4 +365,106 @@ async function cancelResolverJob() {
         console.error("Error cancelling job:", e);
         hideResolverModal();
     }
-      }
+}
+
+// --- Funciones para Transmisiones en Vivo (Live Sessions) ---
+
+/**
+ * Crea una nueva sesión de transmisión en Firestore.
+ * @param {string} name - Nombre del transmisor.
+ * @param {string} genre - Género musical.
+ * @returns {Promise<string>} - El ID de la nueva sesión.
+ */
+async function createLiveSession(name, genre) {
+    try {
+        const { collection, addDoc, serverTimestamp } = window.firebase;
+        const sessionData = {
+            name,
+            genre,
+            status: "active",
+            currentTrack: null,
+            isPlaying: false,
+            timestamp: null,
+            createdAt: serverTimestamp()
+        };
+        const docRef = await addDoc(collection(db, "sessions"), sessionData);
+        return docRef.id;
+    } catch (e) {
+        console.error("Error creating live session:", e);
+        showToast("No se pudo iniciar la transmisión.", true);
+        throw e;
+    }
+}
+
+/**
+ * Actualiza los datos de una sesión de transmisión.
+ * @param {string} sessionId - El ID de la sesión a actualizar.
+ * @param {object} data - Los campos a actualizar.
+ */
+async function updateLiveSession(sessionId, data) {
+    if (!sessionId) return;
+    try {
+        const { doc, updateDoc, serverTimestamp } = window.firebase;
+        const sessionRef = doc(db, "sessions", sessionId);
+        await updateDoc(sessionRef, { ...data, lastUpdated: serverTimestamp() });
+    } catch (e) {
+        console.error("Error updating live session:", e);
+    }
+}
+
+/**
+ * Elimina una sesión de transmisión de Firestore.
+ * @param {string} sessionId - El ID de la sesión a eliminar.
+ */
+async function deleteLiveSession(sessionId) {
+    if (!sessionId) return;
+    try {
+        const { doc, deleteDoc } = window.firebase;
+        await deleteDoc(doc(db, "sessions", sessionId));
+    } catch (e) {
+        console.error("Error deleting live session:", e);
+    }
+}
+
+/**
+ * Escucha en tiempo real la lista de sesiones activas.
+ * @param {function} callback - Función que se ejecuta con la lista de sesiones.
+ * @returns {function} - Función para cancelar la suscripción (unsubscribe).
+ */
+function listenToActiveSessions(callback) {
+    const { collection, query, where, onSnapshot, orderBy } = window.firebase;
+    const q = query(
+        collection(db, "sessions"),
+        where("status", "==", "active"),
+        orderBy("createdAt", "desc")
+    );
+    return onSnapshot(q, (snapshot) => {
+        const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        callback(sessions);
+    }, (error) => {
+        console.error("Error listening to active sessions:", error);
+        callback([]);
+    });
+}
+
+
+/**
+ * Escucha los cambios en una sesión específica (para un cliente).
+ * @param {string} sessionId - El ID de la sesión.
+ * @param {function} callback - Función que se ejecuta con los datos de la sesión.
+ * @returns {function} - Función para cancelar la suscripción (unsubscribe).
+ */
+function listenToSessionChanges(sessionId, callback) {
+    if (!sessionId) return () => {};
+    const { doc, onSnapshot } = window.firebase;
+    return onSnapshot(doc(db, "sessions", sessionId), (docSnap) => {
+        if (docSnap.exists()) {
+            callback({ id: docSnap.id, ...docSnap.data() });
+        } else {
+            callback(null); // La sesión fue eliminada o no existe
+        }
+    }, (error) => {
+        console.error("Error listening to session changes:", error);
+        callback(null);
+    });
+}
