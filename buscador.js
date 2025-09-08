@@ -177,7 +177,6 @@ function appendResults(chunk){
   for(const it of chunk){
     const item = document.createElement("article");
     item.className = "result-item";
-    item.dataset.itemId = it.id;
     item.dataset.trackId = it.id;
 
     let logo = youtubeLogoSvg();
@@ -202,6 +201,9 @@ function appendResults(chunk){
         <div class="subtitle">${cleanAuthor(it.author)||""}</div>
       </div>
       <div class="actions">
+        <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
+            ${favIconSvg(isFav(it.id))}
+        </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
     item.addEventListener("click", (e) => handleResultClick(e, it));
@@ -225,7 +227,7 @@ function appendResults(chunk){
  * @param {boolean} forcePlay - Si se debe forzar la reproducción.
  */
 async function handleResultClick(event, item, forcePlay = false) {
-    if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return;
+    if (event.target.closest(".more") || event.target.closest(".fav-btn") || (event.target.closest(".card-play") && !forcePlay)) return;
 
     if (item.type === 'youtube_video') {
         playFromSearch(item.id, true);
