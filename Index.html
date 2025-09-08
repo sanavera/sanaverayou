@@ -42,7 +42,7 @@
         <header class="home-head">
           <h3 class="home-title animated-title">
             Actividad Reciente
-            <span class="eq-title" aria-hidden="true"><span></span><span></span><span></span><span></><span></span></span>
+            <span class="eq-title" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
           </h3>
         </header>
         <div id="allPlaylistsContainer" class="home-grid">
@@ -164,7 +164,6 @@
     </div>
   </div>
 
-  <!-- Modal para Crear Playlist -->
   <div id="createPlaylistSheet" class="sheet">
     <div class="sheet-content">
       <div class="sheet-title">Crear nueva playlist</div>
@@ -179,9 +178,15 @@
     </div>
   </div>
 
-
   <div id="yt-holder"><div id="player"></div></div>
 
-  <script src="script.js" type="module"></script>
+  <!-- Scripts modularizados -->
+  <script src="buscador.js"></script>
+  <script src="firebase.js"></script>
+  <script src="reproductor.js"></script>
+  <script src="playlists.js"></script>
+  <script src="favoritos.js"></script>
+  <script src="main.js"></script>
+
 </body>
 </html>
