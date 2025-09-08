@@ -23,6 +23,12 @@ function sy_fs() {
     updateDoc: f.updateDoc || window.updateDoc,
     setDoc: f.setDoc || window.setDoc,
     deleteDoc: f.deleteDoc || window.deleteDoc,
+    addDoc: f.addDoc || window.addDoc,
+    collection: f.collection || window.collection,
+    query: f.query || window.query,
+    where: f.where || window.where,
+    onSnapshot: f.onSnapshot || window.onSnapshot,
+    getDocs: f.getDocs || window.getDocs,
     serverTimestamp: f.serverTimestamp || window.serverTimestamp
   };
 }
@@ -191,10 +197,6 @@ async function addSongToPlaylist(playlistId, track) {
 
 
 // --- Funciones del Resolver de Spotify ---
-
-/**
- * Comprueba si hay un trabajo de importación activo al cargar la página y reanuda el seguimiento.
- */
 async function checkForActiveImportJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
@@ -228,10 +230,6 @@ async function checkForActiveImportJob() {
     }
 }
 
-/**
- * Inicia un trabajo para resolver las canciones de una playlist de Spotify a videos de YouTube.
- * @param {string} playlistId - El ID de la playlist a resolver.
- */
 async function startResolverJob(playlistId) {
     const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = window.firebase;
     const plRef = doc(db, "playlists", playlistId);
@@ -275,11 +273,6 @@ async function startResolverJob(playlistId) {
     runJobBatch(playlistId, jobRef);
 }
 
-/**
- * Procesa un lote de canciones para resolverlas. Es una función recursiva por lotes.
- * @param {string} playlistId - El ID de la playlist que se está procesando.
- * @param {DocumentReference} jobRef - La referencia al documento del trabajo en Firestore.
- */
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
     const plRef = doc(db, "playlists", playlistId);
@@ -343,9 +336,6 @@ async function runJobBatch(playlistId, jobRef) {
     setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
 }
 
-/**
- * Cancela el trabajo de resolución de canciones de Spotify que esté en curso.
- */
 async function cancelResolverJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
@@ -367,104 +357,50 @@ async function cancelResolverJob() {
     }
 }
 
-// --- Funciones para Transmisiones en Vivo (Live Sessions) ---
+// --- NUEVO: Funciones para Transmisiones ---
+const SESSIONS_COLLECTION = "sessions";
 
-/**
- * Crea una nueva sesión de transmisión en Firestore.
- * @param {string} name - Nombre del transmisor.
- * @param {string} genre - Género musical.
- * @returns {Promise<string>} - El ID de la nueva sesión.
- */
 async function createLiveSession(name, genre) {
-    try {
-        const { collection, addDoc, serverTimestamp } = window.firebase;
-        const sessionData = {
-            name,
-            genre,
-            status: "active",
-            currentTrack: null,
-            isPlaying: false,
-            timestamp: null,
-            createdAt: serverTimestamp()
-        };
-        const docRef = await addDoc(collection(db, "sessions"), sessionData);
-        return docRef.id;
-    } catch (e) {
-        console.error("Error creating live session:", e);
-        showToast("No se pudo iniciar la transmisión.", true);
-        throw e;
-    }
+    const { addDoc, collection, serverTimestamp } = sy_fs();
+    const docRef = await addDoc(collection(db, SESSIONS_COLLECTION), {
+        name,
+        genre,
+        status: "active",
+        currentTrack: null,
+        isPlaying: false,
+        timestamp: null,
+        createdAt: serverTimestamp()
+    });
+    return docRef.id;
 }
 
-/**
- * Actualiza los datos de una sesión de transmisión.
- * @param {string} sessionId - El ID de la sesión a actualizar.
- * @param {object} data - Los campos a actualizar.
- */
 async function updateLiveSession(sessionId, data) {
-    if (!sessionId) return;
-    try {
-        const { doc, updateDoc, serverTimestamp } = window.firebase;
-        const sessionRef = doc(db, "sessions", sessionId);
-        await updateDoc(sessionRef, { ...data, lastUpdated: serverTimestamp() });
-    } catch (e) {
-        console.error("Error updating live session:", e);
-    }
+    const { doc, updateDoc } = sy_fs();
+    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), data);
 }
 
-/**
- * Elimina una sesión de transmisión de Firestore.
- * @param {string} sessionId - El ID de la sesión a eliminar.
- */
 async function deleteLiveSession(sessionId) {
-    if (!sessionId) return;
-    try {
-        const { doc, deleteDoc } = window.firebase;
-        await deleteDoc(doc(db, "sessions", sessionId));
-    } catch (e) {
-        console.error("Error deleting live session:", e);
-    }
+    const { doc, deleteDoc } = sy_fs();
+    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId));
 }
 
-/**
- * Escucha en tiempo real la lista de sesiones activas.
- * @param {function} callback - Función que se ejecuta con la lista de sesiones.
- * @returns {function} - Función para cancelar la suscripción (unsubscribe).
- */
-function listenToActiveSessions(callback) {
-    const { collection, query, where, onSnapshot, orderBy } = window.firebase;
-    const q = query(
-        collection(db, "sessions"),
-        where("status", "==", "active"),
-        orderBy("createdAt", "desc")
-    );
+function listenToSessionChanges(sessionId, callback) {
+    const { doc, onSnapshot } = sy_fs();
+    return onSnapshot(doc(db, SESSIONS_COLLECTION, sessionId), (doc) => {
+        callback(doc.data());
+    });
+}
+
+// CORREGIDO: Escucha en tiempo real en lugar de pedir una sola vez.
+function listenForLiveSessions(callback) {
+    const { collection, query, where, onSnapshot } = sy_fs();
+    const q = query(collection(db, SESSIONS_COLLECTION), where("status", "==", "active"));
+    
     return onSnapshot(q, (snapshot) => {
         const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         callback(sessions);
     }, (error) => {
-        console.error("Error listening to active sessions:", error);
-        callback([]);
-    });
-}
-
-
-/**
- * Escucha los cambios en una sesión específica (para un cliente).
- * @param {string} sessionId - El ID de la sesión.
- * @param {function} callback - Función que se ejecuta con los datos de la sesión.
- * @returns {function} - Función para cancelar la suscripción (unsubscribe).
- */
-function listenToSessionChanges(sessionId, callback) {
-    if (!sessionId) return () => {};
-    const { doc, onSnapshot } = window.firebase;
-    return onSnapshot(doc(db, "sessions", sessionId), (docSnap) => {
-        if (docSnap.exists()) {
-            callback({ id: docSnap.id, ...docSnap.data() });
-        } else {
-            callback(null); // La sesión fue eliminada o no existe
-        }
-    }, (error) => {
-        console.error("Error listening to session changes:", error);
-        callback(null);
+        console.error("Error listening to live sessions:", error);
+        callback([]); // Enviar array vacío en caso de error
     });
 }
