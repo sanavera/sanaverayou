@@ -56,7 +56,7 @@ function renderFavs() {
     ul.innerHTML = "";
 
     if (favs.length === 0) {
-        ul.innerHTML = `<div class="empty muted">Aún no tienes favoritos. Agrega canciones con el menú de opciones.</div>`;
+        ul.innerHTML = `<div class="empty muted">Aún no tienes favoritos. Agrega canciones con el ícono de corazón.</div>`;
         updateHero(null);
         return;
     }
@@ -81,11 +81,14 @@ function renderFavs() {
         <div class="subtitle">${cleanAuthor(it.author) || ""}</div>
       </div>
       <div class="actions">
+        <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
+            ${favIconSvg(isFav(it.id))}
+        </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
         
         li.addEventListener("click", e => {
-            if (e.target.closest(".more") || e.target.closest(".card-play")) return;
+            if (e.target.closest(".more") || e.target.closest(".fav-btn") || e.target.closest(".card-play")) return;
             playFromFav(it, true);
         });
 
