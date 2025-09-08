@@ -18,14 +18,15 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 
-// --- NUEVO: Estado de Transmisión en Vivo ---
-const BUFFER_DELAY = 2000; // 2 segundos de buffer
+// --- AJUSTADO: Estado de Transmisión en Vivo ---
+const BUFFER_DELAY = 5000; // 5 segundos de buffer
 let liveState = {
     mode: 'none', // 'none', 'broadcasting', 'listening'
     sessionId: null,
     sessionData: null,
 };
-let sessionUnsubscribe = null; // Para anular la suscripción al listener de Firestore
+let sessionUnsubscribe = null; 
+let heartbeatInterval = null; // Para la señal de "sigo aquí" del transmisor
 
 /**
  * Carga la API de IFrame de YouTube.
@@ -195,7 +196,7 @@ function playCurrent(autoplay=false){
       updateLiveSession(liveState.sessionId, {
           currentTrack: currentTrack,
           isPlaying: autoplay,
-          timestamp: projectedStartTime
+          timestampStart: projectedStartTime
       });
 
       ytPlayer.pauseVideo();
@@ -232,9 +233,9 @@ function togglePlay(){
   } else {
       if (liveState.mode === 'broadcasting') {
           const currentTime = ytPlayer.getCurrentTime() || 0;
-          const timestamp = (Date.now() + BUFFER_DELAY) - (currentTime * 1000);
+          const timestampStart = (Date.now() + BUFFER_DELAY) - (currentTime * 1000);
 
-          updateLiveSession(liveState.sessionId, { isPlaying: true, timestamp: timestamp });
+          updateLiveSession(liveState.sessionId, { isPlaying: true, timestampStart: timestampStart });
 
           setTimeout(() => {
               if (liveState.mode === 'broadcasting') ytPlayer.playVideo();
@@ -272,7 +273,7 @@ function next(){
     ytPlayer.stopVideo();
     currentTrack = null;
     if (liveState.mode === 'broadcasting') {
-        updateLiveSession(liveState.sessionId, { isPlaying: false, currentTrack: null, timestamp: null });
+        updateLiveSession(liveState.sessionId, { isPlaying: false, currentTrack: null, timestampStart: null });
     }
     updateUIOnTrackChange();
   }
@@ -287,8 +288,8 @@ function prev(){
   if (ytPlayer.getCurrentTime() > 3) {
     ytPlayer.seekTo(0, true);
     if (liveState.mode === 'broadcasting') {
-        const timestamp = Date.now() + BUFFER_DELAY;
-        updateLiveSession(liveState.sessionId, { isPlaying: true, timestamp: timestamp });
+        const timestampStart = Date.now() + BUFFER_DELAY;
+        updateLiveSession(liveState.sessionId, { isPlaying: true, timestampStart: timestampStart });
         setTimeout(() => ytPlayer.playVideo(), BUFFER_DELAY);
     }
   } else if (qIdx - 1 >= 0) {
@@ -375,7 +376,6 @@ function stopTimer(){
 }
 
 // --- Media Session & Android Bridge ---
-
 function updateMediaSession(track){
   if(!('mediaSession' in navigator) || !track) return;
   try {
@@ -466,25 +466,43 @@ async function startBroadcasting(name, genre) {
         liveState.mode = 'broadcasting';
         liveState.sessionId = sessionId;
         showToast(`Iniciaste la transmisión: ${name}`);
+
+        // Heartbeat para mantener la sesión viva
+        heartbeatInterval = setInterval(() => {
+            updateLiveSession(liveState.sessionId, { lastSeen: sy_fs().serverTimestamp() });
+        }, 15000); // Cada 15 segundos
+
+        // Detector de cierre de página
+        window.addEventListener('beforeunload', stopBroadcasting);
+
         if (currentTrack) {
             const isPlaying = getPlaybackState() === 'playing';
-            const timestamp = isPlaying ? (Date.now() + BUFFER_DELAY - ((ytPlayer.getCurrentTime() || 0) * 1000)) : null;
-            updateLiveSession(sessionId, { currentTrack, isPlaying, timestamp });
+            const timestampStart = isPlaying ? ((Date.now() + BUFFER_DELAY) - ((ytPlayer.getCurrentTime() || 0) * 1000)) : null;
+            updateLiveSession(sessionId, { currentTrack, isPlaying, timestampStart });
         }
         return true;
     } catch (e) {
+        console.error("Error starting broadcast:", e);
         return false;
     }
 }
 
 async function stopBroadcasting() {
     if (liveState.mode !== 'broadcasting' || !liveState.sessionId) return;
+    
+    // Limpieza
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+    window.removeEventListener('beforeunload', stopBroadcasting);
+
     showToast("Transmisión finalizada.");
     await updateLiveSession(liveState.sessionId, { status: 'ended' });
-    setTimeout(() => deleteLiveSession(liveState.sessionId), 2000); // Dar tiempo a los clientes a recibir el estado 'ended'
+    setTimeout(() => deleteLiveSession(liveState.sessionId), 2000);
+
     liveState.mode = 'none';
     liveState.sessionId = null;
     liveState.sessionData = null;
+    updateUIOnTrackChange(); // Actualiza la UI para reflejar que ya no se transmite
 }
 
 
@@ -496,44 +514,42 @@ function startListening(sessionId, sessionName) {
     liveState.sessionId = sessionId;
     setPlayerControlsDisabled(true);
     showToast(`Conectado a la transmisión de ${sessionName}`);
+    
+    // Detector de cierre de página para el cliente
+    window.addEventListener('beforeunload', stopListening);
 
     sessionUnsubscribe = listenToSessionChanges(sessionId, handleSessionUpdate);
 }
 
 function stopListening() {
+    if (liveState.mode !== 'listening') return;
     if (sessionUnsubscribe) {
         sessionUnsubscribe();
         sessionUnsubscribe = null;
     }
+    window.removeEventListener('beforeunload', stopListening);
     liveState.mode = 'none';
     liveState.sessionId = null;
     liveState.sessionData = null;
     setPlayerControlsDisabled(false);
     ytPlayer.pauseVideo();
     showToast("Te desconectaste de la transmisión.");
+    updateUIOnTrackChange();
 }
 
 function handleSessionUpdate(sessionData) {
+    if (liveState.mode !== 'listening') return;
+    
     if (!sessionData || sessionData.status === 'ended') {
-        if(liveState.mode === 'listening'){
-            showToast("La transmisión finalizó.", true);
-            stopListening();
-            // Limpiar reproductor
-            currentTrack = null;
-            updateUIOnTrackChange();
-        }
+        showToast("La transmisión finalizó.", true);
+        stopListening();
+        currentTrack = null;
+        updateUIOnTrackChange();
         return;
     }
 
     liveState.sessionData = sessionData;
     const remoteTrack = sessionData.currentTrack;
-
-    // Sincronizar canción
-    if (remoteTrack && remoteTrack.id !== currentTrack?.id) {
-        currentTrack = remoteTrack;
-        updateUIOnTrackChange();
-        ytPlayer.loadVideoById({ videoId: currentTrack.id, suggestedQuality: "auto" });
-    }
 
     if (!remoteTrack) {
         ytPlayer.pauseVideo();
@@ -541,22 +557,30 @@ function handleSessionUpdate(sessionData) {
         updateUIOnTrackChange();
         return;
     }
+    
+    const isNewTrack = remoteTrack.id !== currentTrack?.id;
+    if (isNewTrack) {
+        currentTrack = remoteTrack;
+        updateUIOnTrackChange();
+        ytPlayer.loadVideoById({ videoId: currentTrack.id, suggestedQuality: "auto" });
+    }
 
-    // Sincronizar estado de reproducción y tiempo
     const isPlayingRemotely = sessionData.isPlaying;
-    const remoteTimestamp = sessionData.timestamp;
+    const remoteTimestampStart = sessionData.timestampStart;
 
-    if (isPlayingRemotely && remoteTimestamp) {
-        const timeSinceStart = Date.now() - remoteTimestamp;
+    if (isPlayingRemotely && remoteTimestampStart) {
+        const timeSinceStart = Date.now() - remoteTimestampStart;
         const seekToTime = Math.max(0, timeSinceStart / 1000);
-        const duration = ytPlayer.getDuration() || Infinity;
 
-        if (seekToTime < duration) {
-            ytPlayer.seekTo(seekToTime, true);
-            ytPlayer.playVideo();
-        } else {
-             ytPlayer.pauseVideo();
+        // Solo sincronizamos si hay una diferencia notable o es una canción nueva
+        const currentTime = ytPlayer.getCurrentTime() || 0;
+        if (isNewTrack || Math.abs(currentTime - seekToTime) > 2.5) { 
+             const duration = ytPlayer.getDuration() || Infinity;
+             if (seekToTime < duration) {
+                 ytPlayer.seekTo(seekToTime, true);
+             }
         }
+        ytPlayer.playVideo();
     } else {
         ytPlayer.pauseVideo();
     }
