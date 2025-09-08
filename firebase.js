@@ -44,26 +44,17 @@ async function initFirebase() {
         const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
         communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        let needsRealtimeUpdate = false;
-        let updatedPlaylist = null;
-
         communityPlaylists.forEach(newPl => {
             const oldPl = oldPlaylists.get(newPl.id);
             const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
             
             if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
-                needsRealtimeUpdate = true;
-                updatedPlaylist = newPl;
+                handleRealtimeUpdate(newPl);
             }
         });
-        
-        // Disparamos un evento personalizado para que main.js actualice la UI
-        window.dispatchEvent(new CustomEvent('playlistsUpdated', { 
-            detail: { 
-                needsRealtimeUpdate,
-                updatedPlaylist
-            } 
-        }));
+
+        renderPlaylists(); 
+        renderAllHomePlaylists();
     });
 
     checkForActiveImportJob();
@@ -374,4 +365,4 @@ async function cancelResolverJob() {
         console.error("Error cancelling job:", e);
         hideResolverModal();
     }
-}
+      }
