@@ -465,7 +465,7 @@ function initPlaylistModals() {
     };
 }
 
-/* ========== Spotify Import UI & Logic ========== */
+/* ========== Spotify Import UI & Logic (CORREGIDO) ========== */
 function initSpotifyImportUI() {
     const playlistsView = document.getElementById('view-playlists');
     if (!playlistsView) return;
@@ -476,16 +476,11 @@ function initSpotifyImportUI() {
     btn.id = 'syBtnImportSpotify';
     btn.className = 'pill';
     btn.innerHTML = `${spotifyLogoSvg()} Importar de Spotify`;
-    btn.style.display = 'flex';
-    btn.style.alignItems = 'center';
-    btn.style.gap = '8px';
+    btn.style.cssText = 'display:flex; align-items:center; gap:8px;';
     
     const actionsDiv = header.querySelector('.pl-actions');
-    if (actionsDiv) {
-        actionsDiv.prepend(btn);
-    } else {
-        header.appendChild(btn);
-    }
+    if (actionsDiv) actionsDiv.prepend(btn);
+    else header.appendChild(btn);
 
     btn.addEventListener('click', openSpotifyImportModal);
 }
@@ -495,123 +490,187 @@ function openSpotifyImportModal() {
         document.getElementById('sySpotifyModal').classList.add('show');
         return;
     }
-
     const modal = document.createElement('div');
     modal.id = 'sySpotifyModal';
     modal.className = 'sheet';
     modal.innerHTML = `
         <div class="sheet-content">
-          <div class="sheet-title">Importar playlists de Spotify</div>
-          <p class="muted" style="margin: 8px 0 16px;">Pega el enlace a una playlist pública de Spotify.</p>
-          <div class="sheet-form">
-            <input id="sySmInput" type="text" placeholder="https://open.spotify.com/playlist/..." autocomplete="off">
-          </div>
-          <div class="sheet-actions">
-            <button id="sySmCancel" class="sheet-item ghost">Cancelar</button>
-            <button id="sySmFetch" class="sheet-item pill">Importar</button>
-          </div>
+            <div class="sheet-title">Importar playlists de Spotify</div>
+            <div id="sySmBody">
+                <p class="muted" style="margin: 8px 0 16px;">Ingresá tu nombre de usuario de Spotify o pegá el enlace a tu perfil para buscar tus listas públicas.</p>
+                <div class="sheet-form">
+                    <input id="sySmInput" type="text" placeholder="ej. luchosanavera o https://open.spotify.com/user/..." autocomplete="off">
+                </div>
+                <div class="sheet-actions">
+                    <button id="sySmCancel" class="sheet-item ghost">Cancelar</button>
+                    <button id="sySmFetch" class="sheet-item pill">Buscar Playlists</button>
+                </div>
+                <div id="sySmResults" style="margin-top: 16px;"></div>
+            </div>
         </div>
     `;
     document.body.appendChild(modal);
     modal.classList.add('show');
     
-    modal.addEventListener('click', (e)=>{ if (e.target === modal) modal.classList.remove('show'); });
-    modal.querySelector('#sySmCancel').onclick = ()=> modal.classList.remove('show');
-    modal.querySelector('#sySmFetch').onclick = fetchAndImportSpotifyPlaylist;
-    setTimeout(()=> modal.querySelector('#sySmInput')?.focus(), 60);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+    modal.querySelector('#sySmCancel').onclick = () => modal.classList.remove('show');
+    modal.querySelector('#sySmFetch').onclick = fetchSpotifyUserPlaylists;
 }
 
-function parseSpotifyPlaylistId(input) {
-    if (!input) return null;
-    const cleanedInput = input.trim().split('?')[0];
-    const spotifyPlaylistRegex = /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
-    const match = cleanedInput.match(spotifyPlaylistRegex);
-    return match && match[1] ? match[1] : null;
+function parseSpotifyUserId(input) {
+  if (!input) return null;
+  const cleanedInput = input.trim().split('?')[0];
+  const spotifyUserRegex = /open\.spotify\.com\/(?:user|profile)\/([a-zA-Z0-9]+)/;
+  const match = cleanedInput.match(spotifyUserRegex);
+  if (match && match[1]) return match[1];
+  if (!cleanedInput.includes('/') && !cleanedInput.includes(':')) return cleanedInput;
+  return null;
 }
 
-async function fetchAndImportSpotifyPlaylist() {
+async function fetchSpotifyUserPlaylists() {
     const input = document.getElementById('sySmInput').value.trim();
-    const playlistId = parseSpotifyPlaylistId(input);
-    const modal = document.getElementById('sySpotifyModal');
+    const userId = parseSpotifyUserId(input);
+    const results = document.getElementById('sySmResults');
+    const fetchBtn = document.getElementById('sySmFetch');
     
-    if (!playlistId) {
-        showToast("URL de playlist de Spotify no válida.", true);
+    if (!userId) {
+        showToast("Formato de usuario o URL no válido.", true);
         return;
     }
 
-    const fetchBtn = modal.querySelector('#sySmFetch');
+    results.innerHTML = `<div class="loading-indicator" style="padding: 20px 0;">Buscando...</div>`;
     fetchBtn.disabled = true;
-    fetchBtn.textContent = 'Importando...';
 
     try {
         const token = await getSpotifyToken();
-        const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error('No se pudo obtener la playlist.');
-        const plData = await response.json();
+        let url = `https://api.spotify.com/v1/users/${encodeURIComponent(userId)}/playlists?limit=50`;
+        const allPlaylists = [];
+        while (url) {
+            const response = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+            if (!response.ok) {
+                if (response.status === 404) throw new Error(`Usuario <strong>${userId}</strong> no encontrado.`);
+                throw new Error('Error de API de Spotify: ' + response.status);
+            }
+            const data = await response.json();
+            allPlaylists.push(...data.items);
+            url = data.next;
+        }
 
-        const spotifyTracks = await fetchAllSpotifyPlaylistTracks(playlistId);
-        if (spotifyTracks.length === 0) {
-            showToast("La playlist está vacía o no se pudieron cargar las canciones.", true);
+        if (allPlaylists.length === 0) {
+            results.innerHTML = `<p class="muted">No se encontraron playlists públicas para <strong>${userId}</strong>.</p>`;
             return;
         }
-        
-        await processAndSavePlaylist({
-            spotifyId: plData.id,
-            name: plData.name,
-            creator: plData.owner.display_name,
-            cover: plData.images?.[0]?.url || '',
-            spotifyTracks: spotifyTracks,
-        });
-
-        showToast(`Playlist "${plData.name}" importada.`);
-        modal.classList.remove('show');
-
-    } catch(e) {
-        console.error("Error importing spotify playlist:", e);
-        showToast("Error al importar la playlist. Revisa el enlace.", true);
+        renderSpotifyPlaylistsSelection(userId, allPlaylists);
+    } catch (e) {
+        console.error("Error fetching user playlists:", e);
+        results.innerHTML = `<p class="muted" style="color: var(--accent-light);">${e.message}</p>`;
     } finally {
         fetchBtn.disabled = false;
-        fetchBtn.textContent = 'Importar';
     }
 }
 
-async function processAndSavePlaylist(pl) {
-    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
-    const col = collection(db, 'playlists');
-    
-    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
-    const snapshot = await getDocs(q);
+function renderSpotifyPlaylistsSelection(userId, list) {
+    const resultsContainer = document.getElementById('sySmResults');
+    const sheetBody = document.getElementById('sySmBody');
+    sheetBody.querySelector('.sheet-form').style.display = 'none';
+    sheetBody.querySelector('.sheet-actions').style.display = 'none';
 
-    if (snapshot.empty) {
-        const docRef = await addDoc(col, {
-            name: pl.name,
-            creator: pl.creator,
-            isPublic: false,
-            cover: pl.cover || null,
-            source: 'spotify',
-            spotifyId: pl.spotifyId,
-            spotifyTracks: pl.spotifyTracks,
-            trackCount: pl.spotifyTracks.length,
-            tracks: Array(pl.spotifyTracks.length).fill(null),
-            status: 'unresolved',
-            resolvedCount: 0,
-            updatedAt: serverTimestamp(),
-            ownerUserId: "current_user_id_placeholder"
-        });
-        addMyPlaylistId(docRef.id);
-    } else {
-        const docId = snapshot.docs[0].id;
-        const existingDocRef = doc(db, 'playlists', docId);
-        await updateDoc(existingDocRef, {
-            name: pl.name,
-            creator: pl.creator,
-            cover: pl.cover,
-            spotifyTracks: pl.spotifyTracks,
-            trackCount: pl.spotifyTracks.length,
-            updatedAt: serverTimestamp()
-        });
-        showToast(`Playlist "${pl.name}" actualizada.`);
+    const checks = list.map(p => `
+        <label class="sheet-item" style="display: flex; align-items: center; gap: 12px; margin: 4px 0;">
+            <input type="checkbox" class="sy-pl-check" data-plid="${p.id}" data-plname="${p.name.replace(/"/g,'&quot;')}" data-cover="${p.images?.[0]?.url || ''}" checked>
+            <img src="${p.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'}" alt="" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;">
+            <div style="flex: 1; min-width: 0;">
+                <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
+                <small class="muted">${p.tracks.total} temas</small>
+            </div>
+        </label>
+    `).join('');
+
+    resultsContainer.innerHTML = `
+        <div style="margin-bottom: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="syPlAll" checked>
+                <span>Seleccionar todo (${list.length})</span>
+            </label>
+        </div>
+        <div class="sheet-list" style="max-height: 40vh;">${checks}</div>
+        <div class="sheet-actions" style="display: flex; margin-top: 16px;">
+            <button id="syPlCancel" class="sheet-item ghost">Volver</button>
+            <button id="syPlImport" class="sheet-item pill">Importar / Actualizar (${list.length})</button>
+        </div>
+    `;
+
+    const importBtn = resultsContainer.querySelector('#syPlImport');
+    const selectAllCheckbox = resultsContainer.querySelector('#syPlAll');
+    const allCheckboxes = [...resultsContainer.querySelectorAll('.sy-pl-check')];
+
+    const updateTotal = () => {
+        const selectedCount = allCheckboxes.filter(cb => cb.checked).length;
+        importBtn.textContent = `Importar / Actualizar (${selectedCount})`;
+        importBtn.disabled = selectedCount === 0;
+    };
+
+    selectAllCheckbox.onchange = (e) => {
+        allCheckboxes.forEach(cb => cb.checked = e.target.checked);
+        updateTotal();
+    };
+
+    allCheckboxes.forEach(cb => cb.onchange = () => {
+        if (!cb.checked) selectAllCheckbox.checked = false;
+        updateTotal();
+    });
+
+    resultsContainer.querySelector('#syPlCancel').onclick = () => {
+        sheetBody.querySelector('.sheet-form').style.display = 'block';
+        sheetBody.querySelector('.sheet-actions').style.display = 'flex';
+        resultsContainer.innerHTML = '';
+    };
+
+    importBtn.onclick = async () => {
+        importBtn.disabled = true;
+        importBtn.textContent = 'Importando...';
+        const selected = allCheckboxes.filter(cb => cb.checked);
+        const payload = selected.map(ch => ({
+            spotifyId: ch.dataset.plid,
+            name: ch.dataset.plname,
+            creator: userId,
+            cover: ch.dataset.cover || '',
+        }));
+        await processAndSavePlaylists(payload, importBtn);
+    };
+}
+
+async function processAndSavePlaylists(list, button) {
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
+    let importedCount = 0, updatedCount = 0;
+
+    for (let i = 0; i < list.length; i++) {
+        const pl = list[i];
+        if (button) button.textContent = `Procesando ${i + 1}/${list.length}...`;
+        const spotifyTracks = await fetchAllSpotifyPlaylistTracks(pl.spotifyId);
+        if (spotifyTracks.length === 0) continue;
+
+        const q = query(collection(db, 'playlists'), where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            const docRef = await addDoc(collection(db, 'playlists'), {
+                name: pl.name, creator: pl.creator, isPublic: false, cover: pl.cover, source: 'spotify',
+                spotifyId: pl.spotifyId, spotifyTracks: spotifyTracks, trackCount: spotifyTracks.length,
+                tracks: Array(spotifyTracks.length).fill(null), status: 'unresolved', resolvedCount: 0,
+                updatedAt: serverTimestamp(), ownerUserId: "current_user_id_placeholder"
+            });
+            addMyPlaylistId(docRef.id);
+            importedCount++;
+        } else {
+            const docId = snapshot.docs[0].id;
+            await updateDoc(doc(db, 'playlists', docId), {
+                name: pl.name, creator: pl.creator, cover: pl.cover, spotifyTracks: spotifyTracks,
+                trackCount: spotifyTracks.length, updatedAt: serverTimestamp()
+            });
+            updatedCount++;
+        }
     }
+    showToast(`${importedCount} playlists importadas, ${updatedCount} actualizadas.`);
+    if (document.getElementById('sySpotifyModal')) document.getElementById('sySpotifyModal').classList.remove('show');
 }
