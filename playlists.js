@@ -383,10 +383,13 @@ function renderQueue(queueItems, title) {
             <div class="subtitle">${cleanAuthor(t.author) || ""}</div>
           </div>
           <div class="actions">
+            <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito" ${!isResolved ? 'disabled' : ''}>
+                ${favIconSvg(isFav(t.id))}
+            </button>
             <button class="icon-btn more" title="Opciones" ${!isResolved ? 'disabled' : ''}>${dotsSvg()}</button>
           </div>`;
         li.onclick = (e) => {
-            if (e.target.closest(".more") || e.target.closest(".card-play") || !isResolved) return;
+            if (e.target.closest(".more") || e.target.closest(".fav-btn") || e.target.closest(".card-play") || !isResolved) return;
             const resolvedQueue = queueItems.filter(item => item && item.id);
             const resolvedIndex = resolvedQueue.findIndex(item => item.id === t.id);
             if (resolvedIndex === -1) return;
@@ -462,7 +465,7 @@ function initPlaylistModals() {
     };
 }
 
-/* ========== Spotify Import UI & Logic (NUEVO) ========== */
+/* ========== Spotify Import UI & Logic ========== */
 function initSpotifyImportUI() {
     const playlistsView = document.getElementById('view-playlists');
     if (!playlistsView) return;
@@ -495,7 +498,7 @@ function openSpotifyImportModal() {
 
     const modal = document.createElement('div');
     modal.id = 'sySpotifyModal';
-    modal.className = 'sheet'; // Reutilizamos el estilo de 'sheet' para el overlay
+    modal.className = 'sheet';
     modal.innerHTML = `
         <div class="sheet-content">
           <div class="sheet-title">Importar playlists de Spotify</div>
@@ -607,10 +610,6 @@ async function processAndSavePlaylist(pl) {
             cover: pl.cover,
             spotifyTracks: pl.spotifyTracks,
             trackCount: pl.spotifyTracks.length,
-            // Opcional: resetear 'tracks' para forzar una nueva resolución
-            // tracks: Array(pl.spotifyTracks.length).fill(null),
-            // resolvedCount: 0,
-            // status: 'unresolved',
             updatedAt: serverTimestamp()
         });
         showToast(`Playlist "${pl.name}" actualizada.`);
