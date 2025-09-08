@@ -560,6 +560,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   .buttons-control { gap: 8px; }
   .np-play { width: 64px; height: 64px; }
   .home-grid { gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  .stream-controls { display: none; } /* Ocultar en pantallas muy pequeñas si no caben */
 }
 
 /* Misc & Overrides */
@@ -601,7 +602,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .resolver-cancel { width: 100%; padding: 8px; border: 1px solid var(--border); background: var(--surface-hover); color: var(--text-secondary); border-radius: 8px; cursor: pointer; transition: var(--fast); }
 
 /* ========== Live Stream UI ========== */
-.stream-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.stream-controls { display: flex; align-items: center; gap: 8px; }
 .stream-btn {
   width: 36px; height: 36px; border-radius: 50%; border: none;
   display: grid; place-items: center; cursor: pointer;
@@ -625,7 +626,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .broadcast-wrapper.broadcasting .stream-btn-broadcast { animation: blink-red 1.5s infinite; }
 .broadcast-wrapper .broadcast-label {
   display: none; font-size: 11px; font-weight: 600;
-  color: var(--accent-light);
+  color: var(--accent-light); white-space: nowrap;
 }
 .broadcast-wrapper.broadcasting .broadcast-label { display: block; }
 .broadcast-wrapper.broadcasting .mic-icon {
@@ -688,3 +689,12 @@ body.is-listening .time-control input[type="range"] {
     cursor: not-allowed;
 }
 body.is-listening #npPlay, body.is-listening #miniPlay { opacity: 0.5; }
+
+/* Ajustes para el mini-reproductor */
+.mini-now { gap: 8px; }
+.mini-content-wrapper { gap: 2px; }
+#miniTitle { font-size: 12px; }
+#miniAuthor { font-size: 10px; }
+.broadcast-wrapper {
+    margin-left: auto; /* Mueve el botón de transmitir a la derecha */
+}
