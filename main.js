@@ -20,7 +20,7 @@ const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60)
 const cleanTitle = t => (t||"").replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"").replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"").replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"").replace(/\s{2,}/g," ").trim();
 const cleanAuthor = a => (a||"").replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, "").replace(/VEVO/gi, "").replace(/\s{2,}/g, " ").replace(/\s*-\s*$/, "").trim();
 const dotsSvg = () => `<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>`;
-const favIconSvg = (isFav) => isFav 
+const favIconSvg = (isFav) => isFav
     ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
     : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>`;
 const youtubeLogoSvg = () => `<span class="source-logo youtube-logo" title="YouTube"><svg viewBox="0 0 28 20"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"/></svg></span>`;
@@ -47,12 +47,18 @@ function updateUIOnTrackChange() {
   updateControlStates();
   updateMediaSession(currentTrack);
   updateAndroidNotification();
+  // NUEVO: Actualizar estado del botón de transmisión
+  const broadcastBtn = $("#broadcastBtn");
+  if (broadcastBtn) {
+      broadcastBtn.classList.toggle("broadcasting", liveState.mode === 'broadcasting');
+      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisión" : "Iniciar transmisión";
+  }
 }
 
 function updateHero(track) {
   const t = track || currentTrack;
   const favHero = $("#favHero"), npHero  = $("#npHero");
-  
+
   if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
   if ($("#favNowTitle")) $("#favNowTitle").textContent = t ? t.title : "—";
   if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
@@ -65,7 +71,13 @@ function updateHero(track) {
   } else if (['recommended', 'youtube_playlist'].includes(queueType)) {
     plName = currentQueueTitle;
   }
-  if ($("#npSub")) $("#npSub").textContent = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
+  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
+  if (liveState.mode === 'listening' && liveState.sessionData) {
+      subText = `Escuchando a: ${liveState.sessionData.name}`;
+  } else if (liveState.mode === 'broadcasting') {
+      subText = `Transmitiendo en vivo`;
+  }
+  if ($("#npSub")) $("#npSub").textContent = subText;
 }
 
 function updateMiniNow() {
@@ -75,7 +87,13 @@ function updateMiniNow() {
   if (!hasTrack) return;
   $("#miniThumb").src = currentTrack.thumb;
   $("#miniTitle").textContent = currentTrack.title;
-  $("#miniAuthor").textContent = cleanAuthor(currentTrack.author) || "";
+  let authorText = cleanAuthor(currentTrack.author) || "";
+  if (liveState.mode === 'listening' && liveState.sessionData) {
+      authorText = `De: ${liveState.sessionData.name}`;
+  } else if (liveState.mode === 'broadcasting') {
+      authorText = 'Transmitiendo...';
+  }
+  $("#miniAuthor").textContent = authorText;
 }
 
 function refreshIndicators() {
@@ -86,7 +104,7 @@ function refreshIndicators() {
     let trackId = el.dataset.trackId;
     const isCurrentTrack = trackId === curId;
     el.classList.toggle("is-playing", isCurrentTrack);
-    
+
     const cardPlay = el.querySelector(".card-play");
     if (cardPlay) cardPlay.classList.toggle("playing", isPlaying && isCurrentTrack);
 
@@ -102,11 +120,12 @@ function refreshIndicators() {
 }
 
 function updateControlStates() {
-    $("#btnShuffle")?.classList.toggle('active', isShuffle);
+    const isListening = liveState.mode === 'listening';
+    $("#btnShuffle")?.classList.toggle('active', isShuffle && !isListening);
     const repeatBtn = $("#btnRepeat");
     if (repeatBtn) {
-        repeatBtn.classList.toggle('active', repeatMode !== 'none');
-        repeatBtn.innerHTML = (repeatMode === 'one')
+        repeatBtn.classList.toggle('active', repeatMode !== 'none' && !isListening);
+        repeatBtn.innerHTML = (repeatMode === 'one' && !isListening)
           ? `<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zM13 15V9h-1l-2 1v1h1.5v4H13z"/></svg>`
           : `<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
     }
@@ -263,11 +282,83 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
+// --- NUEVO: Lógica de UI para Transmisiones ---
+function renderLiveSessions(sessions) {
+    const listEl = $("#sessionsList");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    if (sessions.length === 0) {
+        listEl.innerHTML = `<div class="empty muted">No hay transmisiones activas.</div>`;
+        return;
+    }
+    sessions.forEach(session => {
+        const item = document.createElement("div");
+        item.className = "session-item";
+        item.dataset.sessionId = session.id;
+        item.dataset.sessionName = session.name;
+        item.innerHTML = `
+            <div class="session-item-meta">
+                <span class="session-item-name">${session.name}</span>
+                <span class="session-item-genre">${session.genre}</span>
+            </div>
+            <div class="session-item-live-indicator">EN VIVO</div>
+        `;
+        item.addEventListener("click", () => {
+            startListening(session.id, session.name);
+            $("#sessionsSheet").classList.remove("show");
+            $("#leaveStreamBtn").classList.remove("hide");
+        });
+        listEl.appendChild(item);
+    });
+}
+
+function initLiveStreamsUI() {
+    const broadcastBtn = $("#broadcastBtn");
+    const startStreamSheet = $("#startStreamSheet");
+    const sessionsSheet = $("#sessionsSheet");
+
+    broadcastBtn?.addEventListener("click", () => {
+        if (liveState.mode === 'broadcasting') {
+            stopBroadcasting();
+        } else {
+            startStreamSheet.classList.add("show");
+        }
+    });
+
+    $("#startStreamCancel")?.addEventListener("click", () => startStreamSheet.classList.remove("show"));
+    $("#startStreamConfirm")?.addEventListener("click", async () => {
+        const name = $("#streamNameInput").value.trim();
+        const genre = $("#streamGenreSelect").value;
+        if (!name) {
+            showToast("Por favor, ingresa un nombre para la transmisión.", true);
+            return;
+        }
+        startStreamSheet.classList.remove("show");
+        const success = await startBroadcasting(name, genre);
+        if (!success) {
+             showToast("No se pudo iniciar la transmisión.", true);
+        }
+    });
+
+    $("#btnShowStreams")?.addEventListener("click", async () => {
+        sessionsSheet.classList.add("show");
+        const sessions = await getLiveSessions();
+        renderLiveSessions(sessions);
+        $("#leaveStreamBtn").classList.toggle("hide", liveState.mode !== 'listening');
+    });
+
+    $("#closeSessions")?.addEventListener("click", () => sessionsSheet.classList.remove("show"));
+    $("#leaveStreamBtn")?.addEventListener("click", () => {
+        stopListening();
+        sessionsSheet.classList.remove("show");
+    });
+}
+
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
   await initFirebase();
-  
+
   const playlistKeys = Object.keys(recommendedPlaylists);
   const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
   const results = await Promise.all(fetchPromises);
@@ -283,25 +374,26 @@ async function boot(){
   initSearch();
   initPlaylistModals();
   initSpotifyImportUI();
+  initLiveStreamsUI(); // NUEVO
 
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
-  
+
   heroScrollInvalidate();
   document.title = "SanaveraYou Pro";
-  
+
   // Event Listeners globales
   $("#bottomNav").addEventListener("click", e=>{
     const btn = e.target.closest(".nav-btn"); if(!btn || btn.classList.contains('active')) return;
     switchView(btn.dataset.view);
   });
-  
+
   document.addEventListener("click", async (e) => {
     const itemEl = e.target.closest("[data-track-id]");
     if (!itemEl) return;
-    
+
     const trackId = itemEl.dataset.trackId;
-    const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue.find(t => t.id === trackId);
+    const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
     if (!track) return;
 
     if (e.target.closest(".fav-btn")) {
@@ -309,8 +401,9 @@ async function boot(){
         toggleFav(track);
         return;
     }
-    
+
     if (e.target.closest(".icon-btn.more")) {
+        if(liveState.mode === 'listening') return; // No actions for listeners
         const actions = [
             { id: "pl", label: "Agregar a playlist" }
         ];
