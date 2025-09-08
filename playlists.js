@@ -461,3 +461,158 @@ function initPlaylistModals() {
         }
     };
 }
+
+/* ========== Spotify Import UI & Logic (NUEVO) ========== */
+function initSpotifyImportUI() {
+    const playlistsView = document.getElementById('view-playlists');
+    if (!playlistsView) return;
+    const header = playlistsView.querySelector('.section-head');
+    if (!header || playlistsView.querySelector('#syBtnImportSpotify')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'syBtnImportSpotify';
+    btn.className = 'pill';
+    btn.innerHTML = `${spotifyLogoSvg()} Importar de Spotify`;
+    btn.style.display = 'flex';
+    btn.style.alignItems = 'center';
+    btn.style.gap = '8px';
+    
+    const actionsDiv = header.querySelector('.pl-actions');
+    if (actionsDiv) {
+        actionsDiv.prepend(btn);
+    } else {
+        header.appendChild(btn);
+    }
+
+    btn.addEventListener('click', openSpotifyImportModal);
+}
+
+function openSpotifyImportModal() {
+    if (document.getElementById('sySpotifyModal')) {
+        document.getElementById('sySpotifyModal').classList.add('show');
+        return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'sySpotifyModal';
+    modal.className = 'sheet'; // Reutilizamos el estilo de 'sheet' para el overlay
+    modal.innerHTML = `
+        <div class="sheet-content">
+          <div class="sheet-title">Importar playlists de Spotify</div>
+          <p class="muted" style="margin: 8px 0 16px;">Pega el enlace a una playlist pública de Spotify.</p>
+          <div class="sheet-form">
+            <input id="sySmInput" type="text" placeholder="https://open.spotify.com/playlist/..." autocomplete="off">
+          </div>
+          <div class="sheet-actions">
+            <button id="sySmCancel" class="sheet-item ghost">Cancelar</button>
+            <button id="sySmFetch" class="sheet-item pill">Importar</button>
+          </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.classList.add('show');
+    
+    modal.addEventListener('click', (e)=>{ if (e.target === modal) modal.classList.remove('show'); });
+    modal.querySelector('#sySmCancel').onclick = ()=> modal.classList.remove('show');
+    modal.querySelector('#sySmFetch').onclick = fetchAndImportSpotifyPlaylist;
+    setTimeout(()=> modal.querySelector('#sySmInput')?.focus(), 60);
+}
+
+function parseSpotifyPlaylistId(input) {
+    if (!input) return null;
+    const cleanedInput = input.trim().split('?')[0];
+    const spotifyPlaylistRegex = /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
+    const match = cleanedInput.match(spotifyPlaylistRegex);
+    return match && match[1] ? match[1] : null;
+}
+
+async function fetchAndImportSpotifyPlaylist() {
+    const input = document.getElementById('sySmInput').value.trim();
+    const playlistId = parseSpotifyPlaylistId(input);
+    const modal = document.getElementById('sySpotifyModal');
+    
+    if (!playlistId) {
+        showToast("URL de playlist de Spotify no válida.", true);
+        return;
+    }
+
+    const fetchBtn = modal.querySelector('#sySmFetch');
+    fetchBtn.disabled = true;
+    fetchBtn.textContent = 'Importando...';
+
+    try {
+        const token = await getSpotifyToken();
+        const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('No se pudo obtener la playlist.');
+        const plData = await response.json();
+
+        const spotifyTracks = await fetchAllSpotifyPlaylistTracks(playlistId);
+        if (spotifyTracks.length === 0) {
+            showToast("La playlist está vacía o no se pudieron cargar las canciones.", true);
+            return;
+        }
+        
+        await processAndSavePlaylist({
+            spotifyId: plData.id,
+            name: plData.name,
+            creator: plData.owner.display_name,
+            cover: plData.images?.[0]?.url || '',
+            spotifyTracks: spotifyTracks,
+        });
+
+        showToast(`Playlist "${plData.name}" importada.`);
+        modal.classList.remove('show');
+
+    } catch(e) {
+        console.error("Error importing spotify playlist:", e);
+        showToast("Error al importar la playlist. Revisa el enlace.", true);
+    } finally {
+        fetchBtn.disabled = false;
+        fetchBtn.textContent = 'Importar';
+    }
+}
+
+async function processAndSavePlaylist(pl) {
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
+    const col = collection(db, 'playlists');
+    
+    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        const docRef = await addDoc(col, {
+            name: pl.name,
+            creator: pl.creator,
+            isPublic: false,
+            cover: pl.cover || null,
+            source: 'spotify',
+            spotifyId: pl.spotifyId,
+            spotifyTracks: pl.spotifyTracks,
+            trackCount: pl.spotifyTracks.length,
+            tracks: Array(pl.spotifyTracks.length).fill(null),
+            status: 'unresolved',
+            resolvedCount: 0,
+            updatedAt: serverTimestamp(),
+            ownerUserId: "current_user_id_placeholder"
+        });
+        addMyPlaylistId(docRef.id);
+    } else {
+        const docId = snapshot.docs[0].id;
+        const existingDocRef = doc(db, 'playlists', docId);
+        await updateDoc(existingDocRef, {
+            name: pl.name,
+            creator: pl.creator,
+            cover: pl.cover,
+            spotifyTracks: pl.spotifyTracks,
+            trackCount: pl.spotifyTracks.length,
+            // Opcional: resetear 'tracks' para forzar una nueva resolución
+            // tracks: Array(pl.spotifyTracks.length).fill(null),
+            // resolvedCount: 0,
+            // status: 'unresolved',
+            updatedAt: serverTimestamp()
+        });
+        showToast(`Playlist "${pl.name}" actualizada.`);
+    }
+}
