@@ -2,10 +2,10 @@
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
 const recommendedPlaylists = {
-  p1: { ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYlqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'], title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar', creator: 'Luis Sanavera', data: [], isRecommended: true },
+  p1: { ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZN1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxTNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYLqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'], title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar', creator: 'Luis Sanavera', data: [], isRecommended: true },
   p2: { ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'], title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia', creator: 'Luis Sanavera', data: [], isRecommended: true },
   cumbia: { ids: [ 'UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQ6svFb8_0', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c' ], title: 'Cumbias del Recuerdo', creator: 'Luis Sanavera', data: [], isRecommended: true },
-  reggaeton: { ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48MV59LU', '0VR3dfZf9Yg'], title: 'Noche de Reggaetón', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
+  reggaeton: { ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'], title: 'Noche de Reggaetón', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
   reggae: { ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', 'ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'], title: 'Vibras de Reggae', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
   pop: { ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'], title: 'Éxitos Pop', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
   rock_int: { ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'], title: 'Himnos del Rock', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
@@ -263,61 +263,6 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
-/**
- * Maneja las actualizaciones en tiempo real de la playlist que se está reproduciendo.
- * @param {object} updatedPlaylist - El objeto de la playlist con los datos nuevos.
- */
-function handleRealtimeUpdate(updatedPlaylist) {
-    console.log(`Playlist '${updatedPlaylist.name}' updated in real-time.`);
-    const newPlayableTracks = (updatedPlaylist.tracks || []).filter(t => t && t.id);
-    const currentTrackId = currentTrack ? currentTrack.id : null;
-    
-    let tracksToShow = updatedPlaylist.tracks || [];
-    if (updatedPlaylist.source === 'spotify') {
-        tracksToShow = (updatedPlaylist.tracks || Array(updatedPlaylist.spotifyTracks.length).fill(null))
-            .map((track, index) => track || (updatedPlaylist.spotifyTracks[index] ? { ...updatedPlaylist.spotifyTracks[index], id: null, thumb: updatedPlaylist.spotifyTracks[index].thumb || updatedPlaylist.cover } : null))
-            .filter(Boolean);
-    }
-    renderQueue(tracksToShow, updatedPlaylist.name);
-
-    if (newPlayableTracks.length === 0) {
-        if (ytPlayer) ytPlayer.stopVideo();
-        currentTrack = null; queue = []; qIdx = -1;
-        updateUIOnTrackChange();
-        return;
-    }
-    const wasPlayingTrackRemoved = currentTrackId && !newPlayableTracks.some(t => t.id === currentTrackId);
-    if (wasPlayingTrackRemoved) {
-        let nextIndex = qIdx;
-        if (nextIndex >= newPlayableTracks.length) nextIndex = newPlayableTracks.length - 1;
-        setQueue(newPlayableTracks, 'playlist', nextIndex);
-        playCurrent(true);
-    } else {
-        let newCurrentIndex = qIdx;
-        if (currentTrackId) newCurrentIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
-        setQueue(newPlayableTracks, 'playlist', newCurrentIndex);
-    }
-}
-
-/**
- * Inicializa los listeners para la creación de playlists.
- */
-function initPlaylistModals() {
-    $("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
-    $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
-    $("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
-    $("#createPlConfirm").onclick = async () => {
-        const name = $("#newPlName").value.trim();
-        const creator = $("#newPlCreator").value.trim();
-        if (await createNewPlaylist(name, creator)) {
-            $("#newPlName").value = ""; 
-            $("#newPlCreator").value = ""; 
-            $("#createPlaylistSheet").classList.remove("show");
-        }
-    };
-}
-
-
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
@@ -351,20 +296,12 @@ async function boot(){
     switchView(btn.dataset.view);
   });
   
-  window.addEventListener('playlistsUpdated', e => {
-      renderPlaylists();
-      renderAllHomePlaylists();
-      if(e.detail.needsRealtimeUpdate && e.detail.updatedPlaylist) {
-          handleRealtimeUpdate(e.detail.updatedPlaylist);
-      }
-  });
-
   document.addEventListener("click", async (e) => {
     const itemEl = e.target.closest("[data-track-id]");
     if (!itemEl) return;
     
     const trackId = itemEl.dataset.trackId;
-    const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || (queue || []).find(t => t.id === trackId);
+    const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue.find(t => t.id === trackId);
     if (!track) return;
 
     if (e.target.closest(".fav-btn")) {
@@ -374,23 +311,13 @@ async function boot(){
     }
     
     if (e.target.closest(".icon-btn.more")) {
-        const actions = [{ id: "pl", label: "Agregar a playlist" }];
-        
-        const isQueueItemInMyPlaylist = itemEl.classList.contains("queue-item") && 
-                                        queueType === 'playlist' && 
-                                        viewingPlaylistId && 
-                                        isMyPlaylist(viewingPlaylistId);
+        const actions = [
+            { id: "pl", label: "Agregar a playlist" }
+        ];
 
-        if (isQueueItemInMyPlaylist) {
-            const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
-            const trackIndex = pl.tracks.findIndex(t => t.id === trackId);
-
-            if (trackIndex > -1) {
-                actions.push({ id: "correct_name", label: "Corregir nombre" });
-                actions.push({ id: "rename", label: "Renombrar" });
-                actions.push({ id: "reassign", label: "Reasignar fuente" });
-                actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
-            }
+        if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
+            actions.push({ id: "reassign", label: "Reasignar fuente" });
+            actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
         }
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
@@ -398,16 +325,9 @@ async function boot(){
             title: track.title,
             actions: actions,
             onAction: (act) => {
-                const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
-                const trackIndex = pl ? pl.tracks.findIndex(t => t.id === trackId) : -1;
-
                 if (act === "pl") openPlaylistSheet(track);
-                if (isQueueItemInMyPlaylist && trackIndex > -1) {
-                    if (act === "delete") removeFromPlaylist(viewingPlaylistId, trackId);
-                    if (act === "reassign") reassignTrackSource(viewingPlaylistId, trackId);
-                    if (act === "correct_name") correctTrackName(viewingPlaylistId, trackIndex);
-                    if (act === "rename") renameTrackManually(viewingPlaylistId, trackIndex);
-                }
+                if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
+                if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
             }
         });
     }
