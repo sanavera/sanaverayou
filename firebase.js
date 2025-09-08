@@ -368,18 +368,25 @@ async function createLiveSession(name, genre) {
         status: "active",
         currentTrack: null,
         isPlaying: false,
-        timestamp: null,
-        createdAt: serverTimestamp()
+        timestampStart: null, // Campo para sincronización
+        createdAt: serverTimestamp(),
+        lastSeen: serverTimestamp() // Para detectar desconexiones
     });
     return docRef.id;
 }
 
 async function updateLiveSession(sessionId, data) {
+    if (!sessionId) return;
     const { doc, updateDoc } = sy_fs();
-    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), data);
+    try {
+        await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), data);
+    } catch(e) {
+        console.warn("Could not update session, it might have been deleted.", e.message);
+    }
 }
 
 async function deleteLiveSession(sessionId) {
+    if (!sessionId) return;
     const { doc, deleteDoc } = sy_fs();
     await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId));
 }
@@ -391,16 +398,25 @@ function listenToSessionChanges(sessionId, callback) {
     });
 }
 
-// CORREGIDO: Escucha en tiempo real en lugar de pedir una sola vez.
 function listenForLiveSessions(callback) {
     const { collection, query, where, onSnapshot } = sy_fs();
     const q = query(collection(db, SESSIONS_COLLECTION), where("status", "==", "active"));
     
     return onSnapshot(q, (snapshot) => {
-        const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const now = Date.now();
+        const thirtySecondsAgo = now - 30000; // 30 segundos de tolerancia
+
+        const sessions = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(session => {
+                if (!session.lastSeen) return false; // Si no tiene lastSeen, es inválida
+                const lastSeenTime = session.lastSeen.toDate().getTime();
+                return lastSeenTime > thirtySecondsAgo; // Solo las vistas en los últimos 30s
+            });
+            
         callback(sessions);
     }, (error) => {
         console.error("Error listening to live sessions:", error);
-        callback([]); // Enviar array vacío en caso de error
+        callback([]);
     });
 }
