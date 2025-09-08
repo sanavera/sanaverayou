@@ -612,32 +612,89 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .stream-btn:hover { transform: scale(1.1); }
 
 /* --- Botón de Transmitir --- */
-.broadcast-wrapper { display: flex; align-items: center; gap: 6px; }
-.stream-btn-broadcast { background-color: #ef4444; }
+.broadcast-wrapper { 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+}
+
+.stream-btn-broadcast { 
+  background-color: #ef4444; 
+}
 
 .mic-icon {
-  width: 8px; height: 12px; background: white;
-  border-radius: 4px; position: relative;
+  width: 16px;
+  height: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.mic-icon::before {
-  content: ''; position: absolute; bottom: -4px; left: -3px;
-  width: 14px; height: 4px; background: white; border-radius: 2px;
-}
-.broadcast-wrapper.broadcasting .stream-btn-broadcast { animation: blink-red 1.5s infinite; }
-.broadcast-wrapper .broadcast-label {
-  display: none; font-size: 11px; font-weight: 600;
-  color: var(--accent-light); white-space: nowrap;
-}
-.broadcast-wrapper.broadcasting .broadcast-label { display: block; }
-.broadcast-wrapper.broadcasting .mic-icon {
-    width: 12px; height: 12px; border-radius: 2px; background: white;
-}
-.broadcast-wrapper.broadcasting .mic-icon::before { display: none; }
 
+.mic-icon::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 10px;
+  background: white;
+  border-radius: 3px 3px 0 0;
+  top: 1px;
+}
+
+.mic-icon::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 8px;
+  border: 1.5px solid white;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  bottom: 3px;
+  background: transparent;
+}
+
+/* Base del micrófono */
+.mic-icon {
+  background: linear-gradient(to bottom, transparent 13px, white 13px, white 14px, transparent 14px);
+}
+
+.broadcast-wrapper.broadcasting .stream-btn-broadcast { 
+  animation: blink-red 1.5s infinite; 
+}
+
+.broadcast-wrapper .broadcast-label {
+  display: none; 
+  font-size: 11px; 
+  font-weight: 600;
+  color: var(--accent-light); 
+  white-space: nowrap;
+}
+
+.broadcast-wrapper.broadcasting .broadcast-label { 
+  display: block; 
+}
+
+.broadcast-wrapper.broadcasting .mic-icon::before {
+  background: #ef4444;
+}
+
+.broadcast-wrapper.broadcasting .mic-icon::after {
+  border-color: #ef4444;
+}
+
+.broadcast-wrapper.broadcasting .mic-icon {
+  background: linear-gradient(to bottom, transparent 13px, #ef4444 13px, #ef4444 14px, transparent 14px);
+}
 
 @keyframes blink-red {
-  0%, 100% { background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  50% { background-color: #f87171; box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.5); }
+  0%, 100% { 
+    background-color: #ef4444; 
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); 
+  }
+  50% { 
+    background-color: #f87171; 
+    box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.5); 
+  }
 }
 
 /* --- Botón de Ver Transmisiones --- */
@@ -645,24 +702,52 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   background-color: #22c55e;
   animation: pulse-green 2.5s infinite;
 }
+
 .headphone-icon {
-    width: 18px; height: 18px; position: relative;
-    border: 2px solid white; border-radius: 50%;
-    border-bottom-color: transparent; border-left-color: transparent;
-    transform: rotate(45deg);
+  width: 16px;
+  height: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.headphone-icon::before, .headphone-icon::after {
-    content: ''; position: absolute;
-    width: 6px; height: 8px; background: white;
-    border-radius: 2px;
+
+/* Diadema de los auriculares */
+.headphone-icon::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  top: 0;
+  left: 2px;
 }
-.headphone-icon::before { top: 12px; left: -3px; transform: rotate(-45deg); }
-.headphone-icon::after { top: -1px; left: 7px; transform: rotate(-45deg); }
+
+/* Auricular izquierdo */
+.headphone-icon::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 6px;
+  background: white;
+  border-radius: 2px;
+  bottom: 2px;
+  left: 1px;
+  box-shadow: 10px 0 0 white; /* Auricular derecho */
+}
 
 @keyframes pulse-green {
-  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
-  70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  0% { 
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); 
+  }
+  70% { 
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); 
+  }
+  100% { 
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); 
+  }
 }
 
 /* --- Modal de Transmisiones --- */
@@ -698,3 +783,4 @@ body.is-listening #npPlay, body.is-listening #miniPlay { opacity: 0.5; }
 .broadcast-wrapper {
     margin-left: auto; /* Mueve el botón de transmitir a la derecha */
 }
+
