@@ -19,7 +19,6 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 
 // --- AJUSTADO: Estado de Transmisión en Vivo ---
-const BUFFER_DELAY = 5000; // 5 segundos de buffer
 let liveState = {
     mode: 'none', // 'none', 'broadcasting', 'listening'
     sessionId: null,
@@ -27,7 +26,6 @@ let liveState = {
 };
 let sessionUnsubscribe = null;
 let heartbeatInterval = null;
-let scheduledPlayTimeout = null; // NUEVO: Temporizador para la reproducción sincronizada
 
 /**
  * Carga la API de IFrame de YouTube.
@@ -190,24 +188,23 @@ function playCurrent(autoplay=false){
     return;
   }
 
-  // Carga el video sin reproducir en todos los casos primero
-  ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
-  ytPlayer.pauseVideo(); // Asegura que esté pausado al cargar
-
   if (liveState.mode === 'broadcasting') {
-      const timestampStart = Date.now() + BUFFER_DELAY;
-      updateLiveSession(liveState.sessionId, {
-          currentTrack: currentTrack,
-          isPlaying: autoplay,
-          timestampStart: autoplay ? timestampStart : null
-      });
-
-      if (autoplay) {
-          // El transmisor también obedece al timestamp que acaba de crear
-          schedulePlayback(timestampStart);
-      }
+      // El transmisor reproduce localmente DE INMEDIATO
+      ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
+      if(autoplay) ytPlayer.playVideo();
+      
+      // Y notifica el nuevo estado a los clientes
+      setTimeout(() => { // Pequeño delay para que ytPlayer.getCurrentTime() sea preciso
+          updateLiveSession(liveState.sessionId, {
+              currentTrack: currentTrack,
+              isPlaying: autoplay,
+              currentTime: 0,
+              stateChangeTimestamp: sy_fs().serverTimestamp()
+          });
+      }, 1500); // 1.5s de delay para notificar
   } else {
-      // Modo local
+      // Modo local normal
+      ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
       if(autoplay) ytPlayer.playVideo();
   }
 
@@ -226,23 +223,16 @@ function togglePlay(){
   const state = ytPlayer.getPlayerState();
   const isCurrentlyPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
 
-  if (isCurrentlyPlaying) {
-      ytPlayer.pauseVideo();
-      if (liveState.mode === 'broadcasting') {
-          updateLiveSession(liveState.sessionId, { isPlaying: false, timestampStart: null });
-      }
-  } else {
-      // Al reanudar
-      if (liveState.mode === 'broadcasting') {
-          const currentTime = ytPlayer.getCurrentTime() || 0;
-          // Calcula el timestamp de inicio original basado en la posición actual
-          const timestampStart = (Date.now() + BUFFER_DELAY) - (currentTime * 1000);
-          updateLiveSession(liveState.sessionId, { isPlaying: true, timestampStart: timestampStart });
-          // El transmisor también agenda su propia reanudación
-          schedulePlayback(timestampStart);
-      } else {
-          ytPlayer.playVideo();
-      }
+  // La acción local es inmediata para el transmisor
+  isCurrentlyPlaying ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+
+  if (liveState.mode === 'broadcasting') {
+      // Notifica el cambio de estado a los clientes
+      updateLiveSession(liveState.sessionId, {
+          isPlaying: !isCurrentlyPlaying,
+          currentTime: ytPlayer.getCurrentTime() || 0,
+          stateChangeTimestamp: sy_fs().serverTimestamp()
+      });
   }
 }
 
@@ -273,7 +263,7 @@ function next(){
     ytPlayer.stopVideo();
     currentTrack = null;
     if (liveState.mode === 'broadcasting') {
-        updateLiveSession(liveState.sessionId, { isPlaying: false, currentTrack: null, timestampStart: null });
+        updateLiveSession(liveState.sessionId, { isPlaying: false, currentTrack: null });
     }
     updateUIOnTrackChange();
   }
@@ -286,12 +276,15 @@ function prev(){
   if (liveState.mode === 'listening') return;
   if (!queue) return;
   if (ytPlayer.getCurrentTime() > 3) {
-    ytPlayer.seekTo(0, true);
-    if (liveState.mode === 'broadcasting') {
-        const timestampStart = Date.now() + BUFFER_DELAY;
-        updateLiveSession(liveState.sessionId, { isPlaying: true, timestampStart: timestampStart });
-        schedulePlayback(timestampStart);
-    }
+      // Reinicia la canción actual
+      ytPlayer.seekTo(0, true);
+      if (liveState.mode === 'broadcasting') {
+          updateLiveSession(liveState.sessionId, {
+              isPlaying: true,
+              currentTime: 0,
+              stateChangeTimestamp: sy_fs().serverTimestamp()
+          });
+      }
   } else if (qIdx - 1 >= 0) {
     qIdx--;
     playCurrent(true);
@@ -473,9 +466,12 @@ async function startBroadcasting(name, genre) {
         window.addEventListener('beforeunload', stopBroadcasting);
 
         if (currentTrack) {
-            const isPlaying = getPlaybackState() === 'playing';
-            const timestampStart = isPlaying ? ((Date.now() + BUFFER_DELAY) - ((ytPlayer.getCurrentTime() || 0) * 1000)) : null;
-            updateLiveSession(sessionId, { currentTrack, isPlaying, timestampStart });
+            updateLiveSession(sessionId, {
+                currentTrack,
+                isPlaying: getPlaybackState() === 'playing',
+                currentTime: ytPlayer.getCurrentTime() || 0,
+                stateChangeTimestamp: sy_fs().serverTimestamp()
+            });
         }
         return true;
     } catch (e) {
@@ -523,10 +519,6 @@ function stopListening() {
     }
     window.removeEventListener('beforeunload', stopListening);
 
-    // Limpia cualquier reproducción agendada
-    if (scheduledPlayTimeout) clearTimeout(scheduledPlayTimeout);
-    scheduledPlayTimeout = null;
-
     liveState.mode = 'none';
     liveState.sessionId = null;
     liveState.sessionData = null;
@@ -537,45 +529,11 @@ function stopListening() {
 }
 
 /**
- * NUEVO: Función central para agendar la reproducción sincronizada.
- * @param {number} targetTimestamp - El timestamp de Unix en el que debe empezar a sonar la música.
- */
-function schedulePlayback(targetTimestamp) {
-    if (scheduledPlayTimeout) {
-        clearTimeout(scheduledPlayTimeout);
-    }
-
-    const now = Date.now();
-    const delay = targetTimestamp - now;
-
-    if (delay > 0) {
-        // El momento de inicio es en el futuro. Pausamos y esperamos.
-        ytPlayer.pauseVideo();
-        scheduledPlayTimeout = setTimeout(() => {
-            ytPlayer.playVideo();
-        }, delay);
-    } else {
-        // El momento ya pasó. El cliente se une tarde.
-        // Calculamos en qué segundo de la canción debería estar.
-        const seekToTime = Math.abs(delay) / 1000;
-        const duration = ytPlayer.getDuration() || Infinity;
-
-        if (seekToTime < duration) {
-            ytPlayer.seekTo(seekToTime, true);
-            ytPlayer.playVideo();
-        } else {
-            // La canción ya terminó para el transmisor
-            ytPlayer.pauseVideo();
-        }
-    }
-}
-
-/**
  * CORREGIDO: Maneja las actualizaciones de la sesión para el cliente.
  * @param {object} sessionData - Los datos de la sesión desde Firestore.
  */
 function handleSessionUpdate(sessionData) {
-    if (liveState.mode !== 'listening') return;
+    if (liveState.mode !== 'listening' || !YT_READY) return;
 
     if (!sessionData || sessionData.status === 'ended') {
         showToast("La transmisión finalizó.", true);
@@ -587,6 +545,8 @@ function handleSessionUpdate(sessionData) {
 
     liveState.sessionData = sessionData;
     const remoteTrack = sessionData.currentTrack;
+    const remoteTime = sessionData.currentTime || 0;
+    const remoteTimestamp = sessionData.stateChangeTimestamp;
 
     if (!remoteTrack) {
         ytPlayer.pauseVideo();
@@ -596,26 +556,34 @@ function handleSessionUpdate(sessionData) {
     }
 
     const isNewTrack = remoteTrack.id !== currentTrack?.id;
+
     if (isNewTrack) {
         currentTrack = remoteTrack;
         updateUIOnTrackChange();
-        // Carga el video y lo deja listo (pausado)
-        ytPlayer.loadVideoById({ videoId: currentTrack.id, suggestedQuality: "auto" });
-        ytPlayer.pauseVideo();
-    }
 
-    const isPlayingRemotely = sessionData.isPlaying;
-    const remoteTimestampStart = sessionData.timestampStart;
+        let startSeconds = remoteTime;
+        if (remoteTimestamp && sessionData.isPlaying) {
+            // Calcula el tiempo transcurrido desde que el transmisor cambió de estado
+            const elapsed = (Date.now() - remoteTimestamp.toDate().getTime()) / 1000;
+            startSeconds += elapsed;
+        }
 
-    // Limpia cualquier reproducción agendada anterior al recibir nuevo estado
-    if (scheduledPlayTimeout) clearTimeout(scheduledPlayTimeout);
-    scheduledPlayTimeout = null;
+        // Carga el video directamente en el segundo correcto
+        ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: Math.max(0, startSeconds) });
+        if (sessionData.isPlaying) {
+             // Pequeño delay para dar tiempo a cargar el video antes de reproducir
+            setTimeout(() => ytPlayer.playVideo(), 1500);
+        }
 
-    if (isPlayingRemotely && remoteTimestampStart) {
-        // Si el transmisor está reproduciendo, agendamos nuestra reproducción
-        schedulePlayback(remoteTimestampStart);
     } else {
-        // Si el transmisor pausó, pausamos inmediatamente
-        ytPlayer.pauseVideo();
+        // La canción es la misma, solo se actualiza el estado play/pause
+        const isPlayingRemotely = sessionData.isPlaying;
+        const isPlayingLocally = getPlaybackState() === 'playing';
+
+        if (isPlayingRemotely && !isPlayingLocally) {
+            ytPlayer.playVideo();
+        } else if (!isPlayingRemotely && isPlayingLocally) {
+            ytPlayer.pauseVideo();
+        }
     }
 }
