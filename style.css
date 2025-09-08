@@ -194,9 +194,12 @@ html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
 .subtitle{font-size:var(--subtitle-size);color:var(--text-secondary);margin-top:4px}
 
 /* Acciones / tres puntitos */
-.actions{display:flex;gap:6px;margin-left:auto}
-.icon-btn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
-.icon-btn.more, .icon-btn.more svg, .icon-btn.more path{color:var(--dots)!important;fill:var(--dots)!important}
+.actions{display:flex;gap:4px;margin-left:auto;align-items:center;}
+.icon-btn{width:36px;height:36px;border-radius:12px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0; color: var(--text-secondary);}
+.icon-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.more { color:var(--dots); }
+.icon-btn.fav-btn.is-fav { color: var(--accent-light); }
 
 /* ====== PLAYLISTS (Diseño de tarjetas) ====== */
 .pl-grid {
@@ -533,9 +536,11 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   display: inline-flex; align-items: center; flex-shrink: 0;
   width: 16px; height: 16px;
 }
+/* AJUSTE: Colores para los logos de origen */
 .source-logo.spotify-logo { color: #1DB954; }
 .source-logo.youtube-logo { color: #FF0000; }
-.result-item .source-logo svg { width: 16px; height: 16px; }
+.source-logo.ytmusic-logo { color: #FF0000; }
+.result-item .source-logo svg { width: 16px; height: 16px; fill: currentColor; }
 
 /* ====== Tarjeta de Canción (NUEVO) ====== */
 .result-item.as-card {
@@ -561,6 +566,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .loading-indicator { text-align: center; padding: 60px 20px; color: var(--text-secondary); animation: fadeIn .5s ease-out; }
 .loading-indicator h3 { color: var(--text-primary); margin-bottom: 8px; font-size: 1.2em; }
 .loading-indicator p { margin: 0; font-size: 0.9em; }
+.empty { text-align: center; padding: 40px 20px; }
 
 /* Toast */
 #sy-toast {
@@ -582,16 +588,6 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 
 /* ========== Spotify Import & Resolver ========== */
 .sy-pl-toolbar{ display:flex; justify-content:flex-end; align-items:center; gap:8px; margin: 8px 8px 12px; }
-.sy-modal{ position: fixed; inset:0; display:none; z-index: 10000; }
-.sy-modal.show{ display:block; }
-.sy-modal__overlay{ position:absolute; inset:0; background: rgba(0,0,0,.45); }
-.sy-modal__card{ position: relative; margin: 6vh auto 0; max-width: 680px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 16px 40px rgba(0,0,0,.35); }
-.sy-field input{ padding:10px 12px; border:1px solid var(--border); border-radius:10px; background: var(--bg); color: var(--text-primary); }
-.sy-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
-.sy-pl-list{ max-height: 52vh; overflow:auto; display:flex; flex-direction:column; gap:8px; }
-.sy-pl-row{ display:grid; grid-template-columns: 20px 48px 1fr auto; gap:10px; align-items:center; padding:8px; border:1px solid var(--border); border-radius:12px; }
-.sy-pl-row img{ width:48px; height:48px; object-fit:cover; border-radius:8px; }
-.sy-pl-name{ font-weight:700; }
 #resolver-modal {
     position: fixed; bottom: calc(var(--nav-h) + var(--seek-h) + 8px + var(--safe));
     left: 50%; animation: slideUp .3s cubic-bezier(.4,0,.2,1); z-index: 1500;
