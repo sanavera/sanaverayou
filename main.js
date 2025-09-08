@@ -263,6 +263,42 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
+/**
+ * Maneja las actualizaciones en tiempo real de la playlist que se está reproduciendo.
+ * @param {object} updatedPlaylist - El objeto de la playlist con los datos nuevos.
+ */
+function handleRealtimeUpdate(updatedPlaylist) {
+    console.log(`Playlist '${updatedPlaylist.name}' updated in real-time.`);
+    const newPlayableTracks = (updatedPlaylist.tracks || []).filter(t => t && t.id);
+    const currentTrackId = currentTrack ? currentTrack.id : null;
+    
+    let tracksToShow = updatedPlaylist.tracks || [];
+    if (updatedPlaylist.source === 'spotify') {
+        tracksToShow = (updatedPlaylist.tracks || Array(updatedPlaylist.spotifyTracks.length).fill(null))
+            .map((track, index) => track || (updatedPlaylist.spotifyTracks[index] ? { ...updatedPlaylist.spotifyTracks[index], id: null, thumb: updatedPlaylist.spotifyTracks[index].thumb || updatedPlaylist.cover } : null))
+            .filter(Boolean);
+    }
+    renderQueue(tracksToShow, updatedPlaylist.name);
+
+    if (newPlayableTracks.length === 0) {
+        if (ytPlayer) ytPlayer.stopVideo();
+        currentTrack = null; queue = []; qIdx = -1;
+        updateUIOnTrackChange();
+        return;
+    }
+    const wasPlayingTrackRemoved = currentTrackId && !newPlayableTracks.some(t => t.id === currentTrackId);
+    if (wasPlayingTrackRemoved) {
+        let nextIndex = qIdx;
+        if (nextIndex >= newPlayableTracks.length) nextIndex = newPlayableTracks.length - 1;
+        setQueue(newPlayableTracks, 'playlist', nextIndex);
+        playCurrent(true);
+    } else {
+        let newCurrentIndex = qIdx;
+        if (currentTrackId) newCurrentIndex = newPlayableTracks.findIndex(t => t.id === currentTrackId);
+        setQueue(newPlayableTracks, 'playlist', newCurrentIndex);
+    }
+}
+
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
@@ -296,23 +332,28 @@ async function boot(){
     switchView(btn.dataset.view);
   });
   
+  window.addEventListener('playlistsUpdated', e => {
+      renderPlaylists();
+      renderAllHomePlaylists();
+      if(e.detail.needsRealtimeUpdate && e.detail.updatedPlaylist) {
+          handleRealtimeUpdate(e.detail.updatedPlaylist);
+      }
+  });
+
   document.addEventListener("click", async (e) => {
     const itemEl = e.target.closest("[data-track-id]");
     if (!itemEl) return;
     
     const trackId = itemEl.dataset.trackId;
-    // Unificar la búsqueda de la canción en todas las posibles listas
     const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || (queue || []).find(t => t.id === trackId);
     if (!track) return;
 
-    // Manejar clic en el botón de favoritos
     if (e.target.closest(".fav-btn")) {
         e.stopPropagation();
         toggleFav(track);
         return;
     }
     
-    // Manejar clic en el menú de "más opciones"
     if (e.target.closest(".icon-btn.more")) {
         const actions = [{ id: "pl", label: "Agregar a playlist" }];
         
