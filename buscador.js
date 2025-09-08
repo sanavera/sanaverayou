@@ -1,14 +1,14 @@
-// Contiene toda la lógica de búsqueda, scraping de YouTube y renderizado de resultados.
+// Contiene toda la lógica de búsqueda, incluyendo scraping de YouTube y Spotify.
 
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false };
 
 /**
- * Realiza una petición fetch con reintentos en caso de fallo.
- * @param {Function} fn - La función que ejecuta el fetch.
- * @param {number} retries - Número de reintentos.
- * @param {number} delay - Tiempo de espera entre reintentos en ms.
+ * Función de reintento para peticiones fetch.
+ * @param {function} fn - La función a ejecutar.
+ * @param {number} retries - El número de reintentos.
+ * @param {number} delay - El tiempo de espera entre reintentos.
  * @returns {Promise<any>}
  */
 async function withRetry(fn, retries = 2, delay = 300) {
@@ -27,8 +27,8 @@ async function withRetry(fn, retries = 2, delay = 300) {
 }
 
 /**
- * Obtiene solo la URL de YouTube para una búsqueda, usado por el importador de Spotify.
- * @param {string} query - Término de búsqueda.
+ * Obtiene solo la URL del video de YouTube a través de scraping.
+ * @param {string} query - La consulta de búsqueda.
  * @returns {Promise<string|null>} El ID del video de YouTube.
  */
 async function scrapeYoutubeUrlOnly(query) {
@@ -53,10 +53,10 @@ async function scrapeYoutubeUrlOnly(query) {
 }
 
 /**
- * Obtiene el ID del video de YouTube para el enésimo resultado de búsqueda.
- * @param {string} query - Término de búsqueda.
- * @param {number} index - El índice del resultado a obtener (0 para el primero).
- * @returns {Promise<string|null>} El ID del video de YouTube.
+ * Obtiene el ID del video de YouTube para el enésimo resultado.
+ * @param {string} query - La consulta de búsqueda.
+ * @param {number} index - El índice del resultado a obtener (0-based).
+ * @returns {Promise<string|null>} El ID del video.
  */
 async function scrapeYoutubeIdForNthResult(query, index = 0) {
     return withRetry(async () => {
@@ -69,8 +69,7 @@ async function scrapeYoutubeIdForNthResult(query, index = 0) {
         });
         if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
         const html = await response.text();
-
-        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]));
+        const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))];
         if (!ids || ids.length <= index) {
             console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
             return null;
@@ -79,10 +78,11 @@ async function scrapeYoutubeIdForNthResult(query, index = 0) {
     });
 }
 
+
 /**
- * Realiza una búsqueda principal en YouTube y obtiene metadatos de los videos.
- * @param {string} query - Término de búsqueda.
- * @param {number} limit - Número máximo de resultados.
+ * Realiza una búsqueda en YouTube y obtiene metadatos de los videos.
+ * @param {string} query - La consulta de búsqueda.
+ * @param {number} limit - El número máximo de resultados.
  * @returns {Promise<Array<object>>} Una lista de objetos de video.
  */
 async function scrapeYoutube(query, limit = 20) {
@@ -97,39 +97,49 @@ async function scrapeYoutube(query, limit = 20) {
         if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
         const html = await response.text();
 
-        const ids = uniq(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1])).slice(0, limit);
+        const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))].slice(0, limit);
         if (!ids.length) return [];
         
-        return fetchVideoDetailsByIds(ids);
+        return await fetchVideoDetailsByIds(ids);
     });
 }
 
-
 /**
- * Abre el overlay de búsqueda.
+ * Obtiene los detalles de varios videos de YouTube por sus IDs usando noembed.com.
+ * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
+ * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
  */
-function openSearch(){
-    const searchOverlay = $("#searchOverlay");
-    const overlayInput  = $("#overlaySearchInput");
-    searchOverlay.classList.add("show");
-    setTimeout(()=> {
-        overlayInput.focus();
-        overlayInput.select();
-    }, 50);
+async function fetchVideoDetailsByIds(ids) {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return [];
+    
+    const metadataPromises = uniqueIds.map(id => 
+        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+            .then(r => r.json())
+            .then(meta => {
+                if (meta.error) return null;
+                return {
+                    id,
+                    title: cleanTitle(meta.title || `Video ${id}`),
+                    thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                    author: cleanAuthor(meta.author_name || "YouTube"),
+                    source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
+                };
+            })
+            .catch(() => ({
+                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
+            }))
+    );
+    return (await Promise.all(metadataPromises)).filter(Boolean);
 }
 
-/**
- * Cierra el overlay de búsqueda.
- */
-function closeSearch(){
-    $("#searchOverlay").classList.remove("show");
-}
 
 /**
- * Inicia el proceso de búsqueda a partir de una consulta.
- * @param {string} query - El término de búsqueda.
+ * Inicia el proceso de búsqueda.
+ * @param {string} query - La consulta de búsqueda.
  */
-async function startSearch(query){
+async function startSearch(query) {
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
   paging = { query, loading: true };
@@ -137,14 +147,12 @@ async function startSearch(query){
   const resultsEl = $("#results");
   if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
   updateHomeGridVisibility();
-  $('#search-filters')?.classList.add('hide');
-
+  
   try {
     const videoResults = await scrapeYoutube(query, 20);
     if (searchAbort.signal.aborted) return;
     
     if (resultsEl) resultsEl.innerHTML = "";
-
     if (videoResults.length === 0) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
         return;
@@ -152,7 +160,6 @@ async function startSearch(query){
 
     items = videoResults;
     appendResults(items);
-
   } catch (e) {
     console.error('Search failed:', e);
     if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
@@ -212,10 +219,10 @@ function appendResults(chunk){
 }
 
 /**
- * Maneja el clic en un resultado de búsqueda para reproducirlo.
- * @param {Event} event - El objeto del evento.
- * @param {object} item - El objeto de la canción/video.
- * @param {boolean} forcePlay - Si es true, inicia la reproducción inmediatamente.
+ * Maneja el clic en un resultado de búsqueda.
+ * @param {Event} event - El evento de clic.
+ * @param {object} item - El objeto del video.
+ * @param {boolean} forcePlay - Si se debe forzar la reproducción.
  */
 async function handleResultClick(event, item, forcePlay = false) {
     if (event.target.closest(".more") || (event.target.closest(".card-play") && !forcePlay)) return;
@@ -225,13 +232,19 @@ async function handleResultClick(event, item, forcePlay = false) {
     }
 }
 
-
 /**
- * Inicializa los listeners de eventos para la funcionalidad de búsqueda.
+ * Inicializa los listeners para la búsqueda (overlay, etc.).
  */
 function initSearch() {
     const searchOverlay = $("#searchOverlay");
     const overlayInput  = $("#overlaySearchInput");
+    
+    function openSearch() {
+        searchOverlay.classList.add("show");
+        setTimeout(() => { overlayInput.focus(); overlayInput.select(); }, 50);
+    }
+    
+    function closeSearch() { searchOverlay.classList.remove("show"); }
 
     $("#searchFab")?.addEventListener("click", openSearch);
     searchOverlay?.addEventListener("click", e => { if(e.target === searchOverlay) closeSearch(); });
