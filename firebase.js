@@ -357,7 +357,7 @@ async function cancelResolverJob() {
     }
 }
 
-// --- NUEVO: Funciones para Transmisiones ---
+// --- Funciones para Transmisiones ---
 const SESSIONS_COLLECTION = "sessions";
 
 async function createLiveSession(name, genre) {
@@ -368,9 +368,10 @@ async function createLiveSession(name, genre) {
         status: "active",
         currentTrack: null,
         isPlaying: false,
-        timestampStart: null, // Campo para sincronización
+        currentTime: 0, // Tiempo actual de la canción
+        stateChangeTimestamp: null, // Momento del último cambio de estado
         createdAt: serverTimestamp(),
-        lastSeen: serverTimestamp() // Para detectar desconexiones
+        lastSeen: serverTimestamp()
     });
     return docRef.id;
 }
@@ -404,14 +405,14 @@ function listenForLiveSessions(callback) {
     
     return onSnapshot(q, (snapshot) => {
         const now = Date.now();
-        const thirtySecondsAgo = now - 30000; // 30 segundos de tolerancia
+        const thirtySecondsAgo = now - 30000;
 
         const sessions = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .filter(session => {
-                if (!session.lastSeen) return false; // Si no tiene lastSeen, es inválida
+                if (!session.lastSeen) return false;
                 const lastSeenTime = session.lastSeen.toDate().getTime();
-                return lastSeenTime > thirtySecondsAgo; // Solo las vistas en los últimos 30s
+                return lastSeenTime > thirtySecondsAgo;
             });
             
         callback(sessions);
