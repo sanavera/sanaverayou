@@ -1,4 +1,4 @@
-// Contiene toda la lógica de búsqueda, optimizada para usar el endpoint de búsqueda de Jina.ai.
+// Contiene toda la lógica de búsqueda, optimizada para usar Jina.ai y con las funciones de scraping necesarias.
 
 let items = [];
 let searchAbort = null;
@@ -11,20 +11,19 @@ let paging = { query: "", loading: false };
  * @param {number} delay - El tiempo de espera entre reintentos.
  * @returns {Promise<any>}
  */
-async function withRetry(fn, retries = 3, delay = 500) {
-    let lastError;
-    for (let i = 0; i < retries; i++) {
+async function withRetry(fn, retries = 2, delay = 300) {
+    for (let i = 0; i <= retries; i++) {
         try {
             return await fn();
-        } catch (err) {
-            lastError = err;
-            console.warn(`Reintento ${i + 1} de ${retries} falló:`, err);
-            if (i < retries - 1) {
-                await new Promise(res => setTimeout(res, delay * (i + 1)));
+        } catch (e) {
+            if (i === retries) {
+                 console.error("Scraping failed after all retries.", e);
+                 throw e;
             }
+            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
+            await new Promise(res => setTimeout(res, delay));
         }
     }
-    throw lastError;
 }
 
 /**
@@ -50,7 +49,7 @@ async function scrapeYoutubeUrlOnly(query) {
 
 /**
  * FUNCIÓN RESTAURADA: Obtiene el ID del video de YouTube para el enésimo resultado.
- * Es necesaria para la función "Reasignar Fuente".
+ * Es necesaria para la función "Reasignar Fuente" en playlists.js.
  * @param {string} query - La consulta de búsqueda.
  * @param {number} index - El índice del resultado a obtener (0-based).
  * @returns {Promise<string|null>} El ID del video.
@@ -74,7 +73,6 @@ async function scrapeYoutubeIdForNthResult(query, index = 0) {
         return ids[index];
     });
 }
-
 
 /**
  * Extrae el ID de un video de una URL de YouTube.
@@ -326,3 +324,4 @@ function initSearch() {
         await startSearch(q);
     });
 }
+
