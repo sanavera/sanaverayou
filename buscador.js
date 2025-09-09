@@ -113,7 +113,7 @@ function findVideosInData(data) {
 async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
         const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(youtubeUrl)}`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(youtubeUrl)}`;
         
         const response = await fetch(proxyUrl, {
             signal: searchAbort?.signal
