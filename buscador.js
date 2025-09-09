@@ -20,7 +20,6 @@ async function withRetry(fn, retries = 3, delay = 500) {
             lastError = err;
             console.warn(`Reintento ${i + 1} de ${retries} falló:`, err);
             if (i < retries - 1) {
-                // Incrementa el delay en cada reintento
                 await new Promise(res => setTimeout(res, delay * (i + 1)));
             }
         }
@@ -28,41 +27,8 @@ async function withRetry(fn, retries = 3, delay = 500) {
     throw lastError;
 }
 
-
 /**
- * CORREGIDO: Función de limpieza de títulos más robusta.
- * @param {string} title - El título a limpiar.
- * @returns {string} El título limpio.
- */
-function cleanTitle(title) {
-    if (!title) return "";
-    return title
-        .replace(/\(official.*?video.*?\)/gi, "")
-        .replace(/\[official.*?video.*?\]/gi, "")
-        .replace(/\(official.*?music.*?video.*?\)/gi, "")
-        .replace(/\[official.*?music.*?video.*?\]/gi, "")
-        .replace(/\(.*?lyrics.*?\)/gi, "")
-        .replace(/\[.*?lyrics.*?\]/gi, "")
-        .replace(/\(.*?hd.*?\)/gi, "")
-        .replace(/\[.*?hd.*?\]/gi, "")
-        .replace(/\|.*$/gi, "") // Elimina todo después de un |
-        .replace(/\s{2,}/g, " ")
-        .trim();
-}
-
-/**
- * Limpieza de autores.
- * @param {string} author - El nombre del autor a limpiar.
- * @returns {string} El nombre limpio.
- */
-function cleanAuthor(author) {
-    if (!author) return "YouTube";
-    return author.replace(/ - Topic$/, "").trim();
-}
-
-
-/**
- * CORREGIDO: Extraer videoId de distintas formas de URL (incluyendo shorts).
+ * Extraer videoId de distintas formas de URL (incluyendo shorts).
  * @param {string} url - La URL de YouTube.
  * @returns {string|null} El ID del video.
  */
@@ -78,14 +44,13 @@ function extractVideoId(url) {
             return pathnameParts[pathnameParts.length - 1];
         }
     } catch (e) {
-        // Fallback para formatos que no son URL completas
         if (url.includes("watch?v=")) {
             return new URLSearchParams(url.split('?')[1]).get('v');
         }
+        console.warn("URL inválida o no reconocida:", url);
     }
     return null;
 }
-
 
 /**
  * Scraping usando Jina.ai JSON (versión final y simplificada).
@@ -106,7 +71,6 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
         const jsonData = await response.json();
 
-        // Usamos la única estructura que hemos confirmado que Jina devuelve.
         if (!jsonData?.data || !Array.isArray(jsonData.data)) {
             console.warn("Estructura inesperada de Jina.ai:", jsonData);
             return [];
@@ -124,16 +88,14 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
                 type: "youtube_video",
                 isTopic: /topic/i.test(item.author || "")
             };
-        }).filter(Boolean); // Filtra los resultados nulos si no se pudo extraer un ID
+        }).filter(Boolean);
 
         return videoResults.slice(0, limit);
     });
 }
 
-
 /**
  * Función de compatibilidad para main.js (carga de playlists recomendadas).
- * No la eliminamos porque es necesaria para el arranque de la app.
  * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
  * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
  */
