@@ -1,84 +1,25 @@
-// Contiene toda la lógica de búsqueda, optimizada para usar Jina.ai y con las funciones de scraping necesarias.
+// Contiene toda la lógica de búsqueda, usando AllOrigins para obtener el HTML de YouTube
 
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false };
 
-/**
- * Función de reintento para peticiones fetch.
- * @param {function} fn - La función a ejecutar.
- * @param {number} retries - El número de reintentos.
- * @param {number} delay - El tiempo de espera entre reintentos.
- * @returns {Promise<any>}
- */
-async function withRetry(fn, retries = 2, delay = 300) {
-    for (let i = 0; i <= retries; i++) {
+async function withRetry(fn, retries = 3, delay = 500) {
+    let lastError;
+    for (let i = 0; i < retries; i++) {
         try {
             return await fn();
-        } catch (e) {
-            if (i === retries) {
-                 console.error("Scraping failed after all retries.", e);
-                 throw e;
+        } catch (err) {
+            lastError = err;
+            console.warn(`Reintento ${i + 1} de ${retries} falló:`, err);
+            if (i < retries - 1) {
+                await new Promise(res => setTimeout(res, delay * (i + 1)));
             }
-            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-            await new Promise(res => setTimeout(res, delay));
         }
     }
+    throw lastError;
 }
 
-/**
- * Obtiene solo la URL del video de YouTube a través de scraping (usado por el resolver de Spotify).
- * @param {string} query - La consulta de búsqueda.
- * @returns {Promise<string|null>} El ID del video de YouTube.
- */
-async function scrapeYoutubeUrlOnly(query) {
-    return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const response = await fetch(endpoint, {
-            headers: { "Accept": "text/plain", "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj" }
-        });
-        if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
-        const html = await response.text();
-        const priorityRegex = /watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i;
-        const priorityMatch = html.match(priorityRegex);
-        if (priorityMatch) return priorityMatch[1];
-        const genericMatch = html.match(/watch\?v=([\w-]{11})/);
-        return genericMatch ? genericMatch[1] : null;
-    });
-}
-
-/**
- * FUNCIÓN RESTAURADA: Obtiene el ID del video de YouTube para el enésimo resultado.
- * Es necesaria para la función "Reasignar Fuente" en playlists.js.
- * @param {string} query - La consulta de búsqueda.
- * @param {number} index - El índice del resultado a obtener (0-based).
- * @returns {Promise<string|null>} El ID del video.
- */
-async function scrapeYoutubeIdForNthResult(query, index = 0) {
-    return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const response = await fetch(endpoint, {
-            headers: {
-                "Accept": "text/plain",
-                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
-            }
-        });
-        if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
-        const html = await response.text();
-        const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))];
-        if (!ids || ids.length <= index) {
-            console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
-            return null;
-        }
-        return ids[index];
-    });
-}
-
-/**
- * Extrae el ID de un video de una URL de YouTube.
- * @param {string} url - La URL del video.
- * @returns {string|null} El ID del video o null si no se encuentra.
- */
 function extractVideoId(url) {
     if (!url) return null;
     try {
@@ -103,71 +44,130 @@ function extractVideoId(url) {
     return null;
 }
 
-/**
- * Extrae el nombre del canal del campo 'content' que devuelve Jina.
- * @param {string} content - El texto de contenido.
- * @returns {string|null} El nombre del canal.
- */
-function extractChannelFromContent(content) {
-    if (!content) return null;
-    const match = content.match(/(?:by\s+|channel:\s*|@)([^•\n\r]+)/i);
-    return match ? match[1].trim() : null;
+function extractVideoData(videoRenderer) {
+    if (!videoRenderer || !videoRenderer.videoId) return null;
+    
+    let title = 'Sin título';
+    if (videoRenderer.title) {
+        if (videoRenderer.title.runs && videoRenderer.title.runs[0]) {
+            title = videoRenderer.title.runs[0].text;
+        } else if (videoRenderer.title.simpleText) {
+            title = videoRenderer.title.simpleText;
+        }
+    }
+    
+    let channel = 'Sin canal';
+    if (videoRenderer.ownerText && videoRenderer.ownerText.runs && videoRenderer.ownerText.runs[0]) {
+        channel = videoRenderer.ownerText.runs[0].text;
+    } else if (videoRenderer.longBylineText && videoRenderer.longBylineText.runs && videoRenderer.longBylineText.runs[0]) {
+        channel = videoRenderer.longBylineText.runs[0].text;
+    }
+    
+    let thumbnail = null;
+    if (videoRenderer.thumbnail && videoRenderer.thumbnail.thumbnails && videoRenderer.thumbnail.thumbnails.length > 0) {
+        thumbnail = videoRenderer.thumbnail.thumbnails[0].url;
+    }
+    
+    return {
+        id: videoRenderer.videoId,
+        title: cleanTitle(title),
+        thumb: thumbnail || `https://i.ytimg.com/vi/${videoRenderer.videoId}/hqdefault.jpg`,
+        author: cleanAuthor(channel),
+        source: "youtube",
+        type: "youtube_video",
+        isTopic: /topic/i.test(channel)
+    };
 }
 
-/**
- * Usa el endpoint `s.jina.ai` para búsquedas.
- * @param {string} query - La consulta de búsqueda.
- * @param {number} limit - El número máximo de resultados.
- * @returns {Promise<Array<object>>} Una lista de objetos de video.
- */
+function findVideosInData(data) {
+    const videosFound = [];
+    
+    function findVideosRecursive(obj, depth = 0, maxDepth = 4) {
+        if (depth > maxDepth || !obj || typeof obj !== 'object') return;
+        
+        if (obj.videoRenderer) {
+            const video = extractVideoData(obj.videoRenderer);
+            if (video) videosFound.push(video);
+        }
+        
+        if (obj.itemSectionRenderer && obj.itemSectionRenderer.contents) {
+            for (const content of obj.itemSectionRenderer.contents) {
+                if (content.videoRenderer) {
+                    const video = extractVideoData(content.videoRenderer);
+                    if (video) videosFound.push(video);
+                }
+            }
+        }
+        
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                findVideosRecursive(obj[key], depth + 1, maxDepth);
+            }
+        }
+    }
+    
+    findVideosRecursive(data);
+    return videosFound;
+}
+
 async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
-        const endpoint = `https://s.jina.ai/${encodeURIComponent(query + " site:youtube.com")}`;
-        const response = await fetch(endpoint, {
-            headers: {
-                "Accept": "application/json",
-                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
-            }
+        const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            signal: searchAbort?.signal
         });
 
         if (!response.ok) {
-            throw new Error(`Proxy failed with status ${response.status}`);
+            throw new Error(`AllOrigins falló: ${response.status}`);
         }
-
-        const jsonData = await response.json();
         
-        if (!jsonData?.data || !Array.isArray(jsonData.data)) {
-            console.warn("Estructura inesperada de Jina.ai:", jsonData);
-            return [];
+        const html = await response.text();
+        
+        // Usar el mismo patrón que funciona en el HTML de test
+        const scriptMatch = html.match(/var ytInitialData = ({.*?});/);
+        if (!scriptMatch) {
+            throw new Error("No se encontró ytInitialData en el HTML");
         }
-
-        const videoResults = [];
         
-        for (const item of jsonData.data) {
-            if (!item.url) continue;
-            const videoId = extractVideoId(item.url);
-            if (!videoId) continue;
+        const data = JSON.parse(scriptMatch[1]);
+        
+        // Usar la misma función que funciona en el HTML de test
+        const videosFound = [];
+        
+        function findVideos(obj) {
+            if (typeof obj !== 'object' || obj === null) return;
             
-            videoResults.push({
-                id: videoId,
-                title: cleanTitle(item.title || `Video ${videoId}`),
-                thumb: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                author: cleanAuthor(extractChannelFromContent(item.content) || "YouTube"),
-                source: "youtube",
-                type: "youtube_video",
-                isTopic: /topic/i.test(item.content || "")
-            });
+            if (obj.videoRenderer) {
+                const video = obj.videoRenderer;
+                if (video.videoId && video.title) {
+                    videosFound.push({
+                        id: video.videoId,
+                        title: cleanTitle(video.title.runs ? video.title.runs[0].text : video.title.simpleText || 'Sin título'),
+                        thumb: video.thumbnail ? video.thumbnail.thumbnails[0].url : `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`,
+                        author: cleanAuthor(video.ownerText ? video.ownerText.runs[0].text : 'Sin canal'),
+                        source: "youtube",
+                        type: "youtube_video",
+                        isTopic: /topic/i.test(video.ownerText ? video.ownerText.runs[0].text : '')
+                    });
+                }
+            }
+            
+            // Recursivamente buscar en objetos y arrays
+            for (let key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    findVideos(obj[key]);
+                }
+            }
         }
-
-        return videoResults.slice(0, limit);
+        
+        findVideos(data);
+        
+        return videosFound.slice(0, limit);
     });
 }
 
-/**
- * Función de compatibilidad para main.js (carga de playlists recomendadas).
- * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
- * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
- */
 async function fetchVideoDetailsByIds(ids) {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return [];
@@ -193,10 +193,6 @@ async function fetchVideoDetailsByIds(ids) {
     return (await Promise.all(metadataPromises)).filter(Boolean);
 }
 
-/**
- * Inicia el proceso de búsqueda.
- * @param {string} query - La consulta de búsqueda.
- */
 async function startSearch(query) {
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
@@ -204,7 +200,7 @@ async function startSearch(query) {
   items = [];
   
   const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
+  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere (puede tardar unos segundos)</h3></div>`;
   updateHomeGridVisibility();
   
   try {
@@ -229,10 +225,6 @@ async function startSearch(query) {
   }
 }
 
-/**
- * Agrega los resultados de la búsqueda al DOM.
- * @param {Array<object>} chunk - Un array de objetos de video.
- */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
@@ -281,12 +273,6 @@ function appendResults(chunk){
   refreshIndicators();
 }
 
-/**
- * Maneja el clic en un resultado de búsqueda.
- * @param {Event} event - El evento de clic.
- * @param {object} item - El objeto del video.
- * @param {boolean} forcePlay - Si se debe forzar la reproducción.
- */
 async function handleResultClick(event, item, forcePlay = false) {
     if (event.target.closest(".more") || event.target.closest(".fav-btn") || (event.target.closest(".card-play") && !forcePlay)) return;
 
@@ -295,9 +281,6 @@ async function handleResultClick(event, item, forcePlay = false) {
     }
 }
 
-/**
- * Inicializa los listeners para la búsqueda (overlay, etc.).
- */
 function initSearch() {
     const searchOverlay = $("#searchOverlay");
     const overlayInput  = $("#overlaySearchInput");
@@ -324,4 +307,3 @@ function initSearch() {
         await startSearch(q);
     });
 }
-
