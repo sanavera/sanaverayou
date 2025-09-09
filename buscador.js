@@ -125,25 +125,45 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         
         const html = await response.text();
         
-        // Extraer ytInitialData del HTML
-        const fullPattern = /var ytInitialData = '((?:\\x[0-9a-f]{2}|\\"|\\\\|[^'])*?)';/s;
-        const match = html.match(fullPattern);
+        // Probar múltiples patrones para extraer ytInitialData
+        const patterns = [
+            /var ytInitialData = '((?:\\x[0-9a-f]{2}|\\"|\\\\|[^'])*?)';/s,
+            /var ytInitialData = ({.*?});/s,
+            /window\["ytInitialData"\] = ({.*?});/s,
+            /ytInitialData = ({.*?});/s
+        ];
         
-        if (!match) {
-            throw new Error("No se encontró ytInitialData en el HTML");
+        let data = null;
+        let isEscaped = false;
+        
+        for (let i = 0; i < patterns.length; i++) {
+            const match = html.match(patterns[i]);
+            if (match) {
+                try {
+                    let jsonString = match[1];
+                    
+                    if (i === 0) {
+                        // Patrón escapado
+                        isEscaped = true;
+                        jsonString = jsonString
+                            .replace(/\\x([0-9a-f]{2})/gi, (match, hex) => {
+                                return String.fromCharCode(parseInt(hex, 16));
+                            })
+                            .replace(/\\"/g, '"')
+                            .replace(/\\\\/g, '\\');
+                    }
+                    
+                    data = JSON.parse(jsonString);
+                    break;
+                } catch (e) {
+                    continue;
+                }
+            }
         }
         
-        // Decodificar el string escapado
-        let escapedString = match[1];
-        let decodedString = escapedString
-            .replace(/\\x([0-9a-f]{2})/gi, (match, hex) => {
-                return String.fromCharCode(parseInt(hex, 16));
-            })
-            .replace(/\\"/g, '"')
-            .replace(/\\\\/g, '\\');
-        
-        // Parsear el JSON
-        const data = JSON.parse(decodedString);
+        if (!data) {
+            throw new Error("No se encontró ytInitialData en el HTML");
+        }
         
         // Extraer videos de la estructura JSON
         const videoResults = findVideosInData(data);
