@@ -46,11 +46,10 @@ function extractVideoId(url) {
 
 async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
-        const response = await fetch(`https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+        const response = await fetch(`https://s.jina.ai/${encodeURIComponent(query + " site:youtube.com")}`, {
             headers: {
                 "Accept": "application/json",
-                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj",
-                "X-Return-Format": "json"
+                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
             }
         });
 
@@ -58,42 +57,39 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
             throw new Error(`Proxy failed with status ${response.status}`);
         }
 
-        const text = await response.text();
-        let jsonData;
-        
-        try {
-            jsonData = JSON.parse(text);
-        } catch {
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                jsonData = JSON.parse(jsonMatch[0]);
-            } else {
-                throw new Error("No JSON found in response");
-            }
+        const jsonData = await response.json();
+
+        if (!jsonData || !Array.isArray(jsonData)) {
+            console.warn("Estructura inesperada de Jina.ai:", jsonData);
+            return [];
         }
 
         const videoResults = [];
         
-        if (jsonData.data && Array.isArray(jsonData.data)) {
-            for (const item of jsonData.data) {
-                if (!item.url) continue;
-                const videoId = extractVideoId(item.url);
-                if (!videoId) continue;
-                
-                videoResults.push({
-                    id: videoId,
-                    title: cleanTitle(item.title || `Video ${videoId}`),
-                    thumb: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                    author: cleanAuthor(item.author || "YouTube"),
-                    source: "youtube",
-                    type: "youtube_video",
-                    isTopic: /topic/i.test(item.author || "")
-                });
-            }
+        for (const item of jsonData) {
+            if (!item.url) continue;
+            const videoId = extractVideoId(item.url);
+            if (!videoId) continue;
+            
+            videoResults.push({
+                id: videoId,
+                title: cleanTitle(item.title || `Video ${videoId}`),
+                thumb: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                author: cleanAuthor(extractChannelFromContent(item.content) || "YouTube"),
+                source: "youtube",
+                type: "youtube_video",
+                isTopic: /topic/i.test(item.content || "")
+            });
         }
 
         return videoResults.slice(0, limit);
     });
+}
+
+function extractChannelFromContent(content) {
+    if (!content) return null;
+    const match = content.match(/(?:by\s+|channel:\s*|@)([^•\n\r]+)/i);
+    return match ? match[1].trim() : null;
 }
 
 async function fetchVideoDetailsByIds(ids) {
