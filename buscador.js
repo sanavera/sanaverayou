@@ -1,4 +1,4 @@
-I// Contiene toda la lógica de búsqueda, incluyendo scraping de YouTube y Spotify.
+// Contiene toda la lógica de búsqueda, incluyendo scraping de YouTube y Spotify.
 
 let items = [];
 let searchAbort = null;
