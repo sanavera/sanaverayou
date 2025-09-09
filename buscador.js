@@ -1,192 +1,186 @@
-// buscador.js
-// Búsqueda por scraping usando Jina.ai (JSON). Sin NoEmbed.
-// Mantiene la interfaz usada por el proyecto original y NO redefine cleanTitle.
+// buscador.js — versión sin NoEmbed, usando Jina AI (JSON) para metadatos
+// Requiere: cleanTitle, cleanAuthor, youtubeLogoSvg, youtubeMusicLogoSvg, spotifyLogoSvg,
+//           appendResults, updateHomeGridVisibility, playFromSearch, isFav (desde main.js)
+// No redefine utilidades existentes en main.js.
 
-// ===================== Config ======================
-const JINA_KEY = "jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj";
-const JINA_BASE = "https://r.jina.ai"; // funciona con Accept: application/json
-
-// ===================== Estado ======================
+// -------------------- Estado de búsqueda --------------------
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false };
 
-// ===================== Utils =======================
+// -------------------- Configuración Jina --------------------
+const JINA_API_KEY = "jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"; // tu key
+const JINA_BASE = "https://r.jina.ai";
+const JINA_HEADERS_TEXT = {
+  "Accept": "text/plain",
+  "Authorization": `Bearer ${JINA_API_KEY}`,
+};
+const JINA_HEADERS_JSON = {
+  "Accept": "application/json",
+  "Authorization": `Bearer ${JINA_API_KEY}`,
+};
+
+// -------------------- Helpers --------------------
 async function withRetry(fn, retries = 2, delay = 300) {
   for (let i = 0; i <= retries; i++) {
-    try {
-      return await fn();
-    } catch (e) {
-      if (i === retries) {
-        console.error("Scraping failed after all retries.", e);
-        throw e;
-      }
-      console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-      await new Promise(res => setTimeout(res, delay));
+    try { return await fn(); }
+    catch (e) {
+      if (i === retries) { console.error("Scraping failed after retries:", e); throw e; }
+      await new Promise(r => setTimeout(r, delay));
     }
   }
 }
 
-function extractVideoId(url) {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    if (u.searchParams.has("v")) return u.searchParams.get("v");
-    if (u.pathname.startsWith("/watch/")) return u.pathname.split("/watch/")[1];
-    if (u.pathname.includes("/shorts/")) return u.pathname.split("/shorts/")[1];
-  } catch {
-    // ignore
-  }
-  const m = url.match(/watch\?v=([\w-]{11})/);
-  return m ? m[1] : null;
+function unique(list) { return [...new Set(list)]; }
+
+function extractIdsFromSearchHTML(html, limit = 20) {
+  // Captura IDs únicos de watch?v=XXXXXXXXXXX
+  const ids = Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]);
+  return unique(ids).slice(0, limit);
 }
 
-function cleanAuthor(author) {
-  if (!author) return "YouTube";
-  return author.replace(/ - Topic$/, "").trim();
+function pickTitleFromJinaJSON(j) {
+  // Intentos comunes en la estructura de Jina:
+  // j.data?.title, j.title, OpenGraph/meta extraídos
+  return (
+    j?.data?.title ||
+    j?.title ||
+    j?.data?.["og:title"] ||
+    j?.data?.ogTitle ||
+    ""
+  ).toString().trim();
 }
 
-// ================== Core Jina fetchers =================
-async function jinaFetchJSON(urlPath) {
-  const url = `${JINA_BASE}/${urlPath}`;
-  const res = await fetch(url, {
-    headers: {
-      "Accept": "application/json",
-      "Authorization": `Bearer ${JINA_KEY}`
-    }
+function pickAuthorFromJinaJSON(j) {
+  // Intentos comunes: channel/owner/author
+  const cand = (
+    j?.data?.author ||
+    j?.data?.channelTitle ||
+    j?.data?.owner ||
+    j?.data?.channel?.name ||
+    j?.author ||
+    ""
+  ).toString().trim();
+  return cand || "YouTube";
+}
+
+function looksLikeTopic(authorStr) {
+  return /\btopic\b/i.test(authorStr || "");
+}
+
+// -------------------- Scraping de resultados --------------------
+async function scrapeYoutubeIds(query, limit = 20) {
+  const url = `${JINA_BASE}/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  return withRetry(async () => {
+    const resp = await fetch(url, { headers: JINA_HEADERS_TEXT });
+    if (!resp.ok) throw new Error(`Search proxy error ${resp.status}`);
+    const html = await resp.text();
+    return extractIdsFromSearchHTML(html, limit);
   });
-  if (!res.ok) throw new Error(`Jina fetch JSON failed: ${res.status}`);
-  const ct = res.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) {
-    throw new Error(`Unexpected content-type for JSON: ${ct}`);
-  }
-  return res.json();
 }
 
-async function jinaFetchText(urlPath) {
-  const url = `${JINA_BASE}/${urlPath}`;
-  const res = await fetch(url, {
-    headers: {
-      "Accept": "text/plain",
-      "Authorization": `Bearer ${JINA_KEY}`
+// -------------------- Metadatos por ID (Jina JSON) --------------------
+async function fetchVideoMetaById(id) {
+  const url = `${JINA_BASE}/https://www.youtube.com/watch?v=${id}`;
+  return withRetry(async () => {
+    const resp = await fetch(url, { headers: JINA_HEADERS_JSON });
+    if (!resp.ok) throw new Error(`Meta proxy error ${resp.status} for id ${id}`);
+
+    // Algunos proxies de Jina devuelven text/plain aunque sea JSON.
+    // Intentamos json() y, si falla, tratamos como texto sin romper.
+    let data;
+    try { data = await resp.json(); }
+    catch (_) {
+      // Fallback muy defensivo (no debería ocurrir con Accept: application/json)
+      const text = await resp.text();
+      // No hay forma confiable de parsear; devolvemos mínimos.
+      return {
+        id,
+        title: `Video ${id}`,
+        thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        author: "YouTube",
+        source: "youtube",
+        type: "youtube_video",
+        isTopic: false,
+      };
     }
-  });
-  if (!res.ok) throw new Error(`Jina fetch TEXT failed: ${res.status}`);
-  return res.text();
-}
 
-// ================== Parsers ============================
-function parseJinaResultsJSON(jsonData, limit = 20) {
-  if (!jsonData?.data || !Array.isArray(jsonData.data)) return [];
-  const out = [];
-  for (const it of jsonData.data) {
-    const id = extractVideoId(it.url || "");
-    if (!id) continue;
-    out.push({
-      id,
-      // cleanTitle viene de main.js
-      title: typeof cleanTitle === "function" ? cleanTitle(it.title || `Video ${id}`) : (it.title || `Video ${id}`),
-      thumb: it.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-      author: cleanAuthor(it.author || "YouTube"),
-      source: "youtube",
-      type: "youtube_video",
-      isTopic: /topic/i.test(it.author || "")
-    });
-    if (out.length >= limit) break;
-  }
-  return out;
-}
+    const title = cleanTitle(pickTitleFromJinaJSON(data) || `Video ${id}`);
+    const rawAuthor = pickAuthorFromJinaJSON(data) || "YouTube";
+    const author = (typeof cleanAuthor === "function") ? cleanAuthor(rawAuthor) : rawAuthor;
 
-function parseJinaResultsFromHTML(html, limit = 20) {
-  const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))];
-  const out = [];
-  for (const id of ids.slice(0, limit)) {
-    out.push({
+    return {
       id,
-      title: typeof cleanTitle === "function" ? cleanTitle(`Video ${id}`) : `Video ${id}`,
+      title,
       thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-      author: "YouTube",
+      author,
       source: "youtube",
       type: "youtube_video",
-      isTopic: false
-    });
+      isTopic: looksLikeTopic(rawAuthor),
+    };
+  });
+}
+
+// -------------------- Detalles por lote (reemplaza NoEmbed) --------------------
+async function fetchVideoDetailsByIds(ids) {
+  const uniqueIds = unique(ids);
+  if (uniqueIds.length === 0) return [];
+
+  // Concurrencia moderada para no saturar el proxy
+  const CONCURRENCY = 6;
+  const out = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < uniqueIds.length) {
+      const i = index++;
+      const id = uniqueIds[i];
+      try {
+        const meta = await fetchVideoMetaById(id);
+        if (meta) out.push(meta);
+      } catch (e) {
+        // Fallback mínimo si falló metadata
+        out.push({
+          id,
+          title: `Video ${id}`,
+          thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+          author: "YouTube",
+          source: "youtube",
+          type: "youtube_video",
+          isTopic: false,
+        });
+      }
+    }
   }
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, uniqueIds.length) }, () => worker());
+  await Promise.all(workers);
   return out;
 }
 
-// ================== Public search API ===================
+// -------------------- Búsqueda principal --------------------
 async function scrapeYoutube(query, limit = 20) {
-  return withRetry(async () => {
-    const q = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-
-    // 1) Intentar JSON
-    try {
-      const jsonData = await jinaFetchJSON(q);
-      const parsed = parseJinaResultsJSON(jsonData, limit);
-      if (parsed.length) return parsed;
-    } catch (e) {
-      console.warn("JSON path failed or empty, falling back to TEXT", e);
-    }
-
-    // 2) Fallback a TEXT
-    const html = await jinaFetchText(q);
-    const parsed = parseJinaResultsFromHTML(html, limit);
-    return parsed;
-  });
+  const ids = await scrapeYoutubeIds(query, limit);
+  if (!ids.length) return [];
+  return await fetchVideoDetailsByIds(ids);
 }
 
-// Mantener helpers de URL-only/posición (usan JSON y caen a TEXT)
-async function scrapeYoutubeUrlOnly(query) {
-  return withRetry(async () => {
-    const q = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    try {
-      const json = await jinaFetchJSON(q);
-      const list = parseJinaResultsJSON(json, 1);
-      return list[0]?.id || null;
-    } catch {
-      const html = await jinaFetchText(q);
-      const priority = html.match(/watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i);
-      if (priority) return priority[1];
-      const generic = html.match(/watch\?v=([\w-]{11})/);
-      return generic ? generic[1] : null;
-    }
-  });
-}
-
-async function scrapeYoutubeIdForNthResult(query, index = 0) {
-  return withRetry(async () => {
-    const q = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    try {
-      const json = await jinaFetchJSON(q);
-      const list = parseJinaResultsJSON(json, index + 1);
-      return list[index]?.id || null;
-    } catch {
-      const html = await jinaFetchText(q);
-      const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))];
-      return ids[index] || null;
-    }
-  });
-}
-
-// ================== UI glue (igual que antes) ==========
 async function startSearch(query) {
   if (searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
   paging = { query, loading: true };
   items = [];
 
-  const resultsEl = $("#results");
-  if (resultsEl) {
-    resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
-  }
-  updateHomeGridVisibility?.();
+  const resultsEl = document.querySelector("#results");
+  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
+  if (typeof updateHomeGridVisibility === "function") updateHomeGridVisibility();
 
   try {
     const videoResults = await scrapeYoutube(query, 20);
     if (searchAbort.signal.aborted) return;
 
     if (resultsEl) resultsEl.innerHTML = "";
-    if (!videoResults.length) {
+    if (videoResults.length === 0) {
       if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
       return;
     }
@@ -201,16 +195,22 @@ async function startSearch(query) {
   }
 }
 
+// -------------------- Render de resultados --------------------
 function appendResults(chunk) {
-  const root = $("#results"); if (!root) return;
+  const root = document.querySelector("#results");
+  if (!root) return;
+
   for (const it of chunk) {
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.trackId = it.id;
 
-    let logo = youtubeLogoSvg?.() || "";
+    let logo = (typeof youtubeLogoSvg === "function") ? youtubeLogoSvg() : "";
     if (it.isTopic) {
-      logo = Math.random() < 0.5 ? (spotifyLogoSvg?.() || "") : (youtubeMusicLogoSvg?.() || "");
+      // Aleatorio entre Spotify y YT Music para “Topic”
+      if (typeof spotifyLogoSvg === "function" && typeof youtubeMusicLogoSvg === "function") {
+        logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
+      }
     }
 
     item.innerHTML = `
@@ -227,13 +227,18 @@ function appendResults(chunk) {
           <span class="title-text">${it.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
-        <div class="subtitle">${cleanAuthor(it.author) || ""}</div>
+        <div class="subtitle">${(typeof cleanAuthor === "function" ? cleanAuthor(it.author) : it.author) || ""}</div>
       </div>
       <div class="actions">
         <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
-          ${typeof favIconSvg === "function" ? favIconSvg(isFav?.(it.id)) : ""}
+          ${typeof isFav === "function" ? ( (isFav(it.id) ? 
+            '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>' :
+            '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>'
+          )) : "" }
         </button>
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${typeof dotsSvg === "function" ? dotsSvg() : "⋯"}</button>
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        </button>
       </div>
     `;
 
@@ -249,38 +254,32 @@ function appendResults(chunk) {
 
     root.appendChild(item);
   }
-  refreshIndicators?.();
+
+  if (typeof refreshIndicators === "function") refreshIndicators();
 }
 
+// -------------------- Click de resultado --------------------
 async function handleResultClick(event, item, forcePlay = false) {
-  if (
-    event.target.closest(".more") ||
-    event.target.closest(".fav-btn") ||
-    (event.target.closest(".card-play") && !forcePlay)
-  ) return;
-
-  if (item.type === "youtube_video") {
-    playFromSearch?.(item.id, true);
+  if (event.target.closest(".more") || event.target.closest(".fav-btn") || (event.target.closest(".card-play") && !forcePlay)) return;
+  if (item.type === "youtube_video" && typeof playFromSearch === "function") {
+    playFromSearch(item.id, true);
   }
 }
 
+// -------------------- Overlay & entrada --------------------
 function initSearch() {
-  const searchOverlay = $("#searchOverlay");
-  const overlayInput = $("#overlaySearchInput");
+  const searchOverlay = document.querySelector("#searchOverlay");
+  const overlayInput  = document.querySelector("#overlaySearchInput");
 
   function openSearch() {
     searchOverlay.classList.add("show");
     setTimeout(() => { overlayInput.focus(); overlayInput.select(); }, 50);
   }
-  function closeSearch() {
-    searchOverlay.classList.remove("show");
-  }
+  function closeSearch() { searchOverlay.classList.remove("show"); }
 
-  $("#searchFab")?.addEventListener("click", openSearch);
-  searchOverlay?.addEventListener("click", (e) => {
-    if (e.target === searchOverlay) closeSearch();
-  });
-  overlayInput?.addEventListener("keydown", async (e) => {
+  document.querySelector("#searchFab")?.addEventListener("click", openSearch);
+  searchOverlay?.addEventListener("click", e => { if (e.target === searchOverlay) closeSearch(); });
+  overlayInput?.addEventListener("keydown", async e => {
     if (e.key !== "Enter") return;
     const q = overlayInput.value.trim();
     if (!q) return;
@@ -289,19 +288,15 @@ function initSearch() {
     document.body.scrollTop = 0;
     document.documentElement.scrollTop = 0;
 
-    switchView?.("view-search");
+    if (typeof switchView === "function") switchView("view-search");
     await startSearch(q);
   });
 }
 
-// Export opcional para módulos
-if (typeof module !== "undefined") {
-  module.exports = {
-    startSearch,
-    initSearch,
-    scrapeYoutube,
-    scrapeYoutubeUrlOnly,
-    scrapeYoutubeIdForNthResult
-  };
+// Exponer initSearch si el proyecto lo espera en window (por compat)
+if (typeof window !== "undefined") {
+  window.initSearch = initSearch;
+  window.startSearch = startSearch;
+  // También exponemos estas si otras partes las usan:
+  window.fetchVideoDetailsByIds = fetchVideoDetailsByIds;
 }
-```0
