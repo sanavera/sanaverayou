@@ -291,7 +291,6 @@ async function reassignTrackSource(playlistId, oldTrackId) {
     }
 }
 
-
 // --- Lógica de reproducción desde playlists ---
 
 function playFromSearch(trackId, autoplay=false) {
@@ -443,7 +442,13 @@ function openSpotifyImportModal() {
     const modal = $("#sySpotifyModal");
     if(modal) {
         modal.classList.add('show');
-        $("#sySmInputUrl").value = "";
+        const input = $("#sySmInputUrl");
+        if(input) input.value = "";
+        const fetchBtn = $("#sySmFetch");
+        if(fetchBtn) {
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = 'Importar';
+        }
     }
 }
 
@@ -589,7 +594,6 @@ async function processAndSavePlaylist(pl) {
     const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
     const col = collection(db, 'playlists');
     
-    // Asumimos que no puede haber dos playlists con el mismo spotifyId del mismo usuario
     const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
     const snapshot = await getDocs(q);
 
