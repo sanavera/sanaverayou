@@ -1,54 +1,97 @@
-// Contiene toda la lógica de búsqueda, optimizada y robusta para manejar múltiples formatos de JSON de Jina.ai.
+// Contiene toda la lógica de búsqueda, optimizada para usar Jina.ai en modo JSON y descartar NoEmbed.
 
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false };
 
 /**
- * Función de reintento para peticiones fetch.
+ * Función de reintento mejorada con backoff exponencial.
  * @param {function} fn - La función a ejecutar.
  * @param {number} retries - El número de reintentos.
- * @param {number} delay - El tiempo de espera entre reintentos.
+ * @param {number} delay - El tiempo de espera inicial entre reintentos.
  * @returns {Promise<any>}
  */
-async function withRetry(fn, retries = 2, delay = 300) {
-    for (let i = 0; i <= retries; i++) {
+async function withRetry(fn, retries = 3, delay = 500) {
+    let lastError;
+    for (let i = 0; i < retries; i++) {
         try {
             return await fn();
-        } catch (e) {
-            if (i === retries) {
-                 console.error("Scraping failed after all retries.", e);
-                 throw e;
+        } catch (err) {
+            lastError = err;
+            console.warn(`Reintento ${i + 1} de ${retries} falló:`, err);
+            if (i < retries - 1) {
+                // Incrementa el delay en cada reintento
+                await new Promise(res => setTimeout(res, delay * (i + 1)));
             }
-            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-            await new Promise(res => setTimeout(res, delay));
         }
     }
+    throw lastError;
+}
+
+
+/**
+ * CORREGIDO: Función de limpieza de títulos más robusta.
+ * @param {string} title - El título a limpiar.
+ * @returns {string} El título limpio.
+ */
+function cleanTitle(title) {
+    if (!title) return "";
+    return title
+        .replace(/\(official.*?video.*?\)/gi, "")
+        .replace(/\[official.*?video.*?\]/gi, "")
+        .replace(/\(official.*?music.*?video.*?\)/gi, "")
+        .replace(/\[official.*?music.*?video.*?\]/gi, "")
+        .replace(/\(.*?lyrics.*?\)/gi, "")
+        .replace(/\[.*?lyrics.*?\]/gi, "")
+        .replace(/\(.*?hd.*?\)/gi, "")
+        .replace(/\[.*?hd.*?\]/gi, "")
+        .replace(/\|.*$/gi, "") // Elimina todo después de un |
+        .replace(/\s{2,}/g, " ")
+        .trim();
 }
 
 /**
- * Extrae el ID de un video de una URL de YouTube.
- * @param {string} url - La URL del video.
- * @returns {string|null} El ID del video o null si no se encuentra.
+ * Limpieza de autores.
+ * @param {string} author - El nombre del autor a limpiar.
+ * @returns {string} El nombre limpio.
+ */
+function cleanAuthor(author) {
+    if (!author) return "YouTube";
+    return author.replace(/ - Topic$/, "").trim();
+}
+
+
+/**
+ * CORREGIDO: Extraer videoId de distintas formas de URL (incluyendo shorts).
+ * @param {string} url - La URL de YouTube.
+ * @returns {string|null} El ID del video.
  */
 function extractVideoId(url) {
     if (!url) return null;
     try {
-        const urlObj = new URL(url);
-        if (urlObj.hostname === 'www.youtube.com' || urlObj.hostname === 'youtube.com') {
-            return urlObj.searchParams.get('v');
+        const parsed = new URL(url);
+        if (parsed.searchParams.has("v")) {
+            return parsed.searchParams.get("v");
         }
-        return null;
+        const pathnameParts = parsed.pathname.split('/');
+        if (pathnameParts.includes("shorts")) {
+            return pathnameParts[pathnameParts.length - 1];
+        }
     } catch (e) {
-        return null;
+        // Fallback para formatos que no son URL completas
+        if (url.includes("watch?v=")) {
+            return new URLSearchParams(url.split('?')[1]).get('v');
+        }
     }
+    return null;
 }
 
+
 /**
- * CORREGIDO: Realiza una única llamada a Jina.ai y maneja múltiples posibles estructuras de JSON.
+ * Scraping usando Jina.ai JSON (versión final y simplificada).
  * @param {string} query - La consulta de búsqueda.
  * @param {number} limit - El número máximo de resultados.
- * @returns {Promise<Array<object>>} Una lista de objetos de video con todos sus detalles.
+ * @returns {Promise<Array<object>>} Una lista de objetos de video.
  */
 async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
@@ -56,51 +99,33 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         const response = await fetch(endpoint, {
             headers: {
                 "Accept": "application/json",
-                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj",
-                "X-Return-Format": "json" // Solicitamos un formato JSON más detallado
+                "Authorization": "Bearer jina_6c98eab8c1b3447848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
             }
         });
 
         if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
-        
         const jsonData = await response.json();
-        
-        // Plan A: Intentar parsear la estructura detallada (ideal)
-        let videoResults = [];
-        if (jsonData?.data?.children && Array.isArray(jsonData.data.children)) {
-            for (const child of jsonData.data.children) {
-                const videoData = child.videoRenderer;
-                if (videoData && videoData.videoId) {
-                     videoResults.push({
-                        id: videoData.videoId,
-                        title: cleanTitle(videoData.title?.runs?.[0]?.text || ''),
-                        thumb: `https://i.ytimg.com/vi/${videoData.videoId}/hqdefault.jpg`,
-                        author: cleanAuthor(videoData.longBylineText?.runs?.[0]?.text || 'YouTube'),
-                        source: 'youtube', type: 'youtube_video',
-                        isTopic: /topic/i.test(videoData.longBylineText?.runs?.[0]?.text || "")
-                    });
-                }
-            }
-        } 
-        // Plan B: Si la estructura detallada falla, intentar con la estructura simple
-        else if (jsonData?.data && Array.isArray(jsonData.data)) {
-             videoResults = jsonData.data.map(item => {
-                const videoId = extractVideoId(item.url);
-                if (!videoId) return null;
-                return {
-                    id: videoId,
-                    title: cleanTitle(item.title || `Video ${videoId}`),
-                    thumb: (item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`),
-                    author: cleanAuthor(item.author || "YouTube"),
-                    source: 'youtube', type: 'youtube_video',
-                    isTopic: /topic/i.test(item.author || "")
-                };
-            }).filter(Boolean);
-        } else {
-            console.warn("Jina.ai returned an unrecognized JSON structure:", jsonData);
+
+        // Usamos la única estructura que hemos confirmado que Jina devuelve.
+        if (!jsonData?.data || !Array.isArray(jsonData.data)) {
+            console.warn("Estructura inesperada de Jina.ai:", jsonData);
             return [];
         }
-        
+
+        const videoResults = jsonData.data.map(item => {
+            const videoId = extractVideoId(item.url);
+            if (!videoId) return null;
+            return {
+                id: videoId,
+                title: cleanTitle(item.title || `Video ${videoId}`),
+                thumb: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                author: cleanAuthor(item.author || "YouTube"),
+                source: "youtube",
+                type: "youtube_video",
+                isTopic: /topic/i.test(item.author || "")
+            };
+        }).filter(Boolean); // Filtra los resultados nulos si no se pudo extraer un ID
+
         return videoResults.slice(0, limit);
     });
 }
@@ -108,6 +133,7 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
 
 /**
  * Función de compatibilidad para main.js (carga de playlists recomendadas).
+ * No la eliminamos porque es necesaria para el arranque de la app.
  * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
  * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
  */
