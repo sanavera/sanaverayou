@@ -294,11 +294,6 @@ async function reassignTrackSource(playlistId, oldTrackId) {
 
 // --- Lógica de reproducción desde playlists ---
 
-/**
- * Reproduce una canción de los resultados de búsqueda.
- * @param {string} trackId - ID de la canción.
- * @param {boolean} autoplay - Si debe empezar a reproducir automáticamente.
- */
 function playFromSearch(trackId, autoplay=false) {
     const videoItems = items.filter(it => it.source === 'youtube' && it.type === 'youtube_video');
     const videoIndex = videoItems.findIndex(v => v.id === trackId);
@@ -309,12 +304,6 @@ function playFromSearch(trackId, autoplay=false) {
     }
 }
 
-/**
- * Reproduce una canción desde una playlist.
- * @param {string} plId - ID de la playlist.
- * @param {number} i - Índice de la canción en la playlist.
- * @param {boolean} autoplay - Si debe empezar a reproducir automáticamente.
- */
 function playFromPlaylist(plId, i, autoplay=false){
   const pl = communityPlaylists.find(p=>p.id===plId); if(!pl) return;
   viewingPlaylistId = plId;
@@ -328,10 +317,6 @@ function playFromPlaylist(plId, i, autoplay=false){
   renderPlaylists();
 }
 
-/**
- * Inicia la reproducción de una playlist desde la primera canción.
- * @param {string} id - ID de la playlist.
- */
 function playPlaylist(id){
   const pl = communityPlaylists.find(p=>p.id===id); if(!pl) return;
   const playableTracks = (pl.tracks || []).filter(t => t && t.id);
@@ -345,11 +330,6 @@ function playPlaylist(id){
 
 // --- Manejo de la UI de la cola de reproducción ---
 
-/**
- * Renderiza la cola de reproducción en el panel del reproductor.
- * @param {Array<object>} queueItems - Las canciones a mostrar.
- * @param {string} title - El título de la cola/playlist.
- */
 function renderQueue(queueItems, title) {
     const panel = $("#queuePanel");
     currentQueueTitle = title;
@@ -400,10 +380,6 @@ function renderQueue(queueItems, title) {
     refreshIndicators();
 }
 
-/**
- * Muestra una playlist en la vista del reproductor y comienza la reproducción.
- * @param {string} plId - El ID de la playlist a mostrar.
- */
 async function showPlaylistInPlayer(plId) {
     const pl = communityPlaylists.find(p => p.id === plId);
     if (!pl) return;
@@ -430,9 +406,6 @@ async function showPlaylistInPlayer(plId) {
     playCurrent(true);
 }
 
-/**
- * Oculta el panel de la cola de reproducción.
- */
 function hideQueuePanel(){ 
     $("#queuePanel")?.classList.add("hide"); 
     if ($("#queueList")) $("#queueList").innerHTML=""; 
@@ -444,9 +417,6 @@ function hideQueuePanel(){
     renderPlaylists(); 
 }
 
-/**
- * Inicializa los listeners para la creación de playlists.
- */
 function initPlaylistModals() {
     $("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
     $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
@@ -462,84 +432,130 @@ function initPlaylistModals() {
     };
 }
 
-/* ========== Spotify Import UI & Logic (NUEVO) ========== */
+/* ========== Lógica de Importación de Spotify (CORREGIDA Y AMPLIADA) ========== */
+
 function initSpotifyImportUI() {
-    const playlistsView = document.getElementById('view-playlists');
-    if (!playlistsView) return;
-    const header = playlistsView.querySelector('.section-head');
-    if (!header || playlistsView.querySelector('#syBtnImportSpotify')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'syBtnImportSpotify';
-    btn.className = 'pill';
-    btn.innerHTML = `${spotifyLogoSvg()} Importar de Spotify`;
-    btn.style.display = 'flex';
-    btn.style.alignItems = 'center';
-    btn.style.gap = '8px';
-    
-    const actionsDiv = header.querySelector('.pl-actions');
-    if (actionsDiv) {
-        actionsDiv.prepend(btn);
-    } else {
-        header.appendChild(btn);
-    }
-
-    btn.addEventListener('click', openSpotifyImportModal);
+    const btn = $("#syBtnImportSpotify");
+    if (btn) btn.addEventListener('click', openSpotifyImportModal);
 }
 
 function openSpotifyImportModal() {
-    if (document.getElementById('sySpotifyModal')) {
-        document.getElementById('sySpotifyModal').classList.add('show');
-        return;
+    const modal = $("#sySpotifyModal");
+    if(modal) {
+        modal.classList.add('show');
+        $("#sySmInputUrl").value = "";
     }
-
-    const modal = document.createElement('div');
-    modal.id = 'sySpotifyModal';
-    modal.className = 'sheet'; // Reutilizamos el estilo de 'sheet' para el overlay
-    modal.innerHTML = `
-        <div class="sheet-content">
-          <div class="sheet-title">Importar playlists de Spotify</div>
-          <p class="muted" style="margin: 8px 0 16px;">Pega el enlace a una playlist pública de Spotify.</p>
-          <div class="sheet-form">
-            <input id="sySmInput" type="text" placeholder="https://open.spotify.com/playlist/..." autocomplete="off">
-          </div>
-          <div class="sheet-actions">
-            <button id="sySmCancel" class="sheet-item ghost">Cancelar</button>
-            <button id="sySmFetch" class="sheet-item pill">Importar</button>
-          </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    modal.classList.add('show');
-    
-    modal.addEventListener('click', (e)=>{ if (e.target === modal) modal.classList.remove('show'); });
-    modal.querySelector('#sySmCancel').onclick = ()=> modal.classList.remove('show');
-    modal.querySelector('#sySmFetch').onclick = fetchAndImportSpotifyPlaylist;
-    setTimeout(()=> modal.querySelector('#sySmInput')?.focus(), 60);
 }
 
-function parseSpotifyPlaylistId(input) {
-    if (!input) return null;
-    const cleanedInput = input.trim().split('?')[0];
-    const spotifyPlaylistRegex = /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
-    const match = cleanedInput.match(spotifyPlaylistRegex);
-    return match && match[1] ? match[1] : null;
-}
+async function handleSpotifyImport() {
+    const input = $("#sySmInputUrl").value.trim();
+    if (!input) return;
 
-async function fetchAndImportSpotifyPlaylist() {
-    const input = document.getElementById('sySmInput').value.trim();
-    const playlistId = parseSpotifyPlaylistId(input);
-    const modal = document.getElementById('sySpotifyModal');
-    
-    if (!playlistId) {
-        showToast("URL de playlist de Spotify no válida.", true);
-        return;
-    }
-
-    const fetchBtn = modal.querySelector('#sySmFetch');
+    const modal = $("#sySpotifyModal");
+    const fetchBtn = $("#sySmFetch");
     fetchBtn.disabled = true;
-    fetchBtn.textContent = 'Importando...';
+    fetchBtn.textContent = 'Buscando...';
 
+    try {
+        const { type, id } = parseSpotifyLink(input);
+
+        if (type === 'playlist') {
+            await fetchAndImportSinglePlaylist(id);
+            modal.classList.remove('show');
+        } else if (type === 'user') {
+            const playlists = await fetchUserPlaylists(id);
+            if (playlists.length > 0) {
+                showUserPlaylistsModal(playlists);
+                modal.classList.remove('show');
+            } else {
+                showToast("No se encontraron playlists públicas para este usuario.", true);
+            }
+        } else {
+            showToast("URL o ID de usuario no válido. Intenta de nuevo.", true);
+        }
+    } catch (e) {
+        console.error("Error en importación de Spotify:", e);
+        showToast("Ocurrió un error. Verifica el enlace o ID.", true);
+    } finally {
+        fetchBtn.disabled = false;
+        fetchBtn.textContent = 'Importar';
+    }
+}
+
+function parseSpotifyLink(input) {
+    const cleanedInput = input.trim().split('?')[0];
+    const playlistRegex = /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
+    const userRegex = /open\.spotify\.com\/user\/([a-zA-Z0-9]+)/;
+
+    let match = cleanedInput.match(playlistRegex);
+    if (match && match[1]) return { type: 'playlist', id: match[1] };
+
+    match = cleanedInput.match(userRegex);
+    if (match && match[1]) return { type: 'user', id: match[1] };
+    
+    // Si no es una URL, asumimos que es un ID de usuario
+    if (!cleanedInput.includes(".")) return { type: 'user', id: cleanedInput };
+
+    return { type: null, id: null };
+}
+
+async function fetchUserPlaylists(userId) {
+    const token = await getSpotifyToken();
+    if (!token) return [];
+    
+    let allPlaylists = [];
+    let url = `https://api.spotify.com/v1/users/${userId}/playlists?limit=50`;
+
+    while(url) {
+        try {
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('No se pudo obtener las playlists del usuario.');
+            const data = await response.json();
+            allPlaylists = allPlaylists.concat(data.items);
+            url = data.next;
+        } catch (e) {
+            console.error("Error fetching user playlists:", e);
+            showToast("No se pudo obtener las playlists del usuario.", true);
+            return [];
+        }
+    }
+    return allPlaylists;
+}
+
+function showUserPlaylistsModal(playlists) {
+    const modal = $("#syUserPlaylistsModal");
+    const listEl = $("#syUserPlaylistsList");
+    if (!modal || !listEl) return;
+    
+    listEl.innerHTML = ""; // Limpiar lista anterior
+    
+    playlists.forEach(pl => {
+        const item = document.createElement("div");
+        item.className = "sheet-item-check";
+        item.innerHTML = `
+            <input type="checkbox" id="pl_${pl.id}" data-playlist-id="${pl.id}">
+            <label for="pl_${pl.id}">${pl.name} <span class="muted">(${pl.tracks.total} temas)</span></label>
+        `;
+        listEl.appendChild(item);
+    });
+
+    modal.classList.add("show");
+
+    $("#syUserPlImportBtn").onclick = async () => {
+        const selectedIds = Array.from(listEl.querySelectorAll("input:checked")).map(input => input.dataset.playlistId);
+        if (selectedIds.length === 0) {
+            showToast("Selecciona al menos una playlist para importar.", true);
+            return;
+        }
+        modal.classList.remove('show');
+        showToast(`Importando ${selectedIds.length} playlist(s)...`);
+        for (const id of selectedIds) {
+            await fetchAndImportSinglePlaylist(id);
+        }
+    };
+}
+
+async function fetchAndImportSinglePlaylist(playlistId) {
     try {
         const token = await getSpotifyToken();
         const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
@@ -550,7 +566,7 @@ async function fetchAndImportSpotifyPlaylist() {
 
         const spotifyTracks = await fetchAllSpotifyPlaylistTracks(playlistId);
         if (spotifyTracks.length === 0) {
-            showToast("La playlist está vacía o no se pudieron cargar las canciones.", true);
+            showToast(`La playlist "${plData.name}" está vacía.`, true);
             return;
         }
         
@@ -563,14 +579,9 @@ async function fetchAndImportSpotifyPlaylist() {
         });
 
         showToast(`Playlist "${plData.name}" importada.`);
-        modal.classList.remove('show');
-
     } catch(e) {
         console.error("Error importing spotify playlist:", e);
-        showToast("Error al importar la playlist. Revisa el enlace.", true);
-    } finally {
-        fetchBtn.disabled = false;
-        fetchBtn.textContent = 'Importar';
+        showToast("Error al importar una playlist.", true);
     }
 }
 
@@ -578,6 +589,7 @@ async function processAndSavePlaylist(pl) {
     const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
     const col = collection(db, 'playlists');
     
+    // Asumimos que no puede haber dos playlists con el mismo spotifyId del mismo usuario
     const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
     const snapshot = await getDocs(q);
 
@@ -607,10 +619,6 @@ async function processAndSavePlaylist(pl) {
             cover: pl.cover,
             spotifyTracks: pl.spotifyTracks,
             trackCount: pl.spotifyTracks.length,
-            // Opcional: resetear 'tracks' para forzar una nueva resolución
-            // tracks: Array(pl.spotifyTracks.length).fill(null),
-            // resolvedCount: 0,
-            // status: 'unresolved',
             updatedAt: serverTimestamp()
         });
         showToast(`Playlist "${pl.name}" actualizada.`);
