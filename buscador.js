@@ -1,10 +1,10 @@
 // buscador.js
 // Búsqueda por scraping usando Jina.ai (JSON). Sin NoEmbed.
-// Mantiene la interfaz usada por el proyecto original.
+// Mantiene la interfaz usada por el proyecto original y NO redefine cleanTitle.
 
 // ===================== Config ======================
 const JINA_KEY = "jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj";
-const JINA_BASE = "https://r.jina.ai"; // r.jina.ai funciona con Accept: application/json
+const JINA_BASE = "https://r.jina.ai"; // funciona con Accept: application/json
 
 // ===================== Estado ======================
 let items = [];
@@ -37,38 +37,13 @@ function extractVideoId(url) {
   } catch {
     // ignore
   }
-  // fallback rápido
   const m = url.match(/watch\?v=([\w-]{11})/);
   return m ? m[1] : null;
 }
 
-// Estas helpers existen en el proyecto (o se usan acá igual que antes)
 function cleanAuthor(author) {
   if (!author) return "YouTube";
   return author.replace(/ - Topic$/, "").trim();
-}
-// cleanTitle vive en otro módulo en algunos proyectos, pero lo dejamos acá por compatibilidad.
-function cleanTitle(title) {
-  if (!title) return "";
-  return title
-    .replace(/\(official.*?\)/gi, "")
-    .replace(/\[official.*?\]/gi, "")
-    .replace(/\(video.*?\)/gi, "")
-    .replace(/\[video.*?\]/gi, "")
-    .replace(/\(en vivo.*?\)/gi, "")
-    .replace(/\[en vivo.*?\]/gi, "")
-    .replace(/\(live.*?\)/gi, "")
-    .replace(/\[live.*?\]/gi, "")
-    .replace(/\(letra.*?\)/gi, "")
-    .replace(/\[letra.*?\]/gi, "")
-    .replace(/\(lyrics.*?\)/gi, "")
-    .replace(/\[lyrics.*?\]/gi, "")
-    .replace(/\s*HD\s*/gi, "")
-    .replace(/\s*4K\s*/gi, "")
-    .replace(/\s*official\s*/gi, "")
-    .replace(/\s*video\s*/gi, "")
-    .replace(/\s*audio\s*/gi, "")
-    .trim();
 }
 
 // ================== Core Jina fetchers =================
@@ -105,12 +80,12 @@ function parseJinaResultsJSON(jsonData, limit = 20) {
   if (!jsonData?.data || !Array.isArray(jsonData.data)) return [];
   const out = [];
   for (const it of jsonData.data) {
-    // Esperado: { url, title, author, thumbnail, ... }
     const id = extractVideoId(it.url || "");
     if (!id) continue;
     out.push({
       id,
-      title: cleanTitle(it.title || `Video ${id}`),
+      // cleanTitle viene de main.js
+      title: typeof cleanTitle === "function" ? cleanTitle(it.title || `Video ${id}`) : (it.title || `Video ${id}`),
       thumb: it.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       author: cleanAuthor(it.author || "YouTube"),
       source: "youtube",
@@ -128,7 +103,7 @@ function parseJinaResultsFromHTML(html, limit = 20) {
   for (const id of ids.slice(0, limit)) {
     out.push({
       id,
-      title: `Video ${id}`,
+      title: typeof cleanTitle === "function" ? cleanTitle(`Video ${id}`) : `Video ${id}`,
       thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       author: "YouTube",
       source: "youtube",
@@ -160,17 +135,15 @@ async function scrapeYoutube(query, limit = 20) {
   });
 }
 
-// Mantener helpers de URL-only/posición por compatibilidad (usan JSON y caen a TEXT)
+// Mantener helpers de URL-only/posición (usan JSON y caen a TEXT)
 async function scrapeYoutubeUrlOnly(query) {
   return withRetry(async () => {
     const q = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    // Intento JSON
     try {
       const json = await jinaFetchJSON(q);
       const list = parseJinaResultsJSON(json, 1);
       return list[0]?.id || null;
     } catch {
-      // Fallback TEXT
       const html = await jinaFetchText(q);
       const priority = html.match(/watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i);
       if (priority) return priority[1];
@@ -183,13 +156,11 @@ async function scrapeYoutubeUrlOnly(query) {
 async function scrapeYoutubeIdForNthResult(query, index = 0) {
   return withRetry(async () => {
     const q = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    // Intento JSON
     try {
       const json = await jinaFetchJSON(q);
       const list = parseJinaResultsJSON(json, index + 1);
       return list[index]?.id || null;
     } catch {
-      // Fallback TEXT
       const html = await jinaFetchText(q);
       const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))];
       return ids[index] || null;
@@ -237,9 +208,9 @@ function appendResults(chunk) {
     item.className = "result-item";
     item.dataset.trackId = it.id;
 
-    let logo = youtubeLogoSvg();
+    let logo = youtubeLogoSvg?.() || "";
     if (it.isTopic) {
-      logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
+      logo = Math.random() < 0.5 ? (spotifyLogoSvg?.() || "") : (youtubeMusicLogoSvg?.() || "");
     }
 
     item.innerHTML = `
@@ -260,9 +231,9 @@ function appendResults(chunk) {
       </div>
       <div class="actions">
         <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
-          ${favIconSvg(isFav?.(it.id))}
+          ${typeof favIconSvg === "function" ? favIconSvg(isFav?.(it.id)) : ""}
         </button>
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${typeof dotsSvg === "function" ? dotsSvg() : "⋯"}</button>
       </div>
     `;
 
@@ -333,3 +304,4 @@ if (typeof module !== "undefined") {
     scrapeYoutubeIdForNthResult
   };
 }
+```0
