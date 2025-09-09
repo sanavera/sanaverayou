@@ -1,3 +1,38 @@
+
+async function fetchVideoDetailsByIds(ids = []) {
+  const results = [];
+  for (const id of ids) {
+    try {
+      const resp = await fetch(`https://r.jina.ai/https://www.youtube.com/watch?v=${id}`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
+        }
+      });
+
+      if (!resp.ok) {
+        console.error(`Error al obtener datos de ${id}: ${resp.status}`);
+        continue;
+      }
+
+      const data = await resp.json();
+
+      results.push({
+        id,
+        title: data.title || "Título no disponible",
+        author: data.author || "Desconocido",
+        thumb: data.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        url: `https://www.youtube.com/watch?v=${id}`,
+        duration: data.duration || 0
+      });
+    } catch (err) {
+      console.error("Error en fetchVideoDetailsByIds:", err);
+    }
+  }
+  return results;
+}
+
+
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 let activeSessions = []; // Variable global para guardar las sesiones
 
