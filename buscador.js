@@ -45,9 +45,13 @@ function extractVideoId(url) {
         }
     } catch (e) {
         if (url.includes("watch?v=")) {
-            return new URLSearchParams(url.split('?')[1]).get('v');
+            try {
+                return new URLSearchParams(url.split('?')[1]).get('v');
+            } catch (err) {
+                 console.warn("No se pudo parsear la URL:", url);
+                 return null;
+            }
         }
-        console.warn("URL inválida o no reconocida:", url);
     }
     return null;
 }
@@ -64,11 +68,14 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         const response = await fetch(endpoint, {
             headers: {
                 "Accept": "application/json",
-                "Authorization": "Bearer jina_6c98eab8c1b3447848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
+                // NUEVA API KEY
+                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
             }
         });
 
-        if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`Proxy failed with status ${response.status}`);
+        }
         const jsonData = await response.json();
 
         if (!jsonData?.data || !Array.isArray(jsonData.data)) {
@@ -93,6 +100,7 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         return videoResults.slice(0, limit);
     });
 }
+
 
 /**
  * Función de compatibilidad para main.js (carga de playlists recomendadas).
