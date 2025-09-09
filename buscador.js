@@ -112,63 +112,59 @@ function findVideosInData(data) {
 
 async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
-        const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(youtubeUrl)}`;
+        const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
         
         const response = await fetch(proxyUrl, {
             signal: searchAbort?.signal
         });
 
         if (!response.ok) {
-            throw new Error(`Proxy failed with status ${response.status}`);
+            throw new Error(`AllOrigins falló: ${response.status}`);
         }
         
         const html = await response.text();
         
-        // Probar múltiples patrones para extraer ytInitialData
-        const patterns = [
-            /var ytInitialData = '((?:\\x[0-9a-f]{2}|\\"|\\\\|[^'])*?)';/s,
-            /var ytInitialData = ({.*?});/s,
-            /window\["ytInitialData"\] = ({.*?});/s,
-            /ytInitialData = ({.*?});/s
-        ];
+        // Usar el mismo patrón que funciona en el HTML de test
+        const scriptMatch = html.match(/var ytInitialData = ({.*?});/);
+        if (!scriptMatch) {
+            throw new Error("No se encontró ytInitialData en el HTML");
+        }
         
-        let data = null;
-        let isEscaped = false;
+        const data = JSON.parse(scriptMatch[1]);
         
-        for (let i = 0; i < patterns.length; i++) {
-            const match = html.match(patterns[i]);
-            if (match) {
-                try {
-                    let jsonString = match[1];
-                    
-                    if (i === 0) {
-                        // Patrón escapado
-                        isEscaped = true;
-                        jsonString = jsonString
-                            .replace(/\\x([0-9a-f]{2})/gi, (match, hex) => {
-                                return String.fromCharCode(parseInt(hex, 16));
-                            })
-                            .replace(/\\"/g, '"')
-                            .replace(/\\\\/g, '\\');
-                    }
-                    
-                    data = JSON.parse(jsonString);
-                    break;
-                } catch (e) {
-                    continue;
+        // Usar la misma función que funciona en el HTML de test
+        const videosFound = [];
+        
+        function findVideos(obj) {
+            if (typeof obj !== 'object' || obj === null) return;
+            
+            if (obj.videoRenderer) {
+                const video = obj.videoRenderer;
+                if (video.videoId && video.title) {
+                    videosFound.push({
+                        id: video.videoId,
+                        title: cleanTitle(video.title.runs ? video.title.runs[0].text : video.title.simpleText || 'Sin título'),
+                        thumb: video.thumbnail ? video.thumbnail.thumbnails[0].url : `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`,
+                        author: cleanAuthor(video.ownerText ? video.ownerText.runs[0].text : 'Sin canal'),
+                        source: "youtube",
+                        type: "youtube_video",
+                        isTopic: /topic/i.test(video.ownerText ? video.ownerText.runs[0].text : '')
+                    });
+                }
+            }
+            
+            // Recursivamente buscar en objetos y arrays
+            for (let key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    findVideos(obj[key]);
                 }
             }
         }
         
-        if (!data) {
-            throw new Error("No se encontró ytInitialData en el HTML");
-        }
+        findVideos(data);
         
-        // Extraer videos de la estructura JSON
-        const videoResults = findVideosInData(data);
-        
-        return videoResults.slice(0, limit);
+        return videosFound.slice(0, limit);
     });
 }
 
