@@ -220,13 +220,12 @@
   <div id="yt-holder"><div id="player"></div></div>
 
   <!-- Scripts modularizados -->
-  <!-- CORREGIDO: Orden de carga de scripts para evitar errores de referencia -->
-  <script src="firebase.js"></script>
-  <script src="reproductor.js"></script>
-  <script src="buscador.js"></script> <!-- buscador.js necesita funciones de reproductor.js (playFromSearch) -->
-  <script src="playlists.js"></script>
-  <script src="favoritos.js"></script>
-  <script src="main.js"></script> <!-- main.js se carga al final porque depende de todos los demás -->
+  <script src="firebase.js" defer></script>
+  <script src="reproductor.js" defer></script>
+  <script src="buscador.js" defer></script>
+  <script src="playlists.js" defer></script>
+  <script src="favoritos.js" defer></script>
+  <script src="main.js" defer></script>
 
 </body>
 </html>
