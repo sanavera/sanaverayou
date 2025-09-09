@@ -44,6 +44,9 @@
             Actividad Reciente
             <span class="eq-title" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
           </h3>
+           <button id="btnShowStreams" class="stream-btn stream-btn-listen" title="Ver transmisiones">
+                <div class="headphone-icon"></div>
+            </button>
         </header>
         <div id="allPlaylistsContainer" class="home-grid">
             <!-- Todas las playlists (recomendadas y de usuarios) se insertarán aquí -->
@@ -70,6 +73,7 @@
         <header class="section-head">
             <h3>Mis Playlists</h3>
             <div class="pl-actions">
+              <button id="syBtnImportSpotify" class="pill">Importar de Spotify</button>
               <button id="btnNewPlaylist" class="pill">Nueva</button>
             </div>
         </header>
@@ -129,6 +133,12 @@
             <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
         </button>
+        <div id="broadcastWrapper" class="broadcast-wrapper">
+            <span class="broadcast-label">Transmitiendo...</span>
+            <button id="broadcastBtn" class="stream-btn stream-btn-broadcast" title="Iniciar transmisión">
+                <div class="mic-icon"></div>
+            </button>
+        </div>
     </div>
   </section>
 
@@ -178,15 +188,73 @@
     </div>
   </div>
 
+  <!-- Modales de Transmisiones -->
+  <div id="sessionsSheet" class="sheet">
+      <div class="sheet-content">
+          <div class="sheet-title">Transmisiones Activas</div>
+          <div id="sessionsList" class="sessions-list"></div>
+          <button id="leaveStreamBtn" class="sheet-item ghost hide" style="margin-top: 16px;">Salir de la transmisión</button>
+          <button id="closeSessions" class="sheet-item ghost">Cerrar</button>
+      </div>
+  </div>
+
+  <div id="startStreamSheet" class="sheet">
+      <div class="sheet-content">
+          <div class="sheet-title">Iniciar Transmisión</div>
+          <div class="sheet-form">
+              <input id="streamNameInput" placeholder="Nombre de la transmisión (ej: Sebas)" autocomplete="off" />
+              <select id="streamGenreSelect">
+                  <option>Variado</option>
+                  <option>Cumbia</option>
+                  <option>Rock</option>
+                  <option>Reggaetón</option>
+                  <option>Pop</option>
+                  <option>80s & 90s</option>
+              </select>
+          </div>
+          <div class="sheet-actions">
+              <button id="startStreamCancel" class="sheet-item ghost">Cancelar</button>
+              <button id="startStreamConfirm" class="sheet-item pill">Iniciar</button>
+          </div>
+      </div>
+  </div>
+
+  <!-- Modales de Spotify -->
+  <div id="sySpotifyModal" class="sheet">
+      <div class="sheet-content">
+          <div class="sheet-title">Importar de Spotify</div>
+          <p class="muted" style="margin: 8px 0 16px;">Pega la URL de un perfil de usuario o de una playlist.</p>
+          <div class="sheet-form">
+              <input id="sySmInputUrl" type="text" placeholder="URL o ID de usuario de Spotify" autocomplete="off">
+          </div>
+          <div class="sheet-actions">
+              <button class="sheet-item ghost" onclick="$('#sySpotifyModal').classList.remove('show')">Cancelar</button>
+              <button id="sySmFetch" class="sheet-item pill">Importar</button>
+          </div>
+      </div>
+  </div>
+  
+  <div id="syUserPlaylistsModal" class="sheet">
+      <div class="sheet-content">
+          <div class="sheet-title">Playlists de Usuario</div>
+          <p class="muted">Selecciona las playlists que quieras importar.</p>
+          <div id="syUserPlaylistsList" class="sheet-list"></div>
+          <div class="sheet-actions">
+              <button class="sheet-item ghost" onclick="$('#syUserPlaylistsModal').classList.remove('show')">Cancelar</button>
+              <button id="syUserPlImportBtn" class="sheet-item pill">Importar Seleccionadas</button>
+          </div>
+      </div>
+  </div>
+
   <div id="yt-holder"><div id="player"></div></div>
 
   <!-- Scripts modularizados -->
-  <script src="buscador.js"></script>
-  <script src="firebase.js"></script>
-  <script src="reproductor.js"></script>
-  <script src="playlists.js"></script>
-  <script src="favoritos.js"></script>
-  <script src="main.js"></script>
+  <script src="firebase.js" defer></script>
+  <script src="reproductor.js" defer></script>
+  <script src="buscador.js" defer></script>
+  <script src="playlists.js" defer></script>
+  <script src="favoritos.js" defer></script>
+  <script src="main.js" defer></script>
 
 </body>
 </html>
