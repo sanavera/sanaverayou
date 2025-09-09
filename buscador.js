@@ -79,7 +79,7 @@ async function scrapeYoutubeIdForNthResult(query, index = 0) {
 }
 
 /**
- * NUEVO: Obtiene solo los IDs de los videos de la búsqueda.
+ * Obtiene solo los IDs de los videos de la búsqueda.
  * @param {string} query - La consulta de búsqueda.
  * @param {number} limit - El número máximo de resultados.
  * @returns {Promise<Array<string>>} Una lista de IDs de video.
@@ -100,7 +100,7 @@ async function scrapeYoutubeIds(query, limit = 20) {
 }
 
 /**
- * NUEVO: Obtiene los detalles de un solo video de YouTube por su ID.
+ * Obtiene los detalles de un solo video de YouTube por su ID.
  * @param {string} id - El ID del video de YouTube.
  * @returns {Promise<object|null>} Un objeto con los metadatos del video.
  */
@@ -124,9 +124,40 @@ async function fetchVideoDetailsById(id) {
     }
 }
 
+/**
+ * CORREGIDO: Función restaurada para compatibilidad con main.js (carga de playlists).
+ * Obtiene los detalles de varios videos de YouTube por sus IDs usando noembed.com.
+ * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
+ * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
+ */
+async function fetchVideoDetailsByIds(ids) {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return [];
+    
+    const metadataPromises = uniqueIds.map(id => 
+        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+            .then(r => r.json())
+            .then(meta => {
+                if (meta.error) return null;
+                return {
+                    id,
+                    title: cleanTitle(meta.title || `Video ${id}`),
+                    thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+                    author: cleanAuthor(meta.author_name || "YouTube"),
+                    source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
+                };
+            })
+            .catch(() => ({
+                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+                author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
+            }))
+    );
+    return (await Promise.all(metadataPromises)).filter(Boolean);
+}
+
 
 /**
- * CORREGIDO: Inicia el proceso de búsqueda con renderizado progresivo.
+ * Inicia el proceso de búsqueda con renderizado progresivo.
  * @param {string} query - La consulta de búsqueda.
  */
 async function startSearch(query) {
