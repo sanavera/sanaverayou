@@ -1,4 +1,4 @@
-// Contiene toda la lógica de búsqueda, incluyendo scraping de YouTube y Spotify.
+I// Contiene toda la lógica de búsqueda, incluyendo scraping de YouTube y Spotify.
 
 let items = [];
 let searchAbort = null;
@@ -78,14 +78,13 @@ async function scrapeYoutubeIdForNthResult(query, index = 0) {
     });
 }
 
-
 /**
- * Realiza una búsqueda en YouTube y obtiene metadatos de los videos.
+ * NUEVO: Obtiene solo los IDs de los videos de la búsqueda.
  * @param {string} query - La consulta de búsqueda.
  * @param {number} limit - El número máximo de resultados.
- * @returns {Promise<Array<object>>} Una lista de objetos de video.
+ * @returns {Promise<Array<string>>} Una lista de IDs de video.
  */
-async function scrapeYoutube(query, limit = 20) {
+async function scrapeYoutubeIds(query, limit = 20) {
     return withRetry(async () => {
         const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
         const response = await fetch(endpoint, {
@@ -96,73 +95,82 @@ async function scrapeYoutube(query, limit = 20) {
         });
         if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
         const html = await response.text();
-
-        const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))].slice(0, limit);
-        if (!ids.length) return [];
-        
-        return await fetchVideoDetailsByIds(ids);
+        return [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))].slice(0, limit);
     });
 }
 
 /**
- * Obtiene los detalles de varios videos de YouTube por sus IDs usando noembed.com.
- * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
- * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
+ * NUEVO: Obtiene los detalles de un solo video de YouTube por su ID.
+ * @param {string} id - El ID del video de YouTube.
+ * @returns {Promise<object|null>} Un objeto con los metadatos del video.
  */
-async function fetchVideoDetailsByIds(ids) {
-    const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.length === 0) return [];
-    
-    const metadataPromises = uniqueIds.map(id => 
-        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
-            .then(r => r.json())
-            .then(meta => {
-                if (meta.error) return null;
-                return {
-                    id,
-                    title: cleanTitle(meta.title || `Video ${id}`),
-                    thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
-                    author: cleanAuthor(meta.author_name || "YouTube"),
-                    source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
-                };
-            })
-            .catch(() => ({
-                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-                author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
-            }))
-    );
-    return (await Promise.all(metadataPromises)).filter(Boolean);
+async function fetchVideoDetailsById(id) {
+    try {
+        const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`);
+        const meta = await response.json();
+        if (meta.error) return null;
+        return {
+            id,
+            title: cleanTitle(meta.title || `Video ${id}`),
+            thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+            author: cleanAuthor(meta.author_name || "YouTube"),
+            source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
+        };
+    } catch (e) {
+        return {
+            id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+            author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
+        };
+    }
 }
 
 
 /**
- * Inicia el proceso de búsqueda.
+ * CORREGIDO: Inicia el proceso de búsqueda con renderizado progresivo.
  * @param {string} query - La consulta de búsqueda.
  */
 async function startSearch(query) {
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
   paging = { query, loading: true };
-  items = [];
+  items = []; // Resetea la lista global de resultados
+  
   const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
+  if (resultsEl) {
+      resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
+  }
   updateHomeGridVisibility();
   
   try {
-    const videoResults = await scrapeYoutube(query, 20);
+    // 1. Obtiene todos los IDs de una vez
+    const videoIds = await scrapeYoutubeIds(query, 20);
     if (searchAbort.signal.aborted) return;
     
+    // 2. Limpia el mensaje de "Buscando..."
     if (resultsEl) resultsEl.innerHTML = "";
-    if (videoResults.length === 0) {
+
+    if (videoIds.length === 0) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
+        paging.loading = false;
         return;
     }
 
-    items = videoResults;
-    appendResults(items);
+    // 3. Pide y renderiza los detalles uno por uno
+    for (const id of videoIds) {
+        if (searchAbort.signal.aborted) break;
+        const videoDetails = await fetchVideoDetailsById(id);
+        if (videoDetails) {
+            items.push(videoDetails); // Agrega a la lista global para la reproducción
+            appendResults([videoDetails]); // Renderiza este resultado individual
+        }
+    }
+
   } catch (e) {
     console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
+    // Muestra error solo si no se pudo renderizar ningún resultado
+    if (resultsEl && items.length === 0) {
+        resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
+    }
   } finally {
     paging.loading = false;
   }
@@ -170,7 +178,7 @@ async function startSearch(query) {
 
 /**
  * Agrega los resultados de la búsqueda al DOM.
- * @param {Array<object>} chunk - Un array de objetos de video.
+ * @param {Array<object>} chunk - Un array de objetos de video (en este caso, de un solo elemento).
  */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
