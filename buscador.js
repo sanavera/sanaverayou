@@ -56,9 +56,10 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
         const response = await fetch(endpoint, {
             headers: {
-                // La magia está aquí: le pedimos a Jina que procese la página y nos dé un JSON.
                 "Accept": "application/json",
-                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj"
+                "Authorization": "Bearer jina_6c98eab8c1b34747848a9acec3fa46da1c2tzg6SrvB9zUWtnvt4nY2ytOzj",
+                // Agregamos una cabecera para solicitar a Jina que nos dé los elementos de la lista
+                "X-Return-Format": "json"
             }
         });
 
@@ -66,32 +67,37 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
         
         const jsonData = await response.json();
         
-        // Jina nos devuelve un array 'data' con los resultados. Lo transformamos a nuestro formato.
-        if (!jsonData || !jsonData.data || !Array.isArray(jsonData.data)) {
+        // CORREGIDO: Verificación más robusta de la estructura del JSON.
+        // La estructura correcta que queremos es un array 'children' dentro del objeto 'data'.
+        if (!jsonData || !jsonData.data || !Array.isArray(jsonData.data.children)) {
             console.warn("Jina.ai returned an unexpected JSON structure:", jsonData);
             return [];
         }
 
-        return jsonData.data.slice(0, limit).map(item => {
-            const videoId = extractVideoId(item.url);
-            if (!videoId) return null;
-
-            return {
-                id: videoId,
-                title: cleanTitle(item.title || `Video ${videoId}`),
-                thumb: (item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`),
-                author: cleanAuthor(item.author || "YouTube"), // Jina a menudo puede extraer el autor
-                source: 'youtube',
-                type: 'youtube_video',
-                isTopic: /topic/i.test(item.author || "")
-            };
-        }).filter(Boolean); // Filtramos cualquier resultado nulo si la URL era inválida
+        const results = [];
+        // Iteramos sobre la lista 'children' que contiene los videos.
+        for (const child of jsonData.data.children) {
+            if (results.length >= limit) break;
+            // Jina anida los detalles del video en 'videoRenderer'
+            const videoData = child.videoRenderer;
+            if (videoData && videoData.videoId) {
+                 results.push({
+                    id: videoData.videoId,
+                    title: cleanTitle(videoData.title?.runs?.[0]?.text || ''),
+                    thumb: `https://i.ytimg.com/vi/${videoData.videoId}/hqdefault.jpg`,
+                    author: cleanAuthor(videoData.longBylineText?.runs?.[0]?.text || 'YouTube'),
+                    source: 'youtube',
+                    type: 'youtube_video',
+                    isTopic: /topic/i.test(videoData.longBylineText?.runs?.[0]?.text || "")
+                });
+            }
+        }
+        return results;
     });
 }
 
 /**
- * CORREGIDO: Función restaurada para compatibilidad con main.js (carga de playlists).
- * Aunque la búsqueda principal ya no la usa, es necesaria para el arranque de la app.
+ * Función de compatibilidad para main.js (carga de playlists recomendadas).
  * @param {Array<string>} ids - Una lista de IDs de videos de YouTube.
  * @returns {Promise<Array<object>>} Una lista de objetos con los metadatos de los videos.
  */
@@ -135,11 +141,9 @@ async function startSearch(query) {
   updateHomeGridVisibility();
   
   try {
-    // 1. Llama a la nueva función que lo hace todo en un paso.
     const videoResults = await scrapeYoutubeWithDetails(query, 20);
     if (searchAbort.signal.aborted) return;
     
-    // 2. Limpia la pantalla y renderiza todo de golpe.
     if (resultsEl) resultsEl.innerHTML = "";
     
     if (videoResults.length === 0) {
@@ -253,3 +257,4 @@ function initSearch() {
         await startSearch(q);
     });
 }
+
