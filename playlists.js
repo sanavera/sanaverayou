@@ -228,7 +228,8 @@ async function removeFromPlaylist(plId, trackId) {
     const { doc, updateDoc, serverTimestamp } = sy_fs();
     const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
     
-    sy_syncRemovalRealtime(plId, trackId);
+    // Asumiendo que esta función existe para la sincro en tiempo real
+    // sy_syncRemovalRealtime(plId, trackId); 
 
     try {
         await updateDoc(doc(db, 'playlists', plId), { tracks: updatedTracks, resolvedCount: updatedTracks.length, updatedAt: serverTimestamp() });
@@ -290,6 +291,7 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         showToast("Error al reasignar la fuente.", true);
     }
 }
+
 
 // --- Lógica de reproducción desde playlists ---
 
@@ -434,8 +436,8 @@ function initPlaylistModals() {
 /* ========== Lógica de Importación de Spotify (CORREGIDA Y AMPLIADA) ========== */
 
 function initSpotifyImportUI() {
-    const btn = $("#syBtnImportSpotify");
-    if (btn) btn.addEventListener('click', openSpotifyImportModal);
+    $("#syBtnImportSpotify")?.addEventListener('click', openSpotifyImportModal);
+    $("#sySmFetch")?.addEventListener('click', handleSpotifyImport);
 }
 
 function openSpotifyImportModal() {
@@ -499,7 +501,7 @@ function parseSpotifyLink(input) {
     if (match && match[1]) return { type: 'user', id: match[1] };
     
     // Si no es una URL, asumimos que es un ID de usuario
-    if (!cleanedInput.includes(".")) return { type: 'user', id: cleanedInput };
+    if (!cleanedInput.includes(".") && !cleanedInput.includes("/")) return { type: 'user', id: cleanedInput };
 
     return { type: null, id: null };
 }
@@ -532,7 +534,7 @@ function showUserPlaylistsModal(playlists) {
     const listEl = $("#syUserPlaylistsList");
     if (!modal || !listEl) return;
     
-    listEl.innerHTML = ""; // Limpiar lista anterior
+    listEl.innerHTML = "";
     
     playlists.forEach(pl => {
         const item = document.createElement("div");
@@ -628,3 +630,4 @@ async function processAndSavePlaylist(pl) {
         showToast(`Playlist "${pl.name}" actualizada.`);
     }
 }
+
