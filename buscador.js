@@ -1,90 +1,178 @@
-// Contiene toda la lógica de búsqueda, incluyendo scraping de YouTube y Spotify (sin API de Jina, solo proxy abierto).
+// Contiene toda la lógica de búsqueda, usando AllOrigins para obtener el HTML de YouTube
 
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false };
 
-/**
- * Función de reintento para peticiones fetch.
- */
-async function withRetry(fn, retries = 2, delay = 300) {
-    for (let i = 0; i <= retries; i++) {
+async function withRetry(fn, retries = 3, delay = 500) {
+    let lastError;
+    for (let i = 0; i < retries; i++) {
         try {
             return await fn();
-        } catch (e) {
-            if (i === retries) {
-                 console.error("Scraping failed after all retries.", e);
-                 throw e;
+        } catch (err) {
+            lastError = err;
+            console.warn(`Reintento ${i + 1} de ${retries} falló:`, err);
+            if (i < retries - 1) {
+                await new Promise(res => setTimeout(res, delay * (i + 1)));
             }
-            console.warn(`Scraping attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-            await new Promise(res => setTimeout(res, delay));
         }
     }
+    throw lastError;
 }
 
-/**
- * Obtiene solo la URL del video de YouTube a través de scraping.
- */
-async function scrapeYoutubeUrlOnly(query) {
-    return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const response = await fetch(endpoint, { headers: { "Accept": "text/plain" } });
-        if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
-        const html = await response.text();
-
-        const priorityRegex = /watch\?v=([\w-]{11})[^\s"'<]*" aria-label="[^"]*(official video|video oficial|music video)[^"]*/i;
-        const priorityMatch = html.match(priorityRegex);
-        if (priorityMatch) return priorityMatch[1];
-
-        const genericMatch = html.match(/watch\?v=([\w-]{11})/);
-        return genericMatch ? genericMatch[1] : null;
-    });
-}
-
-/**
- * Obtiene el ID del video de YouTube para el enésimo resultado.
- */
-async function scrapeYoutubeIdForNthResult(query, index = 0) {
-    return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const response = await fetch(endpoint, { headers: { "Accept": "text/plain" } });
-        if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
-        const html = await response.text();
-
-        const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))];
-        if (!ids || ids.length <= index) {
-            console.warn(`Scraping for index ${index} failed, not enough results for query: "${query}"`);
-            return null;
+function extractVideoId(url) {
+    if (!url) return null;
+    try {
+        const parsed = new URL(url);
+        if (parsed.searchParams.has("v")) {
+            return parsed.searchParams.get("v");
         }
-        return ids[index];
-    });
+        const pathnameParts = parsed.pathname.split('/');
+        if (pathnameParts.includes("shorts")) {
+            return pathnameParts[pathnameParts.length - 1];
+        }
+    } catch (e) {
+        if (url.includes("watch?v=")) {
+            try {
+                return new URLSearchParams(url.split('?')[1]).get('v');
+            } catch (err) {
+                 console.warn("No se pudo parsear la URL:", url);
+                 return null;
+            }
+        }
+    }
+    return null;
 }
 
-/**
- * Realiza una búsqueda en YouTube y obtiene metadatos de los videos.
- */
-async function scrapeYoutube(query, limit = 20) {
+function extractVideoData(videoRenderer) {
+    if (!videoRenderer || !videoRenderer.videoId) return null;
+    
+    let title = 'Sin título';
+    if (videoRenderer.title) {
+        if (videoRenderer.title.runs && videoRenderer.title.runs[0]) {
+            title = videoRenderer.title.runs[0].text;
+        } else if (videoRenderer.title.simpleText) {
+            title = videoRenderer.title.simpleText;
+        }
+    }
+    
+    let channel = 'Sin canal';
+    if (videoRenderer.ownerText && videoRenderer.ownerText.runs && videoRenderer.ownerText.runs[0]) {
+        channel = videoRenderer.ownerText.runs[0].text;
+    } else if (videoRenderer.longBylineText && videoRenderer.longBylineText.runs && videoRenderer.longBylineText.runs[0]) {
+        channel = videoRenderer.longBylineText.runs[0].text;
+    }
+    
+    let thumbnail = null;
+    if (videoRenderer.thumbnail && videoRenderer.thumbnail.thumbnails && videoRenderer.thumbnail.thumbnails.length > 0) {
+        thumbnail = videoRenderer.thumbnail.thumbnails[0].url;
+    }
+    
+    return {
+        id: videoRenderer.videoId,
+        title: cleanTitle(title),
+        thumb: thumbnail || `https://i.ytimg.com/vi/${videoRenderer.videoId}/hqdefault.jpg`,
+        author: cleanAuthor(channel),
+        source: "youtube",
+        type: "youtube_video",
+        isTopic: /topic/i.test(channel)
+    };
+}
+
+function findVideosInData(data) {
+    const videosFound = [];
+    
+    function findVideosRecursive(obj, depth = 0, maxDepth = 4) {
+        if (depth > maxDepth || !obj || typeof obj !== 'object') return;
+        
+        if (obj.videoRenderer) {
+            const video = extractVideoData(obj.videoRenderer);
+            if (video) videosFound.push(video);
+        }
+        
+        if (obj.itemSectionRenderer && obj.itemSectionRenderer.contents) {
+            for (const content of obj.itemSectionRenderer.contents) {
+                if (content.videoRenderer) {
+                    const video = extractVideoData(content.videoRenderer);
+                    if (video) videosFound.push(video);
+                }
+            }
+        }
+        
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                findVideosRecursive(obj[key], depth + 1, maxDepth);
+            }
+        }
+    }
+    
+    findVideosRecursive(data);
+    return videosFound;
+}
+
+async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
-        const endpoint = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-        const response = await fetch(endpoint, { headers: { "Accept": "text/plain" } });
-        if (!response.ok) throw new Error(`Proxy failed with status ${response.status}`);
+        const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(proxyUrl, {
+            signal: searchAbort?.signal
+        });
+
+        if (!response.ok) {
+            throw new Error(`AllOrigins falló: ${response.status}`);
+        }
+        
         const html = await response.text();
-
-        const ids = [...new Set(Array.from(html.matchAll(/watch\?v=([\w-]{11})/g)).map(m => m[1]))].slice(0, limit);
-        if (!ids.length) return [];
-
-        return await fetchVideoDetailsByIds(ids);
+        
+        // Usar el mismo patrón que funciona en el HTML de test
+        const scriptMatch = html.match(/var ytInitialData = ({.*?});/);
+        if (!scriptMatch) {
+            throw new Error("No se encontró ytInitialData en el HTML");
+        }
+        
+        const data = JSON.parse(scriptMatch[1]);
+        
+        // Usar la misma función que funciona en el HTML de test
+        const videosFound = [];
+        
+        function findVideos(obj) {
+            if (typeof obj !== 'object' || obj === null) return;
+            
+            if (obj.videoRenderer) {
+                const video = obj.videoRenderer;
+                if (video.videoId && video.title) {
+                    videosFound.push({
+                        id: video.videoId,
+                        title: cleanTitle(video.title.runs ? video.title.runs[0].text : video.title.simpleText || 'Sin título'),
+                        thumb: video.thumbnail ? video.thumbnail.thumbnails[0].url : `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`,
+                        author: cleanAuthor(video.ownerText ? video.ownerText.runs[0].text : 'Sin canal'),
+                        source: "youtube",
+                        type: "youtube_video",
+                        isTopic: /topic/i.test(video.ownerText ? video.ownerText.runs[0].text : '')
+                    });
+                }
+            }
+            
+            // Recursivamente buscar en objetos y arrays
+            for (let key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    findVideos(obj[key]);
+                }
+            }
+        }
+        
+        findVideos(data);
+        
+        return videosFound.slice(0, limit);
     });
 }
 
-/**
- * Obtiene los detalles de varios videos de YouTube por sus IDs usando noembed.com.
- */
 async function fetchVideoDetailsByIds(ids) {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return [];
-
-    const metadataPromises = uniqueIds.map(id =>
+    
+    const metadataPromises = uniqueIds.map(id => 
         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
             .then(r => r.json())
             .then(meta => {
@@ -105,23 +193,22 @@ async function fetchVideoDetailsByIds(ids) {
     return (await Promise.all(metadataPromises)).filter(Boolean);
 }
 
-/**
- * Inicia el proceso de búsqueda.
- */
 async function startSearch(query) {
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
   paging = { query, loading: true };
   items = [];
+  
   const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
+  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere (puede tardar unos segundos)</h3></div>`;
   updateHomeGridVisibility();
-
+  
   try {
-    const videoResults = await scrapeYoutube(query, 20);
+    const videoResults = await scrapeYoutubeWithDetails(query, 20);
     if (searchAbort.signal.aborted) return;
-
+    
     if (resultsEl) resultsEl.innerHTML = "";
+    
     if (videoResults.length === 0) {
         if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
         return;
@@ -129,6 +216,7 @@ async function startSearch(query) {
 
     items = videoResults;
     appendResults(items);
+
   } catch (e) {
     console.error('Search failed:', e);
     if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
@@ -137,9 +225,6 @@ async function startSearch(query) {
   }
 }
 
-/**
- * Agrega los resultados al DOM.
- */
 function appendResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
@@ -151,7 +236,7 @@ function appendResults(chunk){
     if (it.isTopic) {
         logo = Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg();
     }
-
+    
     item.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
@@ -188,9 +273,6 @@ function appendResults(chunk){
   refreshIndicators();
 }
 
-/**
- * Maneja el clic en un resultado de búsqueda.
- */
 async function handleResultClick(event, item, forcePlay = false) {
     if (event.target.closest(".more") || event.target.closest(".fav-btn") || (event.target.closest(".card-play") && !forcePlay)) return;
 
@@ -199,18 +281,15 @@ async function handleResultClick(event, item, forcePlay = false) {
     }
 }
 
-/**
- * Inicializa los listeners para la búsqueda (overlay, etc.).
- */
 function initSearch() {
     const searchOverlay = $("#searchOverlay");
     const overlayInput  = $("#overlaySearchInput");
-
+    
     function openSearch() {
         searchOverlay.classList.add("show");
         setTimeout(() => { overlayInput.focus(); overlayInput.select(); }, 50);
     }
-
+    
     function closeSearch() { searchOverlay.classList.remove("show"); }
 
     $("#searchFab")?.addEventListener("click", openSearch);
