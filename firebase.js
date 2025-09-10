@@ -197,23 +197,55 @@ async function addSongToPlaylist(playlistId, track) {
 
 
 // --- Funciones del Resolver de Spotify ---
+
+function showResolverModal(playlist) {
+    const modal = document.getElementById('resolver-modal');
+    if (!modal) return;
+    document.getElementById('resolver-title').textContent = playlist.name;
+    document.getElementById('resolver-thumb').src = playlist.cover || '';
+    document.getElementById('resolver-cancel').onclick = cancelResolverJob;
+    modal.classList.remove('hide');
+}
+
+function updateResolverModal(job) {
+    const modal = document.getElementById('resolver-modal');
+    if (!modal || modal.classList.contains('hide')) return;
+    
+    const progress = job.total > 0 ? (job.done / job.total) * 100 : 0;
+    document.getElementById('resolver-progress').style.width = `${progress}%`;
+    document.getElementById('resolver-progress-text').textContent = `${job.done} / ${job.total}`;
+}
+
+function hideResolverModal() {
+    localStorage.removeItem('sy_active_import_job');
+    if (resolverJobUnsubscribe) {
+        resolverJobUnsubscribe();
+        resolverJobUnsubscribe = null;
+    }
+    const modal = document.getElementById('resolver-modal');
+    if (modal) modal.classList.add('hide');
+}
+
 async function checkForActiveImportJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
 
     try {
         const { jobId, playlistId } = JSON.parse(activeJobInfo);
-        if (!jobId) {
+        const pl = communityPlaylists.find(p => p.id === playlistId) || await getDoc(doc(db, "playlists", playlistId)).then(d => d.data());
+        if (!jobId || !pl) {
             localStorage.removeItem('sy_active_import_job');
             return;
         }
+        
         console.log(`Resuming listener for job: ${jobId}`);
-        viewingPlaylistId = playlistId;
-        const { doc, onSnapshot } = window.firebase;
-        const jobRef = doc(db, "resolverJobs", jobId);
+        showResolverModal(pl);
+
+        const { doc: fdoc, onSnapshot: fonSnapshot } = window.firebase;
+        const jobRef = fdoc(db, "resolverJobs", jobId);
         if (resolverJobUnsubscribe) resolverJobUnsubscribe();
 
-        resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
+        resolverJobUnsubscribe = fonSnapshot(jobRef, (docSnap) => {
             if (!docSnap.exists()) {
                 hideResolverModal();
                 return;
@@ -222,6 +254,8 @@ async function checkForActiveImportJob() {
             updateResolverModal(job);
             if (['canceled', 'done', 'error'].includes(job.status)) {
                 hideResolverModal();
+                if (job.status === 'done') showToast(`"${pl.name}" importada correctamente.`);
+                if (job.status === 'error') showToast(`Error importando "${pl.name}".`, true);
             }
         });
     } catch (e) {
@@ -238,18 +272,18 @@ async function startResolverJob(playlistId) {
     if (!plDoc.exists()) { console.error("Playlist not found for resolver job:", playlistId); return; }
     const playlist = { id: plDoc.id, ...plDoc.data() };
 
+    showResolverModal(playlist);
+
     let jobId = playlist.resolverJobId;
     const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
     
-    if (jobDoc && jobDoc.exists()) {
-        if (jobDoc.data().status === 'running') {
-            localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
-            return;
-        }
-    } else {
-        jobId = `job_${playlistId}_${Date.now()}`;
-        await updateDoc(plRef, { resolverJobId: jobId });
+    if (jobDoc && jobDoc.exists() && jobDoc.data().status === 'running') {
+        localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
+        return; // Job is already running
     }
+    
+    jobId = `job_${playlistId}_${Date.now()}`;
+    await updateDoc(plRef, { resolverJobId: jobId });
     
     const jobRef = doc(db, "resolverJobs", jobId);
     const jobData = {
@@ -267,7 +301,11 @@ async function startResolverJob(playlistId) {
         if (!docSnap.exists()) return;
         const job = { id: docSnap.id, ...docSnap.data() };
         updateResolverModal(job);
-        if (['canceled', 'done', 'error'].includes(job.status)) hideResolverModal();
+        if (['canceled', 'done', 'error'].includes(job.status)) {
+            hideResolverModal();
+             if (job.status === 'done') showToast(`"${playlist.name}" importada correctamente.`);
+             if (job.status === 'error') showToast(`Error importando "${playlist.name}".`, true);
+        }
     });
 
     runJobBatch(playlistId, jobRef);
@@ -300,7 +338,6 @@ async function runJobBatch(playlistId, jobRef) {
         const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
         await updateDoc(plRef, { status: finalStatus });
         await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
-        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
         return;
     }
 
@@ -308,6 +345,7 @@ async function runJobBatch(playlistId, jobRef) {
     const results = await Promise.all(tracksToProcess.map(track => resolveTrack(track)));
 
     const currentPlDoc = await getDoc(plRef);
+    if(!currentPlDoc.exists()) return; // Playlist might have been deleted during batch
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
     let errorsInBatch = [];
