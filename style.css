@@ -371,12 +371,25 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
 .queue-panel{margin-top: 12px;}
 
 /* Section headers */
-.section-head, .home-head {
-    padding: 0; margin: 10px 0 16px; padding-top: 50px;
+.section-head {
+    padding: 0; margin: 10px 0 16px;
     display: flex; justify-content: space-between; align-items: center;
 }
 .home-head { margin-bottom: 12px; }
-#view-playlists .section-head { padding-left: var(--side-pad); padding-right: var(--side-pad); }
+.sticky-head {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    padding-top: 12px;
+    padding-bottom: 12px;
+    z-index: 20;
+    margin-left: calc(-1 * var(--side-pad));
+    margin-right: calc(-1 * var(--side-pad));
+    padding-left: var(--side-pad);
+    padding-right: var(--side-pad);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
 .home-title { font-size: 20px; font-weight: 700; display: flex; align-items: center; }
 
 /* Mini-player unido a la barra inferior */
@@ -606,19 +619,8 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
     animation: slideUp .3s cubic-bezier(.4,0,.2,1);
     box-sizing: border-box; /* Asegurarse de que padding no afecte el ancho */
 }
-
-@media (min-width: 480px) {
-    #resolver-modal {
-        max-width: 400px;
-    }
-}
-
-
-@keyframes slideUp { 
-  from { transform: translate(-50%, 40px); opacity: 0; } 
-  to { transform: translate(-50%, 0); opacity: 1; } 
-}
-
+@media (min-width: 480px) { #resolver-modal { max-width: 400px; } }
+@keyframes slideUp { from { transform: translate(-50%, 40px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 .resolver-info { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 #resolver-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
 .resolver-meta { display: flex; flex-direction: column; min-width: 0; }
@@ -628,6 +630,75 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .resolver-progress { width: 0%; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.5s ease; }
 .resolver-cancel { width: 100%; padding: 8px; border: none; background: var(--surface-hover); color: var(--text-secondary); border-radius: 8px; cursor: pointer; transition: var(--fast); font-size: 13px; }
 .resolver-cancel:hover { background: var(--border); color: var(--text-primary); }
+
+
+/* Estilos para la nueva vista de selección de playlists de Spotify */
+#view-spotify-import-selection .pl-grid { padding-top: 16px; }
+.spotify-pl-card {
+  position: relative;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-out;
+}
+.spotify-pl-card.selected {
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+.spotify-pl-card .pl-thumb-bg {
+  width: 100%;
+  aspect-ratio: 1/1;
+  object-fit: cover;
+}
+.spotify-pl-card-meta {
+  padding: 10px;
+  background: var(--surface);
+}
+.spotify-pl-card-title {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spotify-pl-card-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.spotify-pl-card-checkbox {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    background: rgba(0,0,0,0.6);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none; /* El click se maneja en la tarjeta */
+    transition: var(--fast);
+}
+.spotify-pl-card.selected .spotify-pl-card-checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.spotify-pl-card-checkbox svg {
+    width: 16px;
+    height: 16px;
+    color: #fff;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: var(--fast);
+}
+.spotify-pl-card.selected .spotify-pl-card-checkbox svg {
+    opacity: 1;
+    transform: scale(1);
+}
+
 
 /* ========== Live Stream UI ========== */
 .stream-controls { display: flex; align-items: center; gap: 8px; }
@@ -645,137 +716,55 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   align-items: center; 
   gap: 6px; 
 }
-
-.stream-btn-broadcast { 
-  background-color: #ef4444; 
-}
-
+.stream-btn-broadcast { background-color: #ef4444; }
 .mic-icon {
-  width: 16px;
-  height: 16px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 16px; height: 16px; position: relative;
+  display: flex; align-items: center; justify-content: center;
 }
-
 .mic-icon::before {
-  content: '';
-  position: absolute;
-  width: 6px;
-  height: 10px;
-  background: white;
-  border-radius: 3px 3px 0 0;
-  top: 1px;
+  content: ''; position: absolute; width: 6px; height: 10px;
+  background: white; border-radius: 3px 3px 0 0; top: 1px;
 }
-
 .mic-icon::after {
-  content: '';
-  position: absolute;
-  width: 10px;
-  height: 8px;
-  border: 1.5px solid white;
-  border-top: none;
-  border-radius: 0 0 5px 5px;
-  bottom: 3px;
-  background: transparent;
+  content: ''; position: absolute; width: 10px; height: 8px;
+  border: 1.5px solid white; border-top: none;
+  border-radius: 0 0 5px 5px; bottom: 3px; background: transparent;
 }
-
-/* Base del micrófono */
-.mic-icon {
-  background: linear-gradient(to bottom, transparent 13px, white 13px, white 14px, transparent 14px);
-}
-
-.broadcast-wrapper.broadcasting .stream-btn-broadcast { 
-  animation: blink-red 1.5s infinite; 
-}
-
+.mic-icon { background: linear-gradient(to bottom, transparent 13px, white 13px, white 14px, transparent 14px); }
+.broadcast-wrapper.broadcasting .stream-btn-broadcast { animation: blink-red 1.5s infinite; }
 .broadcast-wrapper .broadcast-label {
-  display: none; 
-  font-size: 11px; 
-  font-weight: 600;
-  color: var(--accent-light); 
-  white-space: nowrap;
+  display: none; font-size: 11px; font-weight: 600;
+  color: var(--accent-light); white-space: nowrap;
 }
-
-.broadcast-wrapper.broadcasting .broadcast-label { 
-  display: block; 
-}
-
-.broadcast-wrapper.broadcasting .mic-icon::before {
-  background: #ef4444;
-}
-
-.broadcast-wrapper.broadcasting .mic-icon::after {
-  border-color: #ef4444;
-}
-
-.broadcast-wrapper.broadcasting .mic-icon {
-  background: linear-gradient(to bottom, transparent 13px, #ef4444 13px, #ef4444 14px, transparent 14px);
-}
-
+.broadcast-wrapper.broadcasting .broadcast-label { display: block; }
+.broadcast-wrapper.broadcasting .mic-icon::before { background: #ef4444; }
+.broadcast-wrapper.broadcasting .mic-icon::after { border-color: #ef4444; }
+.broadcast-wrapper.broadcasting .mic-icon { background: linear-gradient(to bottom, transparent 13px, #ef4444 13px, #ef4444 14px, transparent 14px); }
 @keyframes blink-red {
-  0%, 100% { 
-    background-color: #ef4444; 
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); 
-  }
-  50% { 
-    background-color: #f87171; 
-    box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.5); 
-  }
+  0%, 100% { background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  50% { background-color: #f87171; box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.5); }
 }
 
 /* --- Botón de Ver Transmisiones --- */
-.stream-btn-listen {
-  background-color: #22c55e;
-  animation: pulse-green 2.5s infinite;
-}
-
+.stream-btn-listen { background-color: #22c55e; animation: pulse-green 2.5s infinite; }
 .headphone-icon {
-  width: 16px;
-  height: 16px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 16px; height: 16px; position: relative;
+  display: flex; align-items: center; justify-content: center;
 }
-
-/* Diadema de los auriculares */
 .headphone-icon::before {
-  content: '';
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 2px solid white;
-  border-bottom: none;
-  border-radius: 12px 12px 0 0;
-  top: 0;
-  left: 2px;
+  content: ''; position: absolute; width: 12px; height: 12px;
+  border: 2px solid white; border-bottom: none; border-radius: 12px 12px 0 0;
+  top: 0; left: 2px;
 }
-
-/* Auricular izquierdo */
 .headphone-icon::after {
-  content: '';
-  position: absolute;
-  width: 4px;
-  height: 6px;
-  background: white;
-  border-radius: 2px;
-  bottom: 2px;
-  left: 1px;
-  box-shadow: 10px 0 0 white; /* Auricular derecho */
+  content: ''; position: absolute; width: 4px; height: 6px;
+  background: white; border-radius: 2px; bottom: 2px;
+  left: 1px; box-shadow: 10px 0 0 white; /* Auricular derecho */
 }
-
 @keyframes pulse-green {
-  0% { 
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); 
-  }
-  70% { 
-    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); 
-  }
-  100% { 
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); 
-  }
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
 
 /* --- Modal de Transmisiones --- */
@@ -808,6 +797,4 @@ body.is-listening #npPlay, body.is-listening #miniPlay { opacity: 0.5; }
 .mini-content-wrapper { gap: 2px; }
 #miniTitle { font-size: 12px; }
 #miniAuthor { font-size: 10px; }
-.broadcast-wrapper {
-    margin-left: auto; /* Mueve el botón de transmitir a la derecha */
-}
+.broadcast-wrapper { margin-left: auto; }
