@@ -405,26 +405,30 @@ function initPlaylistModals() {
 function initSpotifyImportUI() {
     $("#syBtnImportSpotify")?.addEventListener('click', () => $("#sySpotifyModal").classList.add('show'));
     $("#sySmFetch")?.addEventListener('click', handleSpotifyImport);
-
-    $("#spotifyImportBackBtn")?.addEventListener('click', () => switchView('view-playlists'));
+    $("#spotifyImportBackBtn")?.addEventListener('click', () => {
+        $("#sySmInputUrl").value = "";
+        switchView('view-playlists');
+    });
     
     $("#spotifyImportConfirmBtn").onclick = async () => {
         const grid = $("#spotifyUserPlaylistsGrid");
-        const selectedIds = Array.from(grid.querySelectorAll(".spotify-pl-card.selected")).map(card => card.dataset.playlistId);
+        const selectedPlaylists = Array.from(grid.querySelectorAll(".spotify-pl-card.selected"))
+            .map(card => card.playlistData);
 
-        if (selectedIds.length === 0) {
+        if (selectedPlaylists.length === 0) {
             showToast("Selecciona al menos una playlist para importar.", true);
             return;
         }
         
         switchView('view-playlists');
-        showToast(`Importando ${selectedIds.length} playlist(s)...`);
+        showToast(`Importando ${selectedPlaylists.length} playlist(s)...`);
 
-        for (const id of selectedIds) {
-            await fetchAndImportSinglePlaylist(id);
+        for (const pl of selectedPlaylists) {
+            await fetchAndImportSinglePlaylist(pl);
         }
     };
 }
+
 
 async function handleSpotifyImport() {
     const input = $("#sySmInputUrl").value.trim();
@@ -443,8 +447,7 @@ async function handleSpotifyImport() {
             const token = await getSpotifyToken();
             const response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener la playlist.');
-            const plData = await response.json();
-            playlists = [plData];
+            playlists = [await response.json()];
         } else if (type === 'user') {
             playlists = await fetchUserPlaylists(id);
         } else {
@@ -518,6 +521,7 @@ function showUserPlaylistsSelectionView(playlists) {
         const card = document.createElement("div");
         card.className = "spotify-pl-card";
         card.dataset.playlistId = pl.id;
+        card.playlistData = pl; // Guardamos todos los datos para después
 
         card.innerHTML = `
             <img class="spotify-pl-card-thumb" src="${pl.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'}" alt="Cover de ${pl.name}">
@@ -538,16 +542,9 @@ function showUserPlaylistsSelectionView(playlists) {
 }
 
 
-async function fetchAndImportSinglePlaylist(playlistId) {
+async function fetchAndImportSinglePlaylist(plData) {
     try {
-        const token = await getSpotifyToken();
-        const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error('No se pudo obtener la playlist.');
-        const plData = await response.json();
-
-        const spotifyTracks = await fetchAllSpotifyPlaylistTracks(playlistId);
+        const spotifyTracks = await fetchAllSpotifyPlaylistTracks(plData.id);
         if (spotifyTracks.length === 0) {
             showToast(`La playlist "${plData.name}" está vacía.`, true);
             return;
@@ -563,7 +560,7 @@ async function fetchAndImportSinglePlaylist(playlistId) {
 
     } catch(e) {
         console.error("Error importing spotify playlist:", e);
-        showToast("Error al importar una playlist.", true);
+        showToast("Error al importar la playlist.", true);
     }
 }
 
@@ -574,39 +571,33 @@ async function processAndSavePlaylist(pl) {
     const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
     const snapshot = await getDocs(q);
 
+    const playlistData = {
+        name: pl.name,
+        creator: pl.creator,
+        cover: pl.cover || null,
+        spotifyTracks: pl.spotifyTracks,
+        trackCount: pl.spotifyTracks.length,
+        tracks: Array(pl.spotifyTracks.length).fill(null),
+        status: 'unresolved',
+        resolvedCount: 0,
+        updatedAt: serverTimestamp(),
+    };
+
     if (snapshot.empty) {
         const docRef = await addDoc(col, {
-            name: pl.name,
-            creator: pl.creator,
+            ...playlistData,
             isPublic: false,
-            cover: pl.cover || null,
             source: 'spotify',
             spotifyId: pl.spotifyId,
-            spotifyTracks: pl.spotifyTracks,
-            trackCount: pl.spotifyTracks.length,
-            tracks: Array(pl.spotifyTracks.length).fill(null),
-            status: 'unresolved',
-            resolvedCount: 0,
-            updatedAt: serverTimestamp(),
             ownerUserId: "current_user_id_placeholder"
         });
         addMyPlaylistId(docRef.id);
-        startResolverJob(docRef.id); // Iniciar la resolución automáticamente
+        startResolverJob(docRef.id);
     } else {
         const docId = snapshot.docs[0].id;
         const existingDocRef = doc(db, 'playlists', docId);
-        await updateDoc(existingDocRef, {
-            name: pl.name,
-            creator: pl.creator,
-            cover: pl.cover,
-            spotifyTracks: pl.spotifyTracks,
-            trackCount: pl.spotifyTracks.length,
-            status: 'unresolved', // Marcar para re-resolver
-            tracks: Array(pl.spotifyTracks.length).fill(null),
-            resolvedCount: 0,
-            updatedAt: serverTimestamp()
-        });
+        await updateDoc(existingDocRef, playlistData);
         showToast(`Playlist "${pl.name}" actualizada.`);
-        startResolverJob(docId); // Iniciar la resolución
+        startResolverJob(docId);
     }
 }
