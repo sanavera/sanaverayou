@@ -197,34 +197,35 @@ async function addSongToPlaylist(playlistId, track) {
 
 
 // --- Funciones del Resolver de Spotify ---
-
-function showResolverModal(playlist) {
-    const modal = document.getElementById('resolver-modal');
+function showResolverModal(job, playlistName = 'Importando...', playlistCover = '') {
+    const modal = $('#resolver-modal');
     if (!modal) return;
-    document.getElementById('resolver-title').textContent = playlist.name;
-    document.getElementById('resolver-thumb').src = playlist.cover || '';
-    document.getElementById('resolver-cancel').onclick = cancelResolverJob;
+    
+    $('#resolver-title').textContent = playlistName;
+    $('#resolver-thumb').src = playlistCover;
+
     modal.classList.remove('hide');
+    updateResolverModal(job); // Initial update
 }
 
 function updateResolverModal(job) {
-    const modal = document.getElementById('resolver-modal');
-    if (!modal || modal.classList.contains('hide')) return;
-    
-    const progress = job.total > 0 ? (job.done / job.total) * 100 : 0;
-    document.getElementById('resolver-progress').style.width = `${progress}%`;
-    document.getElementById('resolver-progress-text').textContent = `${job.done} / ${job.total}`;
+    const progress = (job.done / job.total) * 100;
+    $('#resolver-progress').style.width = `${progress}%`;
+    $('#resolver-progress-text').textContent = `${job.done} / ${job.total}`;
 }
 
 function hideResolverModal() {
-    localStorage.removeItem('sy_active_import_job');
+    const modal = $('#resolver-modal');
+    if (modal) {
+        modal.classList.add('hide');
+    }
     if (resolverJobUnsubscribe) {
         resolverJobUnsubscribe();
         resolverJobUnsubscribe = null;
     }
-    const modal = document.getElementById('resolver-modal');
-    if (modal) modal.classList.add('hide');
+    localStorage.removeItem('sy_active_import_job');
 }
+
 
 async function checkForActiveImportJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
@@ -232,33 +233,24 @@ async function checkForActiveImportJob() {
 
     try {
         const { jobId, playlistId } = JSON.parse(activeJobInfo);
-        const { doc, getDoc, onSnapshot } = window.firebase;
-        const plDoc = await getDoc(doc(db, "playlists", playlistId));
-        
-        if (!jobId || !plDoc.exists()) {
-            localStorage.removeItem('sy_active_import_job');
+        const { doc, onSnapshot, getDoc } = window.firebase;
+
+        const pl = communityPlaylists.find(p => p.id === playlistId) || (await getDoc(doc(db, "playlists", playlistId))).data();
+        if (!pl) {
+            hideResolverModal();
             return;
         }
-        
-        const pl = plDoc.data();
-        console.log(`Resuming listener for job: ${jobId}`);
-        showResolverModal(pl);
 
         const jobRef = doc(db, "resolverJobs", jobId);
         if (resolverJobUnsubscribe) resolverJobUnsubscribe();
 
         resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
-            if (!docSnap.exists()) {
+            if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
                 hideResolverModal();
                 return;
             }
             const job = { id: docSnap.id, ...docSnap.data() };
-            updateResolverModal(job);
-            if (['canceled', 'done', 'error'].includes(job.status)) {
-                hideResolverModal();
-                if (job.status === 'done') showToast(`"${pl.name}" importada correctamente.`);
-                if (job.status === 'error') showToast(`Error importando "${pl.name}".`, true);
-            }
+            showResolverModal(job, pl.name, pl.cover);
         });
     } catch (e) {
         console.error("Failed to parse or resume active job:", e);
@@ -274,25 +266,22 @@ async function startResolverJob(playlistId) {
     if (!plDoc.exists()) { console.error("Playlist not found for resolver job:", playlistId); return; }
     const playlist = { id: plDoc.id, ...plDoc.data() };
 
-    showResolverModal(playlist);
+    showResolverModal({ done: 0, total: playlist.spotifyTracks.length }, playlist.name, playlist.cover);
 
     let jobId = playlist.resolverJobId;
     const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
     
-    if (jobDoc && jobDoc.exists() && jobDoc.data().status === 'running') {
-        localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
-        return;
+    if (!jobDoc || !jobDoc.exists() || jobDoc.data().status !== 'running') {
+        jobId = `job_${playlistId}_${Date.now()}`;
+        await updateDoc(plRef, { resolverJobId: jobId });
     }
     
-    jobId = `job_${playlistId}_${Date.now()}`;
-    await updateDoc(plRef, { resolverJobId: jobId });
-    
     const jobRef = doc(db, "resolverJobs", jobId);
-    const jobData = {
+    await setDoc(jobRef, {
         playlistRef: plRef.path, status: 'queued', total: playlist.spotifyTracks.length,
-        done: playlist.resolvedCount || 0, errors: [], lastUpdated: serverTimestamp()
-    };
-    await setDoc(jobRef, jobData, { merge: true });
+        done: 0, errors: [], lastUpdated: serverTimestamp()
+    }, { merge: true });
+
     await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
     await updateDoc(plRef, { status: 'resolving' });
     
@@ -300,18 +289,19 @@ async function startResolverJob(playlistId) {
     
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
-        if (!docSnap.exists()) return;
+        if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
+            hideResolverModal();
+            return;
+        }
         const job = { id: docSnap.id, ...docSnap.data() };
         updateResolverModal(job);
-        if (['canceled', 'done', 'error'].includes(job.status)) {
-            hideResolverModal();
-             if (job.status === 'done') showToast(`"${playlist.name}" importada correctamente.`);
-             if (job.status === 'error') showToast(`Error importando "${playlist.name}".`, true);
-        }
     });
+
+    $('#resolver-cancel')?.addEventListener('click', cancelResolverJob);
 
     runJobBatch(playlistId, jobRef);
 }
+
 
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
@@ -340,6 +330,7 @@ async function runJobBatch(playlistId, jobRef) {
         const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
         await updateDoc(plRef, { status: finalStatus });
         await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
+        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
         return;
     }
 
@@ -347,24 +338,23 @@ async function runJobBatch(playlistId, jobRef) {
     const results = await Promise.all(tracksToProcess.map(track => resolveTrack(track)));
 
     const currentPlDoc = await getDoc(plRef);
-    if(!currentPlDoc.exists()) return;
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
     let errorsInBatch = [];
 
     results.forEach((result, i) => {
         const originalIndex = unresolvedIndices[i];
+        const spotifyTrack = playlist.spotifyTracks[originalIndex];
         if (result.videoId) {
-            const spotifyTrack = playlist.spotifyTracks[originalIndex];
             updatedTracks[originalIndex] = {
-                id: result.videoId, // Esta es la "mainUrl"
+                id: result.videoId,
                 title: spotifyTrack.title,
                 author: spotifyTrack.author,
                 thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
                 source: 'youtube',
                 originalId: spotifyTrack.spotifyId,
-                backupUrls: result.backupIds, // Aquí guardamos los respaldos
-                reassignIndex: 0 // Iniciamos el índice para reasignación
+                backupUrls: result.backups,
+                reassignIndex: 0
             };
         } else if (result.error) {
             errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
