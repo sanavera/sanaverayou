@@ -1,7 +1,6 @@
 // Manejo de playlists locales e importadas (Spotify), y la cola de reproducción.
 
 let viewingPlaylistId = null;
-let spotifyUserPlaylistsCache = [];
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
@@ -73,27 +72,22 @@ async function fetchAllSpotifyPlaylistTracks(playlistId) {
 }
 
 /**
- * Resuelve una canción de Spotify a un video de YouTube, obteniendo múltiples resultados.
+ * Resuelve una canción de Spotify a un video de YouTube, guardando backups.
  * @param {object} track - El objeto de la canción de Spotify.
- * @returns {Promise<{videoId: string|null, backupIds: string[], error: string|null}>}
+ * @returns {Promise<{videoId: string|null, backups: string[], error: string|null}>}
  */
 async function resolveTrack(track) {
     const query = `${track.author} ${track.title}`;
     try {
-        // Buscamos hasta 5 resultados para tener backups
-        const results = await scrapeYoutubeWithDetails(query, 5);
-        
-        if (results.length === 0) {
-            return { videoId: null, backupIds: [], error: "No videos found via scraping" };
+        const results = await scrapeYoutubeWithDetails(query, 5); // Pedimos hasta 5 resultados
+        if (results.length > 0) {
+            const mainVideoId = results[0].id;
+            const backupUrls = results.slice(1).map(v => v.id);
+            return { videoId: mainVideoId, backups: backupUrls, error: null };
         }
-
-        const videoId = results[0]?.id;
-        const backupIds = results.slice(1).map(r => r.id);
-
-        return { videoId, backupIds, error: null };
+        return { videoId: null, backups: [], error: "No video found via scraping" };
     } catch (e) {
-        console.error(`Error resolving track "${query}":`, e);
-        return { videoId: null, backupIds: [], error: e.message };
+        return { videoId: null, backups: [], error: e.message };
     }
 }
 
@@ -123,10 +117,13 @@ function renderPlaylists() {
         const total = pl.trackCount || pl.spotifyTracks?.length || pl.tracks?.length || 0;
         const resolved = pl.resolvedCount || 0;
 
-        let statusText = `${resolved} / ${total} temas`;
-        if (pl.status === 'resolving') statusText = `Importando... (${resolved}/${total})`;
-        else if (pl.status === 'partial') statusText = `Parcial (${resolved}/${total})`;
-        else if (pl.status === 'resolved' || pl.source !== 'spotify') statusText = `${total} temas`;
+        let statusText = `${total} temas`;
+        if (pl.source === 'spotify') {
+            if (pl.status === 'resolving') statusText = `Importando... (${resolved}/${total})`;
+            else if (pl.status === 'partial') statusText = `Parcial (${resolved}/${total})`;
+            else if (pl.status !== 'resolved') statusText = `Pendiente (${resolved}/${total})`;
+        }
+
 
         card.innerHTML = `
             <img class="pl-thumb-bg" src="${cover}" alt="">
@@ -213,7 +210,7 @@ async function removeFromPlaylist(plId, trackId) {
     const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
     
     try {
-        await updateDoc(doc(db, 'playlists', plId), { tracks: updatedTracks, resolvedCount: updatedTracks.length, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'playlists', plId), { tracks: updatedTracks, resolvedCount: updatedTracks.filter(Boolean).length, updatedAt: serverTimestamp() });
         showToast('Canción eliminada.');
     } catch (e) {
         console.error('Error removing song:', e);
@@ -222,75 +219,65 @@ async function removeFromPlaylist(plId, trackId) {
 }
 
 /**
- * Reasigna la fuente de una canción usando las URLs de respaldo.
+ * Reasigna la fuente de una canción, priorizando backups.
  * @param {string} playlistId - El ID de la playlist.
  * @param {string} oldTrackId - El ID de la canción a reasignar.
  */
 async function reassignTrackSource(playlistId, oldTrackId) {
-    try {
-        const pl = communityPlaylists.find(p => p.id === playlistId);
-        if (!pl || !pl.tracks) return;
+    const pl = communityPlaylists.find(p => p.id === playlistId);
+    if (!pl || !pl.tracks) return;
 
-        const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
-        if (trackIndex === -1) return;
+    const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
+    if (trackIndex === -1) return;
 
-        const track = pl.tracks[trackIndex];
-        const backupUrls = track.backupUrls || [];
-        let currentReassignIndex = track.reassignIndex || 0;
+    const track = pl.tracks[trackIndex];
+    const backups = track.backupUrls || [];
+    const currentReassignIndex = track.reassignIndex || 0;
 
-        if (backupUrls.length > 0 && currentReassignIndex < backupUrls.length) {
-            // Hay backups, usamos el siguiente
-            const newVideoId = backupUrls[currentReassignIndex];
-            showToast("Reasignando a fuente de respaldo...");
+    let newVideoId = null;
 
-            const updatedTrack = { ...track, id: newVideoId, reassignIndex: currentReassignIndex + 1 };
+    if (currentReassignIndex < backups.length) {
+        newVideoId = backups[currentReassignIndex];
+        showToast("Reasignando a fuente de respaldo...");
+    } else {
+        showToast("Buscando nueva fuente online...");
+        const newResults = await scrapeYoutubeWithDetails(`${track.author} ${track.title}`, backups.length + 2);
+        if (newResults.length > backups.length + 1) {
+            newVideoId = newResults[backups.length + 1].id;
+        } else {
+            showToast("No se encontraron más versiones.", true);
+            // Reiniciar el ciclo si no se encuentra nada nuevo
+            const updatedTrack = { ...track, reassignIndex: 0 };
             const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
-
-            await updatePlaylistAndQueue(playlistId, oldTrackId, updatedTracks, updatedTrack);
-            showToast("Fuente reasignada desde respaldo.");
-
-        } else {
-            // No hay backups o se agotaron, hacemos scraping
-            showToast("No hay más respaldos, buscando nueva fuente...");
-            const results = await scrapeYoutubeWithDetails(`${track.author} ${track.title}`, 5);
-            const newVideo = results.find(r => r.id !== track.id && !backupUrls.includes(r.id)); // Encontrar uno realmente nuevo
-
-            if (newVideo) {
-                const updatedBackupUrls = [...new Set([...backupUrls, ...results.map(r => r.id)])];
-                const updatedTrack = { ...track, id: newVideo.id, backupUrls: updatedBackupUrls, reassignIndex: 0 };
-                const updatedTracks = [...pl.tracks];
-                updatedTracks[trackIndex] = updatedTrack;
-                
-                await updatePlaylistAndQueue(playlistId, oldTrackId, updatedTracks, updatedTrack);
-                showToast("Nueva fuente encontrada y guardada.");
-            } else {
-                showToast("No se encontraron más versiones.", true);
-            }
-        }
-    } catch (e) {
-        console.error("Error en la reasignación de fuente:", e);
-        showToast("Error al reasignar la fuente.", true);
-    }
-}
-
-async function updatePlaylistAndQueue(playlistId, oldTrackId, updatedTracks, updatedTrack) {
-    const { doc, updateDoc, serverTimestamp } = window.firebase;
-    await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
-
-    if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
-        const queueIndex = queue.findIndex(t => t.id === oldTrackId);
-        if (queueIndex !== -1) {
-            queue[queueIndex] = updatedTrack;
-            if (currentTrack && currentTrack.id === oldTrackId) {
-                currentTrack = updatedTrack;
-                playCurrent(true); // Forzar la reproducción de la nueva fuente
-            }
-             renderQueue(queue, currentQueueTitle); // Actualizar la UI de la cola
+            const { doc, updateDoc, serverTimestamp } = window.firebase;
+            await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
+            return;
         }
     }
-}
 
+    if (newVideoId) {
+        const updatedTrack = { ...track, id: newVideoId, reassignIndex: currentReassignIndex + 1 };
+        const updatedTracks = [...pl.tracks];
+        updatedTracks[trackIndex] = updatedTrack;
+
+        const { doc, updateDoc, serverTimestamp } = window.firebase;
+        await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
+
+        if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
+            const queueIndex = queue.findIndex(t => t.id === oldTrackId);
+            if (queueIndex !== -1) {
+                queue[queueIndex] = updatedTrack;
+                renderQueue(queue, currentQueueTitle); 
+                if (currentTrack && currentTrack.id === oldTrackId) {
+                    currentTrack = updatedTrack;
+                    playCurrent(true);
+                }
+            }
+        }
+        showToast("Fuente reasignada.");
+    }
+}
 
 
 // --- Lógica de reproducción desde playlists ---
@@ -317,17 +304,6 @@ function playFromPlaylist(plId, i, autoplay=false){
   playCurrent(autoplay);
   renderPlaylists();
 }
-
-function playPlaylist(id){
-  const pl = communityPlaylists.find(p=>p.id===id); if(!pl) return;
-  const playableTracks = (pl.tracks || []).filter(t => t && t.id);
-  if(!playableTracks.length) {
-      showToast("Esta playlist no tiene canciones resueltas.", true);
-      return;
-  }
-  playFromPlaylist(pl.id, 0, true);
-}
-
 
 // --- Manejo de la UI de la cola de reproducción ---
 
@@ -388,26 +364,13 @@ async function showPlaylistInPlayer(plId) {
     viewingPlaylistId = pl.id;
     switchView('view-player');
 
-    if (pl.source === 'spotify' && pl.status !== 'resolved') {
-        const tracksToShow = (pl.spotifyTracks || []).map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, thumb: st.thumb || pl.cover, id: null });
-        renderQueue(tracksToShow, pl.name);
-        
-        if (pl.status !== 'resolving') {
-            startResolverJob(pl.id);
-        }
-        return;
-    }
+    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
 
-    const tracksToPlay = (pl.tracks || []).filter(t => t && t.id);
-    if (!tracksToPlay || tracksToPlay.length === 0) {
-        showToast(`La playlist "${pl.name}" está vacía o no tiene canciones resueltas.`, true);
-        switchView('view-playlists');
-        return;
+    renderQueue(tracksToShow, pl.name);
+    
+    if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status)) {
+        startResolverJob(plId);
     }
-
-    setQueue(tracksToPlay, 'playlist', 0);
-    renderQueue(tracksToPlay, pl.name);
-    playCurrent(true);
 }
 
 
@@ -440,24 +403,27 @@ function initPlaylistModals() {
 /* ========== Lógica de Importación de Spotify (CORREGIDA Y AMPLIADA) ========== */
 
 function initSpotifyImportUI() {
-    $("#syBtnImportSpotify")?.addEventListener('click', openSpotifyImportModal);
+    $("#syBtnImportSpotify")?.addEventListener('click', () => $("#sySpotifyModal").classList.add('show'));
     $("#sySmFetch")?.addEventListener('click', handleSpotifyImport);
-    $("#spotifyImportBackBtn")?.addEventListener('click', () => switchView('view-playlists'));
-    $("#spotifyImportConfirmBtn")?.addEventListener('click', handleSpotifyPlaylistSelection);
-}
 
-function openSpotifyImportModal() {
-    const modal = $("#sySpotifyModal");
-    if(modal) {
-        modal.classList.add('show');
-        const input = $("#sySmInputUrl");
-        if(input) input.value = "";
-        const fetchBtn = $("#sySmFetch");
-        if(fetchBtn) {
-            fetchBtn.disabled = false;
-            fetchBtn.textContent = 'Buscar';
+    $("#spotifyImportBackBtn")?.addEventListener('click', () => switchView('view-playlists'));
+    
+    $("#spotifyImportConfirmBtn").onclick = async () => {
+        const grid = $("#spotifyUserPlaylistsGrid");
+        const selectedIds = Array.from(grid.querySelectorAll(".spotify-pl-card.selected")).map(card => card.dataset.playlistId);
+
+        if (selectedIds.length === 0) {
+            showToast("Selecciona al menos una playlist para importar.", true);
+            return;
         }
-    }
+        
+        switchView('view-playlists');
+        showToast(`Importando ${selectedIds.length} playlist(s)...`);
+
+        for (const id of selectedIds) {
+            await fetchAndImportSinglePlaylist(id);
+        }
+    };
 }
 
 async function handleSpotifyImport() {
@@ -471,22 +437,28 @@ async function handleSpotifyImport() {
 
     try {
         const { type, id } = parseSpotifyLink(input);
+        let playlists = [];
+
         if (type === 'playlist') {
-            await fetchAndImportSinglePlaylist(id);
-            modal.classList.remove('show');
-            switchView('view-playlists');
+            const token = await getSpotifyToken();
+            const response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('No se pudo obtener la playlist.');
+            const plData = await response.json();
+            playlists = [plData];
         } else if (type === 'user') {
-            const playlists = await fetchUserPlaylists(id);
-            if (playlists.length > 0) {
-                renderSpotifySelectionView(playlists);
-                modal.classList.remove('show');
-                switchView('view-spotify-import-selection');
-            } else {
-                showToast("No se encontraron playlists públicas para este usuario.", true);
-            }
+            playlists = await fetchUserPlaylists(id);
         } else {
-            showToast("URL o ID no válido. Intenta de nuevo.", true);
+            showToast("URL o ID de usuario no válido.", true);
+            return;
         }
+
+        if (playlists.length > 0) {
+            showUserPlaylistsSelectionView(playlists);
+            modal.classList.remove('show');
+        } else {
+            showToast("No se encontraron playlists públicas.", true);
+        }
+
     } catch (e) {
         console.error("Error en importación de Spotify:", e);
         showToast("Ocurrió un error. Verifica el enlace o ID.", true);
@@ -495,6 +467,7 @@ async function handleSpotifyImport() {
         fetchBtn.textContent = 'Buscar';
     }
 }
+
 
 function parseSpotifyLink(input) {
     const cleanedInput = input.trim().split('?')[0];
@@ -532,21 +505,22 @@ async function fetchUserPlaylists(userId) {
             return [];
         }
     }
-    spotifyUserPlaylistsCache = allPlaylists;
     return allPlaylists;
 }
 
-function renderSpotifySelectionView(playlists) {
-    const gridEl = $("#spotifyUserPlaylistsGrid");
-    if (!gridEl) return;
-    gridEl.innerHTML = "";
+function showUserPlaylistsSelectionView(playlists) {
+    const grid = $("#spotifyUserPlaylistsGrid");
+    if (!grid) return;
+    
+    grid.innerHTML = "";
     
     playlists.forEach(pl => {
-        const card = document.createElement("article");
+        const card = document.createElement("div");
         card.className = "spotify-pl-card";
         card.dataset.playlistId = pl.id;
+
         card.innerHTML = `
-            <img class="pl-thumb-bg" src="${pl.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'}" alt="Cover de ${pl.name}">
+            <img class="spotify-pl-card-thumb" src="${pl.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'}" alt="Cover de ${pl.name}">
             <div class="spotify-pl-card-meta">
                 <div class="spotify-pl-card-title">${pl.name}</div>
                 <div class="spotify-pl-card-count">${pl.tracks.total} canciones</div>
@@ -555,39 +529,12 @@ function renderSpotifySelectionView(playlists) {
                 <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
             </div>
         `;
+        
         card.addEventListener('click', () => card.classList.toggle('selected'));
-        gridEl.appendChild(card);
+        grid.appendChild(card);
     });
-}
 
-async function handleSpotifyPlaylistSelection() {
-    const gridEl = $("#spotifyUserPlaylistsGrid");
-    const selectedCards = gridEl.querySelectorAll(".spotify-pl-card.selected");
-    if (selectedCards.length === 0) {
-        showToast("Selecciona al menos una playlist.", true);
-        return;
-    }
-
-    const selectedIds = Array.from(selectedCards).map(card => card.dataset.playlistId);
-    
-    showToast(`Importando ${selectedIds.length} playlist(s)...`);
-    switchView('view-playlists');
-
-    for (const id of selectedIds) {
-        const plData = spotifyUserPlaylistsCache.find(p => p.id === id);
-        if (plData) {
-            const spotifyTracks = await fetchAllSpotifyPlaylistTracks(id);
-            if (spotifyTracks.length > 0) {
-                 await processAndSavePlaylist({
-                    spotifyId: plData.id,
-                    name: plData.name,
-                    creator: plData.owner.display_name,
-                    cover: plData.images?.[0]?.url || '',
-                    spotifyTracks: spotifyTracks,
-                });
-            }
-        }
-    }
+    switchView('view-spotify-import-selection');
 }
 
 
@@ -616,42 +563,50 @@ async function fetchAndImportSinglePlaylist(playlistId) {
 
     } catch(e) {
         console.error("Error importing spotify playlist:", e);
-        showToast("Error al importar la playlist.", true);
+        showToast("Error al importar una playlist.", true);
     }
 }
 
 async function processAndSavePlaylist(pl) {
-    const { collection, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
     const col = collection(db, 'playlists');
     
-    const myIds = getMyPlaylistIds();
-    const existingPl = communityPlaylists.find(p => p.spotifyId === pl.spotifyId && myIds.includes(p.id));
+    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
+    const snapshot = await getDocs(q);
 
-    const newPlaylistData = {
-        name: pl.name,
-        creator: pl.creator,
-        isPublic: false,
-        cover: pl.cover || null,
-        source: 'spotify',
-        spotifyId: pl.spotifyId,
-        spotifyTracks: pl.spotifyTracks,
-        trackCount: pl.spotifyTracks.length,
-        tracks: Array(pl.spotifyTracks.length).fill(null),
-        status: 'unresolved',
-        resolvedCount: 0,
-        updatedAt: serverTimestamp(),
-        ownerUserId: "current_user_id_placeholder" // Este debería ser el ID del usuario real
-    };
-
-    if (!existingPl) {
-        const docRef = await addDoc(col, newPlaylistData);
+    if (snapshot.empty) {
+        const docRef = await addDoc(col, {
+            name: pl.name,
+            creator: pl.creator,
+            isPublic: false,
+            cover: pl.cover || null,
+            source: 'spotify',
+            spotifyId: pl.spotifyId,
+            spotifyTracks: pl.spotifyTracks,
+            trackCount: pl.spotifyTracks.length,
+            tracks: Array(pl.spotifyTracks.length).fill(null),
+            status: 'unresolved',
+            resolvedCount: 0,
+            updatedAt: serverTimestamp(),
+            ownerUserId: "current_user_id_placeholder"
+        });
         addMyPlaylistId(docRef.id);
-        startResolverJob(docRef.id);
+        startResolverJob(docRef.id); // Iniciar la resolución automáticamente
     } else {
-        const docId = existingPl.id;
+        const docId = snapshot.docs[0].id;
         const existingDocRef = doc(db, 'playlists', docId);
-        await updateDoc(existingDocRef, newPlaylistData);
-        showToast(`Playlist "${pl.name}" actualizada. Volviendo a buscar canciones...`);
-        startResolverJob(docId);
+        await updateDoc(existingDocRef, {
+            name: pl.name,
+            creator: pl.creator,
+            cover: pl.cover,
+            spotifyTracks: pl.spotifyTracks,
+            trackCount: pl.spotifyTracks.length,
+            status: 'unresolved', // Marcar para re-resolver
+            tracks: Array(pl.spotifyTracks.length).fill(null),
+            resolvedCount: 0,
+            updatedAt: serverTimestamp()
+        });
+        showToast(`Playlist "${pl.name}" actualizada.`);
+        startResolverJob(docId); // Iniciar la resolución
     }
 }
