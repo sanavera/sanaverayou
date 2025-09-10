@@ -372,7 +372,7 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
 
 /* Section headers */
 .section-head {
-    padding: 0; margin: 10px 0 16px;
+    padding: 0; margin: 0; /* Limpiado para sticky-head */
     display: flex; justify-content: space-between; align-items: center;
 }
 .home-head { margin-bottom: 12px; }
@@ -380,13 +380,10 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
     position: sticky;
     top: 0;
     background: var(--bg);
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding: 12px var(--side-pad);
     z-index: 20;
-    margin-left: calc(-1 * var(--side-pad));
-    margin-right: calc(-1 * var(--side-pad));
-    padding-left: var(--side-pad);
-    padding-right: var(--side-pad);
+    margin: calc(-1 * var(--side-pad));
+    margin-bottom: 16px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -484,7 +481,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   position:absolute!important;width:1px!important;height:1px!important;left:-9999px!important;top:-9999px!important;opacity:0!important;pointer-events:none!important;z-index:-1!important;
 }
 
-/* ====== Home Section (NUEVO) ====== */
+/* ====== Home Section ====== */
 .home-section .home-head { padding-top: 20px; }
 .home-category { margin-bottom: 24px; }
 .home-category:last-child { margin-bottom: 0; }
@@ -496,7 +493,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 }
 @keyframes card-appear{ to{ opacity: 1; transform: translateY(0) scale(1);} }
 
-/* ====== Tarjeta Playlist/Álbum (NUEVO Y CORREGIDO) ====== */
+/* ====== Tarjeta Playlist/Álbum ====== */
 .playlist-card {
   position: relative; width: 100%; aspect-ratio: 1 / 1.25;
   border-radius: var(--radius-sm); overflow: hidden; cursor: pointer;
@@ -519,9 +516,8 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 }
 .playlist-meta {
   padding: 12px; background: var(--surface-elevated); z-index: 1;
-  margin-top: auto; flex-shrink: 0; /* Asegura que no se encoja */
+  margin-top: auto; flex-shrink: 0;
 }
-/* MARQUESINA Y ALINEACIÓN DE TÍTULO (NUEVO) */
 .playlist-title-wrapper {
     position: relative; overflow: hidden; white-space: nowrap; width: 100%;
 }
@@ -549,22 +545,10 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   display: inline-flex; align-items: center; flex-shrink: 0;
   width: 16px; height: 16px;
 }
-/* AJUSTE: Colores para los logos de origen */
 .source-logo.spotify-logo { color: #1DB954; }
 .source-logo.youtube-logo { color: #FF0000; }
 .source-logo.ytmusic-logo { color: #FF0000; }
 .result-item .source-logo svg { width: 16px; height: 16px; fill: currentColor; }
-
-/* ====== Tarjeta de Canción (NUEVO) ====== */
-.result-item.as-card {
-    flex-direction: column; gap: 10px; padding: 10px;
-    border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
-    background-color: var(--surface); text-align: left; border-bottom: 1px solid var(--border-subtle);
-}
-.result-item.as-card .thumb-wrap { width: 100%; height: auto; aspect-ratio: 1/1; }
-.result-item.as-card .thumb { width: 100%; height: 100%; }
-.result-item.as-card .meta { width: 100%; }
-.result-item.as-card .actions { display: none; }
 
 /* Responsive */
 @media (max-width:480px){
@@ -573,7 +557,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   .buttons-control { gap: 8px; }
   .np-play { width: 64px; height: 64px; }
   .home-grid { gap: 12px; grid-template-columns: repeat(2, 1fr); }
-  .stream-controls { display: none; } /* Ocultar en pantallas muy pequeñas si no caben */
+  .stream-controls { display: none; }
 }
 
 /* Misc & Overrides */
@@ -581,43 +565,23 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .loading-indicator h3 { color: var(--text-primary); margin-bottom: 8px; font-size: 1.2em; }
 .loading-indicator p { margin: 0; font-size: 0.9em; }
 .empty { text-align: center; padding: 40px 20px; }
-
-/* Toast */
 #sy-toast {
-    position: fixed;
-    bottom: 90px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 20px;
-    background: #333;
-    color: white;
-    border-radius: 8px;
-    z-index: 10000;
-    transition: opacity 0.3s, bottom 0.3s;
-    opacity: 0;
-    pointer-events: none;
+    position: fixed; bottom: 90px; left: 50%;
+    transform: translateX(-50%); padding: 10px 20px;
+    background: #333; color: white; border-radius: 8px; z-index: 10000;
+    transition: opacity 0.3s, bottom 0.3s; opacity: 0; pointer-events: none;
 }
 #sy-toast.show { opacity: 1; bottom: 100px; }
 #sy-toast.error { background: #b91c1c; }
 
 /* ========== Spotify Import & Resolver ========== */
-.sy-pl-toolbar{ display:flex; justify-content:flex-end; align-items:center; gap:8px; margin: 8px 8px 12px; }
-
 #resolver-modal {
-    position: fixed;
-    bottom: calc(var(--nav-h) + var(--seek-h) + 12px + var(--safe));
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1500;
-    width: 100%;
-    max-width: calc(100% - 24px); /* Ancho del mini-reproductor */
-    background: var(--surface-elevated);
-    border-radius: var(--radius-sm);
-    padding: 10px;
-    box-shadow: 0 -8px 32px rgba(0,0,0,.4);
-    border: 1px solid var(--border);
-    animation: slideUp .3s cubic-bezier(.4,0,.2,1);
-    box-sizing: border-box; /* Asegurarse de que padding no afecte el ancho */
+    position: fixed; bottom: calc(var(--nav-h) + var(--seek-h) + 12px + var(--safe));
+    left: 50%; transform: translateX(-50%); z-index: 1500;
+    width: 100%; max-width: calc(100% - 24px);
+    background: var(--surface-elevated); border-radius: var(--radius-sm);
+    padding: 10px; box-shadow: 0 -8px 32px rgba(0,0,0,.4);
+    border: 1px solid var(--border); animation: slideUp .3s cubic-bezier(.4,0,.2,1); box-sizing: border-box;
 }
 @media (min-width: 480px) { #resolver-modal { max-width: 400px; } }
 @keyframes slideUp { from { transform: translate(-50%, 40px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
@@ -631,55 +595,95 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .resolver-cancel { width: 100%; padding: 8px; border: none; background: var(--surface-hover); color: var(--text-secondary); border-radius: 8px; cursor: pointer; transition: var(--fast); font-size: 13px; }
 .resolver-cancel:hover { background: var(--border); color: var(--text-primary); }
 
+/* VISTA DE IMPORTACIÓN DE SPOTIFY (PANTALLA COMPLETA) */
+.spotify-import-view {
+    padding-top: 70px; /* Espacio para header fijo */
+    padding-bottom: 100px; /* Espacio para footer fijo */
+}
+.sticky-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: linear-gradient(to top, var(--dock-bg) 50%, transparent 100%);
+    padding: 16px var(--side-pad) calc(16px + var(--safe));
+    display: flex;
+    justify-content: center;
+    pointer-events: none; /* Permite scroll a través del gradiente */
+}
+.sticky-footer > * {
+    pointer-events: all; /* Habilita clicks en el botón */
+}
+.pill-large {
+    width: 100%;
+    max-width: 400px;
+    padding: 14px 20px;
+    font-size: 16px;
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+html[data-theme="light"] .pill-large { color: #fff; }
 
-/* Estilos para la nueva vista de selección de playlists de Spotify */
-#view-spotify-import-selection .pl-grid { padding-top: 16px; }
+/* Layout de lista para las playlists a importar */
+#spotifyUserPlaylistsGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* NUEVO DISEÑO DE TARJETA TIPO LISTA */
 .spotify-pl-card {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  padding: 12px;
   border-radius: var(--radius-sm);
-  overflow: hidden;
   border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.2s ease-out;
 }
+.spotify-pl-card:hover { background: var(--surface-hover); }
 .spotify-pl-card.selected {
   border-color: var(--accent);
-  transform: scale(1.05);
+  background: var(--surface-hover);
 }
-.spotify-pl-card .pl-thumb-bg {
-  width: 100%;
-  aspect-ratio: 1/1;
+.spotify-pl-card-thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 8px;
   object-fit: cover;
 }
 .spotify-pl-card-meta {
-  padding: 10px;
-  background: var(--surface);
+  flex-grow: 1;
+  min-width: 0;
 }
 .spotify-pl-card-title {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 4px;
 }
 .spotify-pl-card-count {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
-  margin-top: 2px;
 }
 .spotify-pl-card-checkbox {
-    position: absolute;
-    top: 10px;
-    right: 10px;
     width: 24px;
     height: 24px;
-    background: rgba(0,0,0,0.6);
-    border: 2px solid #fff;
+    flex-shrink: 0;
+    background: var(--surface-elevated);
+    border: 2px solid var(--border);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: none; /* El click se maneja en la tarjeta */
+    pointer-events: none;
     transition: var(--fast);
 }
 .spotify-pl-card.selected .spotify-pl-card-checkbox {
@@ -699,7 +703,6 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
     transform: scale(1);
 }
 
-
 /* ========== Live Stream UI ========== */
 .stream-controls { display: flex; align-items: center; gap: 8px; }
 .stream-btn {
@@ -709,13 +712,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   flex-shrink: 0;
 }
 .stream-btn:hover { transform: scale(1.1); }
-
-/* --- Botón de Transmitir --- */
-.broadcast-wrapper { 
-  display: flex; 
-  align-items: center; 
-  gap: 6px; 
-}
+.broadcast-wrapper { display: flex; align-items: center; gap: 6px; }
 .stream-btn-broadcast { background-color: #ef4444; }
 .mic-icon {
   width: 16px; height: 16px; position: relative;
@@ -744,8 +741,6 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   0%, 100% { background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
   50% { background-color: #f87171; box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.5); }
 }
-
-/* --- Botón de Ver Transmisiones --- */
 .stream-btn-listen { background-color: #22c55e; animation: pulse-green 2.5s infinite; }
 .headphone-icon {
   width: 16px; height: 16px; position: relative;
@@ -759,15 +754,13 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 .headphone-icon::after {
   content: ''; position: absolute; width: 4px; height: 6px;
   background: white; border-radius: 2px; bottom: 2px;
-  left: 1px; box-shadow: 10px 0 0 white; /* Auricular derecho */
+  left: 1px; box-shadow: 10px 0 0 white;
 }
 @keyframes pulse-green {
   0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
   70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
   100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
-
-/* --- Modal de Transmisiones --- */
 .sessions-list { display: flex; flex-direction: column; gap: 8px; }
 .session-item {
   display: flex; justify-content: space-between; align-items: center;
@@ -791,8 +784,6 @@ body.is-listening .time-control input[type="range"] {
     cursor: not-allowed;
 }
 body.is-listening #npPlay, body.is-listening #miniPlay { opacity: 0.5; }
-
-/* Ajustes para el mini-reproductor */
 .mini-now { gap: 8px; }
 .mini-content-wrapper { gap: 2px; }
 #miniTitle { font-size: 12px; }
