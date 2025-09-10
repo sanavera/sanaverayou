@@ -103,16 +103,21 @@ async function resolveTrack(track) {
     }
     const query = `${track.author} ${track.title}`;
     try {
-        const videoId = await scrapeYoutubeUrlOnly(query);
+        // Usamos la nueva función de búsqueda del buscador.js
+        const results = await scrapeYoutubeWithDetails(query, 1);
+        const videoId = results[0]?.id;
+
         if (videoId) {
             trackCache.set(trackKey, videoId);
             return { videoId: videoId, error: null };
         }
         return { videoId: null, error: "No video found via scraping" };
     } catch (e) {
+        console.error(`Error resolving track "${query}":`, e);
         return { videoId: null, error: e.message };
     }
 }
+
 
 /**
  * Renderiza la lista de playlists del usuario en la vista "Mis Playlists".
@@ -228,9 +233,6 @@ async function removeFromPlaylist(plId, trackId) {
     const { doc, updateDoc, serverTimestamp } = sy_fs();
     const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
     
-    // Asumiendo que esta función existe para la sincro en tiempo real
-    // sy_syncRemovalRealtime(plId, trackId); 
-
     try {
         await updateDoc(doc(db, 'playlists', plId), { tracks: updatedTracks, resolvedCount: updatedTracks.length, updatedAt: serverTimestamp() });
         showToast('Canción eliminada.');
@@ -257,10 +259,13 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         const track = pl.tracks[trackIndex];
         const currentReassignIndex = track.reassignIndex || 0;
         const nextReassignIndex = currentReassignIndex + 1;
-        const newVideoId = await scrapeYoutubeIdForNthResult(`${track.author} ${track.title}`, nextReassignIndex);
 
-        if (newVideoId) {
-            const updatedTrack = { ...track, id: newVideoId, reassignIndex: nextReassignIndex };
+        // Usamos la nueva función de búsqueda para obtener el N-ésimo resultado
+        const results = await scrapeYoutubeWithDetails(`${track.author} ${track.title}`, nextReassignIndex + 1);
+        const newVideo = results[nextReassignIndex];
+
+        if (newVideo) {
+            const updatedTrack = { ...track, id: newVideo.id, reassignIndex: nextReassignIndex };
             const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
 
@@ -273,15 +278,16 @@ async function reassignTrackSource(playlistId, oldTrackId) {
                     queue[queueIndex] = updatedTrack;
                     if (currentTrack && currentTrack.id === oldTrackId) {
                         currentTrack = updatedTrack;
-                        playCurrent(true);
+                        playCurrent(true); // Forzar la reproducción de la nueva fuente
                     }
                 }
             }
             showToast("Fuente reasignada. Reproduciendo nueva versión.");
         } else {
             showToast("No se encontraron más versiones.", true);
+            // Opcional: resetear el índice si llegamos al final de los resultados
             const updatedTrack = { ...track, reassignIndex: 0 };
-            const updatedTracks = [...pl.tracks];
+             const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
             const { doc, updateDoc, serverTimestamp } = window.firebase;
             await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
@@ -388,24 +394,32 @@ async function showPlaylistInPlayer(plId) {
     viewingPlaylistId = pl.id;
     switchView('view-player');
 
+    // Si la playlist es de Spotify y no está resuelta, la mostramos y comenzamos el proceso
     if (pl.source === 'spotify' && pl.status !== 'resolved') {
-        const tracksToShow = (pl.tracks?.length > 0) ? pl.tracks.map((t, i) => t || { ...pl.spotifyTracks[i], id: null, thumb: pl.spotifyTracks[i].thumb || pl.cover }) : pl.spotifyTracks.map(st => ({...st, thumb: st.thumb || pl.cover, id: null}));
+        // Mostramos una lista combinada de canciones resueltas y no resueltas
+        const tracksToShow = (pl.spotifyTracks || []).map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, thumb: st.thumb || pl.cover, id: null });
         renderQueue(tracksToShow, pl.name);
-        if (pl.status !== 'resolving') startResolverJob(plId);
+        
+        // Si no se está resolviendo, iniciamos el trabajo
+        if (pl.status !== 'resolving') {
+            startResolverJob(pl.id);
+        }
         return;
     }
 
+    // Si la playlist es local o ya está resuelta, la reproducimos
     const tracksToPlay = (pl.tracks || []).filter(t => t && t.id);
     if (!tracksToPlay || tracksToPlay.length === 0) {
         showToast(`La playlist "${pl.name}" está vacía o no tiene canciones resueltas.`, true);
-        switchView('view-playlists');
+        switchView('view-playlists'); // Volver si no hay nada que reproducir
         return;
     }
 
     setQueue(tracksToPlay, 'playlist', 0);
     renderQueue(tracksToPlay, pl.name);
-    playCurrent(true);
+    playCurrent(true); // Iniciar la reproducción automáticamente
 }
+
 
 function hideQueuePanel(){ 
     $("#queuePanel")?.classList.add("hide"); 
@@ -538,10 +552,12 @@ function showUserPlaylistsModal(playlists) {
     
     playlists.forEach(pl => {
         const item = document.createElement("div");
-        item.className = "sheet-item-check";
+        item.className = "sheet-item"; // Usar un estilo consistente
         item.innerHTML = `
-            <input type="checkbox" id="pl_${pl.id}" data-playlist-id="${pl.id}">
-            <label for="pl_${pl.id}">${pl.name} <span class="muted">(${pl.tracks.total} temas)</span></label>
+            <label style="display: flex; align-items: center; width: 100%; cursor: pointer;">
+                <input type="checkbox" data-playlist-id="${pl.id}" style="margin-right: 12px;">
+                ${pl.name} <span class="muted" style="margin-left: auto;">(${pl.tracks.total} temas)</span>
+            </label>
         `;
         listEl.appendChild(item);
     });
@@ -561,6 +577,7 @@ function showUserPlaylistsModal(playlists) {
         }
     };
 }
+
 
 async function fetchAndImportSinglePlaylist(playlistId) {
     try {
@@ -596,10 +613,10 @@ async function processAndSavePlaylist(pl) {
     const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
     const col = collection(db, 'playlists');
     
-    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
-    const snapshot = await getDocs(q);
+    const myIds = getMyPlaylistIds();
+    const existingPl = communityPlaylists.find(p => p.spotifyId === pl.spotifyId && myIds.includes(p.id));
 
-    if (snapshot.empty) {
+    if (!existingPl) {
         const docRef = await addDoc(col, {
             name: pl.name,
             creator: pl.creator,
@@ -616,8 +633,10 @@ async function processAndSavePlaylist(pl) {
             ownerUserId: "current_user_id_placeholder"
         });
         addMyPlaylistId(docRef.id);
+        // Iniciar el resolver para la nueva playlist
+        startResolverJob(docRef.id);
     } else {
-        const docId = snapshot.docs[0].id;
+        const docId = existingPl.id;
         const existingDocRef = doc(db, 'playlists', docId);
         await updateDoc(existingDocRef, {
             name: pl.name,
@@ -625,9 +644,14 @@ async function processAndSavePlaylist(pl) {
             cover: pl.cover,
             spotifyTracks: pl.spotifyTracks,
             trackCount: pl.spotifyTracks.length,
+            // Resetear el estado para resolver de nuevo
+            tracks: Array(pl.spotifyTracks.length).fill(null),
+            status: 'unresolved',
+            resolvedCount: 0,
             updatedAt: serverTimestamp()
         });
-        showToast(`Playlist "${pl.name}" actualizada.`);
+        showToast(`Playlist "${pl.name}" actualizada. Volviendo a buscar canciones...`);
+        // Iniciar el resolver para la playlist actualizada
+        startResolverJob(docId);
     }
 }
-
