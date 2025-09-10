@@ -232,20 +232,22 @@ async function checkForActiveImportJob() {
 
     try {
         const { jobId, playlistId } = JSON.parse(activeJobInfo);
-        const pl = communityPlaylists.find(p => p.id === playlistId) || await getDoc(doc(db, "playlists", playlistId)).then(d => d.data());
-        if (!jobId || !pl) {
+        const { doc, getDoc, onSnapshot } = window.firebase;
+        const plDoc = await getDoc(doc(db, "playlists", playlistId));
+        
+        if (!jobId || !plDoc.exists()) {
             localStorage.removeItem('sy_active_import_job');
             return;
         }
         
+        const pl = plDoc.data();
         console.log(`Resuming listener for job: ${jobId}`);
         showResolverModal(pl);
 
-        const { doc: fdoc, onSnapshot: fonSnapshot } = window.firebase;
-        const jobRef = fdoc(db, "resolverJobs", jobId);
+        const jobRef = doc(db, "resolverJobs", jobId);
         if (resolverJobUnsubscribe) resolverJobUnsubscribe();
 
-        resolverJobUnsubscribe = fonSnapshot(jobRef, (docSnap) => {
+        resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
             if (!docSnap.exists()) {
                 hideResolverModal();
                 return;
@@ -279,7 +281,7 @@ async function startResolverJob(playlistId) {
     
     if (jobDoc && jobDoc.exists() && jobDoc.data().status === 'running') {
         localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
-        return; // Job is already running
+        return;
     }
     
     jobId = `job_${playlistId}_${Date.now()}`;
@@ -345,7 +347,7 @@ async function runJobBatch(playlistId, jobRef) {
     const results = await Promise.all(tracksToProcess.map(track => resolveTrack(track)));
 
     const currentPlDoc = await getDoc(plRef);
-    if(!currentPlDoc.exists()) return; // Playlist might have been deleted during batch
+    if(!currentPlDoc.exists()) return;
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
     let errorsInBatch = [];
@@ -355,9 +357,14 @@ async function runJobBatch(playlistId, jobRef) {
         if (result.videoId) {
             const spotifyTrack = playlist.spotifyTracks[originalIndex];
             updatedTracks[originalIndex] = {
-                id: result.videoId, title: spotifyTrack.title, author: spotifyTrack.author,
+                id: result.videoId, // Esta es la "mainUrl"
+                title: spotifyTrack.title,
+                author: spotifyTrack.author,
                 thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-                source: 'youtube', originalId: spotifyTrack.spotifyId 
+                source: 'youtube',
+                originalId: spotifyTrack.spotifyId,
+                backupUrls: result.backupIds, // Aquí guardamos los respaldos
+                reassignIndex: 0 // Iniciamos el índice para reasignación
             };
         } else if (result.error) {
             errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
@@ -406,8 +413,8 @@ async function createLiveSession(name, genre) {
         status: "active",
         currentTrack: null,
         isPlaying: false,
-        currentTime: 0, // Tiempo actual de la canción
-        stateChangeTimestamp: null, // Momento del último cambio de estado
+        currentTime: 0,
+        stateChangeTimestamp: null,
         createdAt: serverTimestamp(),
         lastSeen: serverTimestamp()
     });
