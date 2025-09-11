@@ -375,7 +375,7 @@ html[data-theme="light"] input[type="range"]::-webkit-slider-thumb{ border-color
     padding: 0; margin: 0; /* Limpiado para sticky-head */
     display: flex; justify-content: space-between; align-items: center;
 }
-.home-head { margin-bottom: 12px; }
+.home-head { padding-top: 50px; }
 .sticky-head {
     position: sticky;
     top: 0;
@@ -789,3 +789,37 @@ body.is-listening #npPlay, body.is-listening #miniPlay { opacity: 0.5; }
 #miniTitle { font-size: 12px; }
 #miniAuthor { font-size: 10px; }
 .broadcast-wrapper { margin-left: auto; }
+
+/* ======== Archive.org Quality Selector ======== */
+.quality-selector-container {
+    max-width: 500px;
+    margin: -10px auto 15px auto;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-secondary);
+}
+.quality-selector {
+    flex-grow: 1;
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    outline: none;
+}
+.quality-selector:focus {
+    border-color: var(--accent);
+}
+.hq-indicator {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent-light);
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
