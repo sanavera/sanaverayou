@@ -136,7 +136,7 @@ html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a;
 @keyframes fadeIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 
 /* Centro de listas */
-:where(.results, .fav-list, #queueList, .pl-grid, .fav-list-wrap, .queue-panel){
+:where(.results, .fav-list, #queueList, .pl-grid, .fav-list-wrap, .queue-panel, .search-controls){
   max-width: 820px;
   margin-left: auto;
   margin-right: auto;
@@ -170,6 +170,44 @@ html[data-theme="light"] #overlaySearchInput{ background:#f1f5f9; color:#0f172a;
 @keyframes eqBar{ 0%,100%{ transform:scaleY(.35);} 50%{ transform:scaleY(1);} }
 @media (prefers-reduced-motion: reduce){ .eq span, .eq-title span { animation:none; } }
 
+/* === INICIO: NUEVOS ESTILOS PARA BÚSQUEDA DE ÁLBUMES === */
+.search-controls {
+  padding-bottom: 20px;
+}
+.search-switch-container {
+  display: inline-flex;
+  background-color: var(--surface);
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+}
+.search-switch-btn {
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+.search-switch-btn.active {
+  background-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+html[data-theme="light"] .search-switch-btn.active {
+  color: #fff;
+}
+.results.results-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  flex-direction: row; /* Anula el column de la búsqueda normal */
+}
+/* === FIN: NUEVOS ESTILOS PARA BÚSQUEDA DE ÁLBUMES === */
+
 /* Miniaturas */
 .thumb-wrap{position:relative;width:56px;height:56px;flex:0 0 56px}
 .thumb{width:56px;height:56px;border-radius:12px;object-fit:cover;border:2px solid rgba(255,255,255,.08)}
@@ -181,7 +219,8 @@ html[data-theme="light"] .thumb{ border-color:#e5e7eb; }
   width:40px;height:40px;border-radius:50%;border:none;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.55);padding:0;
   opacity: 0; transition: var(--fast);
 }
-.result-item:hover .card-play, .fav-item:hover .card-play, .queue-item:hover .card-play { opacity: 1; }
+.result-item:hover .card-play, .fav-item:hover .card-play, .queue-item:hover .card-play,
+.playlist-card:hover .card-play { opacity: 1; }
 .card-play .i-pause{display:none}
 .is-playing .card-play .i-play{display:none}
 .is-playing .card-play .i-pause{display:block}
@@ -557,6 +596,7 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
   .buttons-control { gap: 8px; }
   .np-play { width: 64px; height: 64px; }
   .home-grid { gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  .results.results-grid { gap: 12px; }
   .stream-controls { display: none; }
 }
 
