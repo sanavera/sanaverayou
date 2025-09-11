@@ -1,8 +1,8 @@
-// Contiene toda la lógica de búsqueda, usando AllOrigins para obtener el HTML de YouTube
+// Contiene la lógica de búsqueda para YouTube y Archive.org
 
 let items = [];
 let searchAbort = null;
-let paging = { query: "", loading: false };
+let currentSearchSource = 'youtube'; // 'youtube' o 'archive'
 
 async function withRetry(fn, retries = 3, delay = 500) {
     let lastError;
@@ -20,125 +20,25 @@ async function withRetry(fn, retries = 3, delay = 500) {
     throw lastError;
 }
 
-function extractVideoId(url) {
-    if (!url) return null;
-    try {
-        const parsed = new URL(url);
-        if (parsed.searchParams.has("v")) {
-            return parsed.searchParams.get("v");
-        }
-        const pathnameParts = parsed.pathname.split('/');
-        if (pathnameParts.includes("shorts")) {
-            return pathnameParts[pathnameParts.length - 1];
-        }
-    } catch (e) {
-        if (url.includes("watch?v=")) {
-            try {
-                return new URLSearchParams(url.split('?')[1]).get('v');
-            } catch (err) {
-                 console.warn("No se pudo parsear la URL:", url);
-                 return null;
-            }
-        }
-    }
-    return null;
-}
-
-function extractVideoData(videoRenderer) {
-    if (!videoRenderer || !videoRenderer.videoId) return null;
-    
-    let title = 'Sin título';
-    if (videoRenderer.title) {
-        if (videoRenderer.title.runs && videoRenderer.title.runs[0]) {
-            title = videoRenderer.title.runs[0].text;
-        } else if (videoRenderer.title.simpleText) {
-            title = videoRenderer.title.simpleText;
-        }
-    }
-    
-    let channel = 'Sin canal';
-    if (videoRenderer.ownerText && videoRenderer.ownerText.runs && videoRenderer.ownerText.runs[0]) {
-        channel = videoRenderer.ownerText.runs[0].text;
-    } else if (videoRenderer.longBylineText && videoRenderer.longBylineText.runs && videoRenderer.longBylineText.runs[0]) {
-        channel = videoRenderer.longBylineText.runs[0].text;
-    }
-    
-    let thumbnail = null;
-    if (videoRenderer.thumbnail && videoRenderer.thumbnail.thumbnails && videoRenderer.thumbnail.thumbnails.length > 0) {
-        thumbnail = videoRenderer.thumbnail.thumbnails[0].url;
-    }
-    
-    return {
-        id: videoRenderer.videoId,
-        title: cleanTitle(title),
-        thumb: thumbnail || `https://i.ytimg.com/vi/${videoRenderer.videoId}/hqdefault.jpg`,
-        author: cleanAuthor(channel),
-        source: "youtube",
-        type: "youtube_video",
-        isTopic: /topic/i.test(channel)
-    };
-}
-
-function findVideosInData(data) {
-    const videosFound = [];
-    
-    function findVideosRecursive(obj, depth = 0, maxDepth = 4) {
-        if (depth > maxDepth || !obj || typeof obj !== 'object') return;
-        
-        if (obj.videoRenderer) {
-            const video = extractVideoData(obj.videoRenderer);
-            if (video) videosFound.push(video);
-        }
-        
-        if (obj.itemSectionRenderer && obj.itemSectionRenderer.contents) {
-            for (const content of obj.itemSectionRenderer.contents) {
-                if (content.videoRenderer) {
-                    const video = extractVideoData(content.videoRenderer);
-                    if (video) videosFound.push(video);
-                }
-            }
-        }
-        
-        for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
-                findVideosRecursive(obj[key], depth + 1, maxDepth);
-            }
-        }
-    }
-    
-    findVideosRecursive(data);
-    return videosFound;
-}
+// --- Búsqueda en YouTube ---
 
 async function scrapeYoutubeWithDetails(query, limit = 20) {
     return withRetry(async () => {
         const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
         
-        const response = await fetch(proxyUrl, {
-            signal: searchAbort?.signal
-        });
-
-        if (!response.ok) {
-            throw new Error(`AllOrigins falló: ${response.status}`);
-        }
+        const response = await fetch(proxyUrl, { signal: searchAbort?.signal });
+        if (!response.ok) throw new Error(`AllOrigins falló: ${response.status}`);
         
         const html = await response.text();
-        
-        // Usar el mismo patrón que funciona en el HTML de test
         const scriptMatch = html.match(/var ytInitialData = ({.*?});/);
-        if (!scriptMatch) {
-            throw new Error("No se encontró ytInitialData en el HTML");
-        }
+        if (!scriptMatch) throw new Error("No se encontró ytInitialData en el HTML");
         
         const data = JSON.parse(scriptMatch[1]);
-        
-        // Usar la misma función que funciona en el HTML de test
         const videosFound = [];
         
         function findVideos(obj) {
             if (typeof obj !== 'object' || obj === null) return;
-            
             if (obj.videoRenderer) {
                 const video = obj.videoRenderer;
                 if (video.videoId && video.title) {
@@ -153,84 +53,52 @@ async function scrapeYoutubeWithDetails(query, limit = 20) {
                     });
                 }
             }
-            
-            // Recursivamente buscar en objetos y arrays
             for (let key in obj) {
-                if (obj.hasOwnProperty(key)) {
-                    findVideos(obj[key]);
-                }
+                if (obj.hasOwnProperty(key)) findVideos(obj[key]);
             }
         }
         
         findVideos(data);
-        
         return videosFound.slice(0, limit);
     });
 }
 
-async function fetchVideoDetailsByIds(ids) {
-    const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.length === 0) return [];
-    
-    const metadataPromises = uniqueIds.map(id => 
-        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
-            .then(r => r.json())
-            .then(meta => {
-                if (meta.error) return null;
-                return {
-                    id,
-                    title: cleanTitle(meta.title || `Video ${id}`),
-                    thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
-                    author: cleanAuthor(meta.author_name || "YouTube"),
-                    source: 'youtube', type: 'youtube_video', isTopic: /topic/i.test(meta.author_name || "")
-                };
-            })
-            .catch(() => ({
-                id, title: `Video ${id}`, thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-                author: "YouTube", source: 'youtube', type: 'youtube_video', isTopic: false
-            }))
-    );
-    return (await Promise.all(metadataPromises)).filter(Boolean);
-}
-
-async function startSearch(query) {
+async function startYoutubeSearch(query) {
   if(searchAbort) searchAbort.abort();
   searchAbort = new AbortController();
-  paging = { query, loading: true };
+  currentSearchSource = 'youtube';
   items = [];
   
   const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere (puede tardar unos segundos)</h3></div>`;
-  updateHomeGridVisibility();
+  resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube…</h3></div>`;
+  $("#homeSection")?.classList.add("hide");
   
   try {
     const videoResults = await scrapeYoutubeWithDetails(query, 20);
     if (searchAbort.signal.aborted) return;
     
-    if (resultsEl) resultsEl.innerHTML = "";
-    
+    resultsEl.innerHTML = "";
     if (videoResults.length === 0) {
-        if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
+        resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
         return;
     }
 
     items = videoResults;
-    appendResults(items);
+    appendYoutubeResults(items);
 
   } catch (e) {
     console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
-  } finally {
-    paging.loading = false;
+    resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda de YouTube. Reintentá por favor.</p></div>`;
   }
 }
 
-function appendResults(chunk){
+function appendYoutubeResults(chunk){
   const root = $("#results"); if(!root) return;
   for(const it of chunk){
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.trackId = it.id;
+    item.dataset.source = 'youtube';
 
     let logo = youtubeLogoSvg();
     if (it.isTopic) {
@@ -259,27 +127,115 @@ function appendResults(chunk){
         </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
-    item.addEventListener("click", (e) => handleResultClick(e, it));
-
-    const cardPlayBtn = item.querySelector(".card-play");
-    if (cardPlayBtn) {
-        cardPlayBtn.onclick = (e) => {
-            e.stopPropagation();
-            handleResultClick(e, it, true);
-        };
-    }
     root.appendChild(item);
   }
   refreshIndicators();
 }
 
-async function handleResultClick(event, item, forcePlay = false) {
-    if (event.target.closest(".more") || event.target.closest(".fav-btn") || (event.target.closest(".card-play") && !forcePlay)) return;
 
-    if (item.type === 'youtube_video') {
-        playFromSearch(item.id, true);
+// --- Búsqueda en Archive.org ---
+
+async function searchArchiveAlbums(query) {
+    if(searchAbort) searchAbort.abort();
+    searchAbort = new AbortController();
+    currentSearchSource = 'archive';
+    items = []; // Limpiamos los resultados de YouTube
+
+    const resultsEl = $("#results");
+    resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando álbumes en Archive.org…</h3></div>`;
+    $("#homeSection")?.classList.add("hide");
+
+    const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}+AND+mediatype:audio+AND+NOT+collection:librivoxaudio&fl=identifier,title,creator,publicdate&rows=100&page=1&output=json&sort[]=downloads+desc`;
+
+    try {
+        const response = await fetch(url, { signal: searchAbort.signal });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        
+        const docs = data.response?.docs || [];
+        resultsEl.innerHTML = "";
+        
+        if (docs.length === 0) {
+            resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron álbumes para "${query}" en Archive.org.</p></div>`;
+            return;
+        }
+
+        const albums = docs.map(d => ({
+            id: d.identifier,
+            title: Array.isArray(d.title) ? d.title[0] : d.title || 'Sin Título',
+            author: Array.isArray(d.creator) ? d.creator.join(', ') : d.creator || 'Desconocido',
+            thumb: `https://archive.org/services/img/${d.identifier}`,
+            year: d.publicdate ? new Date(d.publicdate).getFullYear() : '',
+            source: 'archive',
+            type: 'archive_album'
+        }));
+
+        appendArchiveResults(albums);
+    } catch (e) {
+        if (e.name === 'AbortError') return;
+        console.error('Error en búsqueda de Archive.org:', e);
+        resultsEl.innerHTML = `<div class="loading-indicator"><p>Error al buscar en Archive.org.</p></div>`;
     }
 }
+
+function appendArchiveResults(albums) {
+    const root = $("#results");
+    if (!root) return;
+    root.innerHTML = ''; // Limpiamos resultados previos
+    
+    const grid = document.createElement('div');
+    grid.className = 'pl-grid'; // Reutilizamos el estilo de grid
+
+    for (const album of albums) {
+        const item = document.createElement("article");
+        item.className = "playlist-card"; // Reutilizamos el estilo de tarjeta
+        item.dataset.albumId = album.id;
+        item.dataset.source = 'archive';
+        
+        item.innerHTML = `
+            <div class="album-cover">
+                <img src="${album.thumb}" alt="Cover de ${album.title}" loading="lazy">
+            </div>
+            <div class="playlist-meta">
+                <div class="playlist-title-wrapper">
+                    <h4 class="playlist-title">${album.title}</h4>
+                </div>
+                <div class="creator-line">
+                    <span style="font-size: 16px; margin-right: 4px;">💿</span>
+                    <span>${album.author} ${album.year ? `(${album.year})` : ''}</span>
+                </div>
+            </div>`;
+        grid.appendChild(item);
+    }
+    root.appendChild(grid);
+}
+
+// --- Manejo de Clicks y Navegación ---
+
+document.addEventListener("click", (e) => {
+    const resultItem = e.target.closest(".result-item, .playlist-card");
+    if (!resultItem) return;
+    
+    // Si es un resultado de YouTube
+    if (resultItem.dataset.source === 'youtube') {
+        if (e.target.closest(".more") || e.target.closest(".fav-btn")) return;
+        const trackId = resultItem.dataset.trackId;
+        const track = items.find(it => it.id === trackId);
+        if (track) {
+            const forcePlay = !!e.target.closest(".card-play");
+            playFromSearch(track.id, forcePlay);
+        }
+    }
+
+    // Si es un resultado de Archive.org
+    if (resultItem.dataset.source === 'archive') {
+        const albumId = resultItem.dataset.albumId;
+        if (albumId) {
+            playArchiveAlbum(albumId);
+        }
+    }
+});
+
 
 function initSearch() {
     const searchOverlay = $("#searchOverlay");
@@ -300,10 +256,9 @@ function initSearch() {
         if (!q) return;
 
         closeSearch();
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-
+        document.body.scrollTop = 0; document.documentElement.scrollTop = 0;
+        
         switchView("view-search");
-        await startSearch(q);
+        await startYoutubeSearch(q); // La búsqueda por defecto es en YouTube
     });
 }
