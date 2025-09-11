@@ -1,5 +1,6 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 let activeSessions = []; // Variable global para guardar las sesiones
+let currentSearchType = 'youtube'; // 'youtube' para canciones, 'archive' para álbumes
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
 const recommendedPlaylists = {};
@@ -64,6 +65,8 @@ function updateHero(track) {
     plName = pl ? pl.name : "";
   } else if (['recommended', 'youtube_playlist'].includes(queueType)) {
     plName = currentQueueTitle;
+  } else if (queueType === 'archive_album') {
+      plName = currentQueueTitle;
   }
   let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
   if (liveState.mode === 'listening' && liveState.sessionData) {
@@ -171,7 +174,8 @@ function renderAllHomePlaylists() {
 
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
-  const shouldShow = (items.length===0 && !$(".loading-indicator"));
+  const resultsEl = $("#results");
+  const shouldShow = (!resultsEl || resultsEl.innerHTML.trim() === "") && !$(".loading-indicator");
   home.classList.toggle("hide", !shouldShow);
 }
 
@@ -351,12 +355,44 @@ function initLiveStreamsUI() {
     });
 }
 
+// --- Lógica del Switch de Búsqueda ---
+function updateSearchSwitchUI() {
+    $('#searchTypeSongs')?.classList.toggle('active', currentSearchType === 'youtube');
+    $('#searchTypeAlbums')?.classList.toggle('active', currentSearchType === 'archive');
+    
+    // Cambia el placeholder del input de búsqueda
+    const placeholderText = currentSearchType === 'youtube' 
+        ? "Buscá canciones en YouTube..." 
+        : "Buscá álbumes o artistas...";
+    $('#overlaySearchInput').placeholder = placeholderText;
+}
+
+function initSearchSwitch() {
+    const btnSongs = $('#searchTypeSongs');
+    const btnAlbums = $('#searchTypeAlbums');
+
+    const handleSwitch = (type) => {
+        if (currentSearchType === type) return;
+        currentSearchType = type;
+        updateSearchSwitchUI();
+        // Limpiar resultados al cambiar de tipo para evitar confusión
+        const resultsEl = $("#results");
+        if (resultsEl) resultsEl.innerHTML = "";
+        updateHomeGridVisibility();
+    };
+
+    btnSongs?.addEventListener('click', () => handleSwitch('youtube'));
+    btnAlbums?.addEventListener('click', () => handleSwitch('archive'));
+}
+
+
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
   await initFirebase();
   
   listenForLiveSessions(renderLiveSessions);
+  initSearchSwitch();
 
   const playlistKeys = Object.keys(recommendedPlaylists);
   const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
@@ -393,9 +429,6 @@ async function boot(){
 
     const trackId = itemEl.dataset.trackId;
 
-    // --- CORREGIDO (1/2): Lógica de búsqueda de track mejorada ---
-    // Busca en la playlist visible actualmente, además de la cola de reproducción.
-    // Esto permite que el menú funcione incluso antes de reproducir una canción.
     let track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
     if (!track && viewingPlaylistId) {
         const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
@@ -417,20 +450,16 @@ async function boot(){
 
     if (e.target.closest(".icon-btn.more")) {
         if(liveState.mode === 'listening') return;
-        
-        // No se pueden mostrar opciones para canciones no resueltas de Spotify
         if (!track.id) return;
 
         const actions = [
-            { id: "pl", label: "Agregar a playlist" }
+            { id: "pl", label: "Agregar a playlist" },
+            { id: "view_albums", label: "Ver Álbumes de este Artista" }
         ];
 
-        // --- CORREGIDO (2/2): Opciones de menú restauradas ---
-        // Se agregan las opciones que faltaban y se asegura que solo aparezcan
-        // en la vista de una playlist propia del usuario.
         if (itemEl.classList.contains("queue-item") && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
             actions.push({ id: "rename", label: "Renombrar canción" });
-            actions.push({ id: "delete", label: "Eliminar canción de este playlist", danger: true });
+            actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
             actions.push({ id: "reassign", label: "Reasignar fuente" });
         }
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
@@ -443,6 +472,15 @@ async function boot(){
                 if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
+                if (act === "view_albums") {
+                    const artistName = cleanAuthor(track.author);
+                    if (artistName) {
+                        currentSearchType = 'archive';
+                        updateSearchSwitchUI();
+                        switchView('view-search');
+                        startSearch(artistName);
+                    }
+                }
             }
         });
     }
