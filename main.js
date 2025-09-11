@@ -1,6 +1,9 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 let activeSessions = []; // Variable global para guardar las sesiones
 
+// --- Listas de reproducción recomendadas (datos estáticos) ---
+// --- const recommendedPlaylists = {}; ---
+
 // --- Utils ---
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -59,7 +62,7 @@ function updateHero(track) {
   if (queueType === 'playlist' && viewingPlaylistId) {
     const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
     plName = pl ? pl.name : "";
-  } else if (queueType === 'archive' || queueType === 'recommended' || queueType === 'youtube_playlist') {
+  } else if (['recommended', 'youtube_playlist'].includes(queueType)) {
     plName = currentQueueTitle;
   }
   let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
@@ -82,7 +85,7 @@ function updateMiniNow() {
   if (liveState.mode === 'listening' && liveState.sessionData) {
       authorText = `De: ${liveState.sessionData.name}`;
   } else if (liveState.mode === 'broadcasting') {
-      authorText = ''; 
+      authorText = ''; // Ocultamos el autor para dar espacio al label
   }
   $("#miniAuthor").textContent = authorText;
 }
@@ -127,41 +130,48 @@ function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     let trackCount = playlist.trackCount || playlist.tracks?.length || 0;
+    if (playlist.isRecommended) trackCount = playlist.data.length;
     if (trackCount === 0) return;
-    
-    let covers = (playlist.tracks || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
+    let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
     if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-    
-    const logo = (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
-    
+    const logo = playlist.isRecommended ? youtubeLogoSvg() : (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
     const card = document.createElement("article");
     card.className = "playlist-card";
-    card.dataset.id = playlist.id;
-    
+    card.dataset.id = playlist.id || playlist.title;
+    const titleText = playlist.title || playlist.name;
     card.innerHTML = `<div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
         <div class="playlist-meta">
-            <div class="playlist-title-wrapper"><h4 class="playlist-title">${playlist.name}</h4></div>
-            <div class="creator-line">${logo}<span>${playlist.creator}</span></div>
+            <div class="playlist-title-wrapper"><h4 class="playlist-title">${titleText}</h4></div>
+            <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
         </div>`;
-        
-    card.onclick = () => showPlaylistInPlayer(playlist.id);
+    card.onclick = async () => {
+        if (playlist.isRecommended) {
+            setQueue(playlist.data, 'recommended', 0);
+            viewingPlaylistId = null;
+            renderQueue(playlist.data, playlist.title);
+            switchView('view-player');
+            playCurrent(true);
+        } else {
+             await showPlaylistInPlayer(playlist.id);
+        }
+    };
     container.appendChild(card);
 }
-
 
 function renderAllHomePlaylists() {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     container.innerHTML = "";
     const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0)));
-    publicCommunityPlaylists.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
-    publicCommunityPlaylists.forEach(p => renderPlaylistCard(p));
+    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
+    allPlaylists.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
+    allPlaylists.forEach(p => renderPlaylistCard(p));
 }
 
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
-  const shouldShow = (currentSearchSource === 'youtube' && items.length === 0 && !$(".loading-indicator"));
+  const shouldShow = (items.length===0 && !$(".loading-indicator"));
   home.classList.toggle("hide", !shouldShow);
 }
 
@@ -198,7 +208,7 @@ async function openPlaylistSheet(track){
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
-  const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id) && p.source !== 'spotify');
+  const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
   myPlaylists.forEach(pl=>{
     const btn = document.createElement("button");
     btn.className="sheet-item";
@@ -266,11 +276,90 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
+// --- Lógica de UI para Transmisiones ---
+function renderLiveSessions(sessions) {
+    activeSessions = sessions; // Actualizamos la variable global
+    const listEl = $("#sessionsList");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    if (sessions.length === 0) {
+        listEl.innerHTML = `<div class="empty muted">No hay transmisiones activas.</div>`;
+        return;
+    }
+    sessions.forEach(session => {
+        const item = document.createElement("div");
+        item.className = "session-item";
+        item.dataset.sessionId = session.id;
+        item.dataset.sessionName = session.name;
+        item.innerHTML = `
+            <div class="session-item-meta">
+                <span class="session-item-name">${session.name}</span>
+                <span class="session-item-genre">${session.genre}</span>
+            </div>
+            <div class="session-item-live-indicator">EN VIVO</div>
+        `;
+        item.addEventListener("click", () => {
+            startListening(session.id, session.name);
+            $("#sessionsSheet").classList.remove("show");
+            $("#leaveStreamBtn").classList.remove("hide");
+        });
+        listEl.appendChild(item);
+    });
+}
+
+function initLiveStreamsUI() {
+    const startStreamSheet = $("#startStreamSheet");
+    const sessionsSheet = $("#sessionsSheet");
+
+    $("#broadcastBtn")?.addEventListener("click", () => {
+        if (liveState.mode === 'broadcasting') {
+            stopBroadcasting();
+        } else {
+            startStreamSheet.classList.add("show");
+        }
+    });
+
+    $("#startStreamCancel")?.addEventListener("click", () => startStreamSheet.classList.remove("show"));
+    $("#startStreamConfirm")?.addEventListener("click", async () => {
+        const name = $("#streamNameInput").value.trim();
+        const genre = $("#streamGenreSelect").value;
+        if (!name) {
+            showToast("Por favor, ingresa un nombre para la transmisión.", true);
+            return;
+        }
+        startStreamSheet.classList.remove("show");
+        const success = await startBroadcasting(name, genre);
+        if (!success) {
+             showToast("No se pudo iniciar la transmisión.", true);
+        }
+    });
+
+    $("#btnShowStreams")?.addEventListener("click", async () => {
+        if (liveState.mode === 'broadcasting') {
+            showToast("No puedes ver transmisiones mientras estás transmitiendo.");
+            return;
+        }
+        sessionsSheet.classList.add("show");
+        renderLiveSessions(activeSessions);
+        $("#leaveStreamBtn").classList.toggle("hide", liveState.mode !== 'listening');
+    });
+
+    $("#closeSessions")?.addEventListener("click", () => sessionsSheet.classList.remove("show"));
+    $("#leaveStreamBtn")?.addEventListener("click", () => {
+        stopListening();
+        sessionsSheet.classList.remove("show");
+    });
+}
+
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
   await initFirebase();
+  
+  listenForLiveSessions(renderLiveSessions);
 
+  // Eliminado el código de carga de playlists precargadas
+  
   renderAllHomePlaylists();
   updateHomeGridVisibility();
 
@@ -281,48 +370,42 @@ async function boot(){
   initSearch();
   initPlaylistModals();
   initSpotifyImportUI();
-  
+  initLiveStreamsUI();
+
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
 
   heroScrollInvalidate();
   document.title = "SanaveraYou Pro";
 
-  // --- Listener Global de Navegación y Acciones ---
+  // Event Listeners globales
   $("#bottomNav").addEventListener("click", e=>{
     const btn = e.target.closest(".nav-btn"); if(!btn || btn.classList.contains('active')) return;
     switchView(btn.dataset.view);
   });
-  
-  document.body.addEventListener("click", async (e) => {
-    const itemEl = e.target.closest(".result-item, .fav-item, .queue-item");
-    if (!itemEl) return;
-    
-    const moreBtn = e.target.closest(".icon-btn.more");
-    if (moreBtn) {
-        e.stopPropagation();
-        
-        const trackId = itemEl.dataset.trackId;
-        // Busca la canción en todas las fuentes de datos posibles
-        const track = [...(queue || []), ...(items || []), ...(favs || [])].find(t => t && t.id === trackId);
-        if (!track) return;
 
-        if (liveState.mode === 'listening') return;
-        
+  document.addEventListener("click", async (e) => {
+    const itemEl = e.target.closest("[data-track-id]");
+    if (!itemEl) return;
+
+    const trackId = itemEl.dataset.trackId;
+    const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
+    if (!track) return;
+
+    if (e.target.closest(".fav-btn")) {
+        e.stopPropagation();
+        toggleFav(track);
+        return;
+    }
+
+    if (e.target.closest(".icon-btn.more")) {
+        if(liveState.mode === 'listening') return;
         const actions = [
             { id: "pl", label: "Agregar a playlist" }
         ];
 
-        // Opción para buscar álbumes del artista
-        if (track.author) {
-            actions.unshift({ id: "find_artist_archive", label: "Buscar álbum de este artista" });
-        }
-
-        // Opciones específicas de playlists
         if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
-            if (track.source === 'youtube') { // Reasignar solo tiene sentido para YouTube
-                actions.push({ id: "reassign", label: "Reasignar fuente" });
-            }
+            actions.push({ id: "reassign", label: "Reasignar fuente" });
             actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
         }
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
@@ -334,22 +417,8 @@ async function boot(){
                 if (act === "pl") openPlaylistSheet(track);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
-                if (act === "find_artist_archive" && track.author) {
-                    switchView('view-search');
-                    searchArchiveAlbums(track.author);
-                }
             }
         });
-        return;
-    }
-
-    const favBtn = e.target.closest(".fav-btn");
-    if (favBtn) {
-        e.stopPropagation();
-        const trackId = itemEl.dataset.trackId;
-        const track = [...(queue || []), ...(items || []), ...(favs || [])].find(t => t && t.id === trackId);
-        if(track) toggleFav(track);
-        return;
     }
   });
 
