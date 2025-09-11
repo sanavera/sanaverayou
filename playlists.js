@@ -218,13 +218,6 @@ async function removeFromPlaylist(plId, trackId) {
     }
 }
 
-
-/**
- * --- NUEVA FUNCIÓN ---
- * Renombra el título y autor de una canción dentro de una playlist.
- * @param {string} playlistId - El ID de la playlist.
- * @param {string} trackId - El ID de la canción a renombrar.
- */
 async function renameTrackInPlaylist(playlistId, trackId) {
     const pl = communityPlaylists.find(p => p.id === playlistId);
     if (!pl || !pl.tracks) return;
@@ -256,7 +249,6 @@ async function renameTrackInPlaylist(playlistId, trackId) {
             updatedAt: serverTimestamp()
         });
 
-        // Actualiza la cola si la playlist está siendo visualizada
         if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
             const queueIndex = queue.findIndex(t => t.id === trackId);
             if (queueIndex !== -1) {
@@ -275,12 +267,6 @@ async function renameTrackInPlaylist(playlistId, trackId) {
     }
 }
 
-
-/**
- * Reasigna la fuente de una canción, priorizando backups.
- * @param {string} playlistId - El ID de la playlist.
- * @param {string} oldTrackId - El ID de la canción a reasignar.
- */
 async function reassignTrackSource(playlistId, oldTrackId) {
     const pl = communityPlaylists.find(p => p.id === playlistId);
     if (!pl || !pl.tracks) return;
@@ -304,7 +290,6 @@ async function reassignTrackSource(playlistId, oldTrackId) {
             newVideoId = newResults[backups.length + 1].id;
         } else {
             showToast("No se encontraron más versiones.", true);
-            // Reiniciar el ciclo si no se encuentra nada nuevo
             const updatedTrack = { ...track, reassignIndex: 0 };
             const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
@@ -336,7 +321,6 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         showToast("Fuente reasignada.");
     }
 }
-
 
 // --- Lógica de reproducción desde playlists ---
 
@@ -422,15 +406,28 @@ async function showPlaylistInPlayer(plId) {
     viewingPlaylistId = pl.id;
     switchView('view-player');
 
-    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
-
+    // --- CORRECCIÓN DEL BUG ---
+    // Se asegura de usar siempre el array `tracks` como la fuente de verdad.
+    // Para las listas de Spotify que aún no están resueltas, se muestra la información
+    // de `spotifyTracks` como placeholder visual, pero la lógica de reproducción
+    // dependerá de las canciones que ya estén en `tracks`.
+    let tracksToShow = [];
+    if (pl.source === 'spotify' && pl.spotifyTracks) {
+        // Para listas de Spotify, combina la info resuelta y la no resuelta
+        tracksToShow = pl.spotifyTracks.map((st, i) => 
+            (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }
+        );
+    } else {
+        // Para listas manuales, simplemente usa el array `tracks`
+        tracksToShow = pl.tracks || [];
+    }
+    
     renderQueue(tracksToShow, pl.name);
     
     if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status)) {
         startResolverJob(plId);
     }
 }
-
 
 function hideQueuePanel(){ 
     $("#queuePanel")?.classList.add("hide"); 
@@ -487,7 +484,6 @@ function initSpotifyImportUI() {
     };
 }
 
-
 async function handleSpotifyImport() {
     const input = $("#sySmInputUrl").value.trim();
     if (!input) return;
@@ -528,7 +524,6 @@ async function handleSpotifyImport() {
         fetchBtn.textContent = 'Buscar';
     }
 }
-
 
 function parseSpotifyLink(input) {
     const cleanedInput = input.trim().split('?')[0];
@@ -598,7 +593,6 @@ function showUserPlaylistsSelectionView(playlists) {
 
     switchView('view-spotify-import-selection');
 }
-
 
 async function fetchAndImportSinglePlaylist(plData) {
     try {
