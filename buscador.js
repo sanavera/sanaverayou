@@ -89,29 +89,36 @@ function appendSongResults(chunk){
 
 // --- Búsqueda en Archive.org (Álbumes) ---
 
-function relevance(doc, q){
-    const t = (doc.title || '').toLowerCase();
-    const c = (doc.creator || doc.artist || '').toLowerCase();
-    const qq = (q||'').toLowerCase();
-    let r=0; 
-    if(t===qq) r+=300; 
-    else if(t.includes(qq)) r+=150; 
-    if(c.includes(qq)) r+=50; 
-    return r;
+/**
+ * --- CORRECCIÓN 1: Lógica de Priorización ---
+ * Asigna una puntuación de relevancia. Una coincidencia exacta en el título
+ * recibe una puntuación mucho más alta para la priorización.
+ */
+function getRelevanceScore(doc, query) {
+    const title = (doc.title || '').toLowerCase();
+    const artist = (doc.artist || doc.creator || '').toLowerCase();
+    const q = query.toLowerCase();
+
+    if (title.includes(q)) {
+        return 100; // Prioridad máxima para coincidencias en el título
+    }
+    if (artist.includes(q)) {
+        return 50; // Prioridad media para coincidencias en el artista
+    }
+    return 0;
 }
+
 
 async function searchArchive(query, page = 1) {
     const { doc, getDoc, setDoc, serverTimestamp } = sy_fs();
     const normalizedQuery = query.toLowerCase().trim().replace(/\s+/g, '_');
     const cacheRef = doc(db, "archive_searches", normalizedQuery);
 
-    // Si es la primera página, intenta cargar desde el caché de Firestore.
     if (page === 1) {
         try {
             const docSnap = await getDoc(cacheRef);
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // Considerar el caché válido por 24 horas.
                 const cacheAge = Date.now() - data.timestamp.toMillis();
                 if (cacheAge < 24 * 60 * 60 * 1000) {
                     showToast("Resultados cargados desde caché.");
@@ -126,9 +133,8 @@ async function searchArchive(query, page = 1) {
         }
     }
     
-    // Si no está en caché, o es una página > 1, busca en Archive.org
     const sortParam = encodeURIComponent("downloads desc");
-    const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}+AND+mediatype:audio+AND+NOT+access-restricted-item:true&fl=identifier,title,creator&rows=${ARCHIVE_PAGE_SIZE}&page=${page}&output=json&sort[]=${sortParam}`;
+    const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}+AND+mediatype:audio+AND+NOT+access-restricted-item:true&fl=identifier,title,creator,description&rows=${ARCHIVE_PAGE_SIZE}&page=${page}&output=json&sort[]=${sortParam}`;
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
     try {
@@ -136,23 +142,22 @@ async function searchArchive(query, page = 1) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         
-        const albums = (data.response?.docs || []).map(d => ({
+        let albums = (data.response?.docs || []).map(d => ({
             id: d.identifier,
             title: d.title || 'Sin título',
             artist: Array.isArray(d.creator) ? d.creator.join(', ') : (d.creator || 'Desconocido'),
             thumb: `https://archive.org/services/img/${d.identifier}`,
-            relevance: relevance(d, query),
-            type: 'archive_album'
+            type: 'archive_album',
+            // --- CORRECCIÓN 1: Se calcula la relevancia aquí ---
+            relevance: getRelevanceScore(d, query)
         }));
         
-        // Ordenar solo la primera página por relevancia, las demás vienen por descargas.
+        // --- CORRECCIÓN 1: Ordenamiento con priorización ---
+        // Solo en la primera página, se reordenan los resultados para poner
+        // las coincidencias exactas del título primero.
         if (page === 1) {
-            albums.sort((a,b) => b.relevance - a.relevance);
-        }
-        
-        if (page === 1) {
+            albums.sort((a, b) => b.relevance - a.relevance);
             items = albums;
-            // Guardar en Firestore el resultado de la primera página.
             await setDoc(cacheRef, { albums: items, timestamp: serverTimestamp() });
         } else {
             items = [...items, ...albums];
@@ -176,7 +181,6 @@ function renderArchiveResults(albums) {
     const resultsEl = $("#results");
     if (!resultsEl) return;
     
-    // Si es la primera vez que se renderizan álbumes, limpiar y preparar la grilla.
     if (!resultsEl.classList.contains('results-grid')) {
         resultsEl.innerHTML = "";
         resultsEl.className = "results results-grid";
@@ -187,7 +191,6 @@ function renderArchiveResults(albums) {
         return;
     }
 
-    // Mostrar solo los nuevos álbumes para el lazy loading
     const displayedCount = resultsEl.children.length;
     const newAlbums = albums.slice(displayedCount);
     
@@ -197,7 +200,7 @@ function renderArchiveResults(albums) {
 function appendAlbumCard(album) {
     const resultsEl = $("#results");
     const card = document.createElement("article");
-    card.className = "pl-item"; // Usamos la misma clase que las playlists para el estilo
+    card.className = "pl-item";
     card.innerHTML = `
         <img class="pl-thumb-bg" src="${album.thumb}" alt="Portada de ${album.title}" loading="lazy">
         <div class="pl-overlay">
@@ -236,6 +239,38 @@ async function openArchiveAlbum(album) {
     }
 }
 
+/**
+ * --- CORRECCIÓN 2: Limpieza de Títulos de Canciones ---
+ * Esta función toma un título sucio de Archive.org y lo limpia,
+ * devolviendo solo el nombre de la canción.
+ */
+function cleanArchiveTrackTitle(rawTitle) {
+    if (!rawTitle) return "Canción sin título";
+    let title = rawTitle;
+
+    // 1. Quitar extensión de archivo
+    title = title.replace(/\.(mp3|flac|wav|ogg|m4a)$/i, '');
+    
+    // 2. Quitar información de album/artista al principio (si la hay)
+    // Ejemplo: "Bajo Palabra - Cumbia Rapera (2001)... / 03. ..."
+    if (title.includes('/')) {
+        title = title.substring(title.lastIndexOf('/') + 1);
+    }
+    
+    // 3. Quitar numeración de track al inicio (ej: "03.", "03 - ", "(03)")
+    title = title.replace(/^[\[(]?\s*\d{1,3}\s*[.)\]-]?\s*/, '');
+    
+    // 4. Si aún queda un patrón "Artista - Título", intenta quedarse con el título.
+    // Esto es menos común después del paso 2, pero puede pasar.
+    const parts = title.split(' - ');
+    if (parts.length > 1) {
+       // Asumimos que la última parte es el título, es lo más probable.
+       title = parts[parts.length - 1];
+    }
+
+    return title.trim();
+}
+
 
 async function fetchAlbumTracks(albumId) {
     const url = `https://archive.org/metadata/${albumId}`;
@@ -253,8 +288,9 @@ async function fetchAlbumTracks(albumId) {
         const baseName = (file.name || '').replace(/\.[^/.]+$/, "").toLowerCase();
         if (!tracksMap.has(baseName)) {
             tracksMap.set(baseName, {
-                id: `${albumId}/${file.name}`, // ID único para la canción
-                title: file.title || cleanTitle(file.name.replace(/_/g, ' ')),
+                id: `${albumId}/${file.name}`,
+                // --- CORRECCIÓN 2: Se usa la nueva función de limpieza ---
+                title: cleanArchiveTrackTitle(file.title || file.name),
                 author: artist,
                 thumb: `https://archive.org/services/img/${albumId}`,
                 source: 'archive',
@@ -318,7 +354,6 @@ function initSearch() {
         await startSearch(q);
     });
     
-    // Lazy loading para álbumes
     const sentinel = $("#sentinel");
     const observer = new IntersectionObserver(async (entries) => {
         if (entries[0].isIntersecting && currentSearchType === 'archive' && !paging.loading && items.length > 0) {
