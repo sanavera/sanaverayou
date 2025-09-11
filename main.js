@@ -1,19 +1,6 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 let activeSessions = []; // Variable global para guardar las sesiones
 
-// --- Listas de reproducción recomendadas (datos estáticos) ---
-const recommendedPlaylists = {
-  p1: { ids: ['dTd2ylacYNU', 'Bx51eegLTY8', 'luwAMFcc2f8', 'J9gKyRmic20', 'izGwDsrQ1eQ', 'r3Pr1_v7hsw', 'k2C5TjS2sh4', 'YkgkThdzX-8', 'n4RjJKxsamQ', 'iy4mXZ1Zzk', 'RcZn2-bGXqQ', '1TO48Cnl66w', 'Zz-DJr1Qs54', 'TR3VdoetCQ', '6NXnxNIWkc', 'YlUKcNNmywk', '6Ejga4kJUts', 'XFkzRNyygfk', 'TmENMZFUU_0', 'NMNgbISmF4I', '8SbUC-UaAxE', 'UrIiLvg58SY', 'IYOYLqOitDA', '7pOr3dBFAeY', '5anLPw0Efmo', 'zRIbf6JqkNc', '9BMwcO6_hyA', 'n4RjJKxsamQ', 'NvR60Wg9R7Q', 'BciS5krYL80', 'UelDrZ1aFeY', 'fregObNcHC8', 'GLvohMXgcBo', 'TR3VdoetCQ'], title: 'Grandes éxitos de los melodicos de los 70s, 80s y 90s para recordar', creator: 'Luis Sanavera', data: [], isRecommended: true },
-  p2: { ids: ['0qSif7B09N8', 'Ngi3rVx6kho', 'HhsXDJ1KeAI', 'MjgYsL3e3Mw', 'rsjGKU-qg3c', 'G6DbIQzCVBk', 'mdQW8ZLHpCU', 'MX-vrDW-A7I', 'uxZC1W6DHmI', 'WTlEED0_QcQ', 'ALA8ZDLQF9U', 'x1tWQNxJpY4', 'h2gj7Aap3iY', 'biXIrPcupuE', 'Vw5j10cBU78', 'Z5jQKzbOejY', 'ypg7ikDRhfg', '1gtJWFSWuYc', 'IhWGr-hTfHU', 'ZAKWI3mi14A', 'gy2hK11AKGE', 'fuYq32iJdIw', 'DzhxJkF7c9s', 'QqS4kWie8SA', 'sw6v-Q-2Is4', 'yXXheK7wYqo', 'xd-IwfDs7c4', 'HcWlkUKwjlc', 'pPoUVEcT0aU', 'N7m-0KXjKR0', 'OX2fVkdQYKg', 'AIIcEeQaWI0', 'WI0da9h-gcE', 'uxZC1W6DHmI', 'w09HG8_FAHQ', '_IqyVs9ObFA', 'auNa0nRPg3o', '46T65kU9Pw0', 'lsDSVZ10sY4', '4nztFNNeay0'], title: 'Cumbia estilo Santafesino para disfrutar con amigos y familia', creator: 'Luis Sanavera', data: [], isRecommended: true },
-  cumbia: { ids: [ 'UHWCB7D8XoI', 'OXunU0CJXtc', 'D-TrNF5V2jo', 'Wcb_gUU5LVA', 'bhyjF3t5XJQ', 'HHOsoZcJ-TY', 'eVHIQ4oxjwM', '9jbiAeXZKbw', 'dcy_B7oSIf8', 'UPnTZCTXHvw', 'v2FjIJUQPhU', 'fgTLwYJpbgQ', 'vHyZrsEuE2o', 'OU2KT7wlAGw', 'aRLPHz0zsUo', 'SE3oVXcppVc', 'P6W-c8y4j5w', 'yBco-h1QPPA', 'umLyS0-GXLQ', '01p-1kMosCI', 'h8emXFUHH0Y', '098YVg5RmkA', '7M6WsIKMtKg', '2aO4gdfkSc8', 'tJCK6y3gPfU', '1rwXkK3vWpg', 'rXuhQxo_Ebc', 'gfPmhcIIi90', 'biIRifuGPa4', 'ym3vG_UgLEA', 'sgIUGLFZ2sE', '3bkfEGlZNqQ', 'Gzo5UY3D7lE', 'CdGxWUu2lwU', 'NrbmqV7ah_c', 'PfnSKD5hgYk', 'NqxCPeG0R7Q', 'gOt1JFkEauU', 'vhSIFloIMxI', 'dWOEGMhOm9k', 'UGFBEUBEpss', '2wGDGtm8dwY', 'IfMujYwHOOE', '9X35iRX27B8', 'PsLVh10nF2w', 'SYQ6svFb8_0', '9UQSYNvA6NE', 'z-MrnGLyj28', 'xH_7932NfYU', 'PTqvL19p87c' ], title: 'Cumbias del Recuerdo', creator: 'Luis Sanavera', data: [], isRecommended: true },
-  reggaeton: { ids: ['kJQP7kiw5Fk', 'TmKh7lAwnBI', 'tbneQDc2H3I', 'wnJ6LuUFpMo', '_I_D_8Z4sJE', 'DiItGE3eAyQ', 'VqEbCxg2bNI', '9jI-z9QN6g8', 'Cr8K88UcO0s', 'QaXhVryxVBk', 'ca48oMV59LU', '0VR3dfZf9Yg'], title: 'Noche de Reggaetón', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
-  reggae: { ids: ['HNBCVM4KbUM', 'IT8XvzIfi4U', '69RdQFDuYPI', 'vdB-8eLEW8g', 'yv5xonFSC4c', 'oqVy6eRXc7Q', 'zXt56MB-3vc', 'f7OXGANW9Ic', 'MrHxhQPOO2c', 'ti2YCFgCoI', '_GZlJGERbvE', 'LfeIfiiBTfY'], title: 'Vibras de Reggae', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
-  pop: { ids: ['JGwWNGJdvx8', 'YQHsXMglC9A', '09R8_2nJtjg', 'OPf0YbXqDm0', 'nfWlot6h_JM', 'fHI8X4OXluQ', 'TUVcZfQe-Kw', 'DyDfgMOUjCI', 'CevxZvSJLk8', 'fRh_vgS2dFE', 'YykjpeuMNEk', '2vjPBrBU-TM'], title: 'Éxitos Pop', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
-  rock_int: { ids: ['1w7OgIMMRc4', 'rY0WxgSXdEE', 'fJ9rUzIMcZQ', 'eVTXPUF4Oz4', 'hTWKbfoikg', 'v2AC41dglnM', 'btPJPFnesV4', 'tAGnKpE4NCI', 'YlUKcNNmywk', '6Ejga4kJUts', 'lDK9QqIzhwk', 'kXYiU_JCYtU'], title: 'Himnos del Rock', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
-  bachata: { ids: ['QFs3PIZb3js', 'bdOXnTbyk0g', 'yC9u00F-NF0', '8iPcqtHoR3U', '0XCot42qTvA', 'z2pt4CN4rhc', 'XNGWDH-6yv8', 'foyH-TEs9D0', 'JNkTNAknE4I', 'h_fXySfFmM8', 'elGZbcpGzdU', '8Ei86cJIWlk'], title: 'Corazón de Bachata', creator: 'Sebastián Sanavera', data: [], isRecommended: true },
-  international: { ids: ['djV11Xbc914', 'Zi_XLOBDo_Y', '3JWTaaS7LdU', 'n4RjJKxsamQ', 'vx2u5uUu3DE', 'PIb6AZdTr-A', '9jK-NcRmVcw', 'dQw4w9WgXcQ', 'FTQbiNvZqaY', 'rY0WxgSXdEE', 'YkAD0TPrJA', '0-EF60neguk'], title: 'Clásicos 70/80/90s', creator: 'Sebastián Sanavera', data: [], isRecommended: true }
-};
-
 // --- Utils ---
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -140,43 +127,36 @@ function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     let trackCount = playlist.trackCount || playlist.tracks?.length || 0;
-    if (playlist.isRecommended) trackCount = playlist.data.length;
     if (trackCount === 0) return;
-    let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
+    
+    let covers = (playlist.tracks || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
     if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-    const logo = playlist.isRecommended ? youtubeLogoSvg() : (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
+    
+    const logo = (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
+    
     const card = document.createElement("article");
     card.className = "playlist-card";
-    card.dataset.id = playlist.id || playlist.title;
-    const titleText = playlist.title || playlist.name;
+    card.dataset.id = playlist.id;
+    
     card.innerHTML = `<div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
         <div class="playlist-meta">
-            <div class="playlist-title-wrapper"><h4 class="playlist-title">${titleText}</h4></div>
-            <div class="creator-line">${logo}<span>Creador: ${playlist.creator}</span></div>
+            <div class="playlist-title-wrapper"><h4 class="playlist-title">${playlist.name}</h4></div>
+            <div class="creator-line">${logo}<span>${playlist.creator}</span></div>
         </div>`;
-    card.onclick = async () => {
-        if (playlist.isRecommended) {
-            setQueue(playlist.data, 'recommended', 0);
-            viewingPlaylistId = null;
-            renderQueue(playlist.data, playlist.title);
-            switchView('view-player');
-            playCurrent(true);
-        } else {
-             await showPlaylistInPlayer(playlist.id);
-        }
-    };
+        
+    card.onclick = () => showPlaylistInPlayer(playlist.id);
     container.appendChild(card);
 }
+
 
 function renderAllHomePlaylists() {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     container.innerHTML = "";
     const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0)));
-    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
-    allPlaylists.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
-    allPlaylists.forEach(p => renderPlaylistCard(p));
+    publicCommunityPlaylists.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
+    publicCommunityPlaylists.forEach(p => renderPlaylistCard(p));
 }
 
 function updateHomeGridVisibility(){
@@ -286,52 +266,12 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
-// --- Lógica de UI para Transmisiones ---
-function renderLiveSessions(sessions) {
-    activeSessions = sessions;
-    const listEl = $("#sessionsList");
-    if (!listEl) return;
-    listEl.innerHTML = "";
-    if (sessions.length === 0) {
-        listEl.innerHTML = `<div class="empty muted">No hay transmisiones activas.</div>`;
-        return;
-    }
-    sessions.forEach(session => {
-        const item = document.createElement("div");
-        item.className = "session-item";
-        item.dataset.sessionId = session.id;
-        item.dataset.sessionName = session.name;
-        item.innerHTML = `
-            <div class="session-item-meta">
-                <span class="session-item-name">${session.name}</span>
-                <span class="session-item-genre">${session.genre}</span>
-            </div>
-            <div class="session-item-live-indicator">EN VIVO</div>
-        `;
-        item.addEventListener("click", () => {
-            startListening(session.id, session.name);
-            $("#sessionsSheet").classList.remove("show");
-            $("#leaveStreamBtn").classList.remove("hide");
-        });
-        listEl.appendChild(item);
-    });
-}
-
-function initLiveStreamsUI() {
-    // ... (sin cambios)
-}
-
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
   await initFirebase();
   
-  listenForLiveSessions(renderLiveSessions);
-
-  const playlistKeys = Object.keys(recommendedPlaylists);
-  const fetchPromises = playlistKeys.map(key => scrapeYoutubeWithDetails(recommendedPlaylists[key].title, 20));
-  const results = await Promise.all(fetchPromises);
-  playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; });
+  // listenForLiveSessions(renderLiveSessions); // Desactivado por ahora
 
   renderAllHomePlaylists();
   updateHomeGridVisibility();
@@ -343,22 +283,21 @@ async function boot(){
   initSearch();
   initPlaylistModals();
   initSpotifyImportUI();
-  // initLiveStreamsUI();
-
+  
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
 
   heroScrollInvalidate();
   document.title = "SanaveraYou Pro";
 
-  // --- Listener Global de Acciones ---
+  // --- Listener Global de Navegación y Acciones ---
   $("#bottomNav").addEventListener("click", e=>{
     const btn = e.target.closest(".nav-btn"); if(!btn || btn.classList.contains('active')) return;
     switchView(btn.dataset.view);
   });
-
-  document.addEventListener("click", async (e) => {
-    const itemEl = e.target.closest("[data-track-id]");
+  
+  document.body.addEventListener("click", async (e) => {
+    const itemEl = e.target.closest(".result-item, .fav-item, .queue-item");
     if (!itemEl) return;
     
     const moreBtn = e.target.closest(".icon-btn.more");
@@ -402,7 +341,8 @@ async function boot(){
     if (favBtn) {
         e.stopPropagation();
         const trackId = itemEl.dataset.trackId;
-        const track = [...(items || []), ...(favs || []), ...(queue || [])].find(t => t && t.id === trackId);
+        // Buscamos la canción en todas las fuentes posibles (resultados, cola, favoritos)
+        const track = [...(queue || []), ...(items || []), ...(favs || [])].find(t => t && t.id === trackId);
         if(track) toggleFav(track);
         return;
     }
@@ -413,3 +353,4 @@ async function boot(){
 }
 
 document.addEventListener('DOMContentLoaded', boot);
+
