@@ -218,6 +218,64 @@ async function removeFromPlaylist(plId, trackId) {
     }
 }
 
+
+/**
+ * --- NUEVA FUNCIÓN ---
+ * Renombra el título y autor de una canción dentro de una playlist.
+ * @param {string} playlistId - El ID de la playlist.
+ * @param {string} trackId - El ID de la canción a renombrar.
+ */
+async function renameTrackInPlaylist(playlistId, trackId) {
+    const pl = communityPlaylists.find(p => p.id === playlistId);
+    if (!pl || !pl.tracks) return;
+
+    const trackIndex = pl.tracks.findIndex(t => t && t.id === trackId);
+    if (trackIndex === -1) return;
+
+    const track = pl.tracks[trackIndex];
+
+    const newTitle = prompt("Nuevo nombre para la canción:", track.title);
+    if (!newTitle || newTitle.trim() === "") return;
+
+    const newAuthor = prompt("Nuevo autor para la canción:", track.author);
+    if (!newAuthor || newAuthor.trim() === "") return;
+
+    const updatedTrack = {
+        ...track,
+        title: newTitle.trim(),
+        author: newAuthor.trim()
+    };
+
+    const updatedTracks = [...pl.tracks];
+    updatedTracks[trackIndex] = updatedTrack;
+
+    try {
+        const { doc, updateDoc, serverTimestamp } = sy_fs();
+        await updateDoc(doc(db, "playlists", playlistId), {
+            tracks: updatedTracks,
+            updatedAt: serverTimestamp()
+        });
+
+        // Actualiza la cola si la playlist está siendo visualizada
+        if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
+            const queueIndex = queue.findIndex(t => t.id === trackId);
+            if (queueIndex !== -1) {
+                queue[queueIndex] = updatedTrack;
+                renderQueue(queue, currentQueueTitle);
+                if (currentTrack && currentTrack.id === trackId) {
+                    currentTrack = updatedTrack;
+                    updateUIOnTrackChange();
+                }
+            }
+        }
+        showToast("Canción renombrada.");
+    } catch (e) {
+        console.error('Error renaming track:', e);
+        showToast('No se pudo renombrar la canción.', true);
+    }
+}
+
+
 /**
  * Reasigna la fuente de una canción, priorizando backups.
  * @param {string} playlistId - El ID de la playlist.
