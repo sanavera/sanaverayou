@@ -70,7 +70,7 @@
     </section>
 
     <section id="view-playlists" class="view">
-        <header class="section-head sticky-head">
+        <header class="section-head">
             <h3>Mis Playlists</h3>
             <div class="pl-actions">
               <button id="syBtnImportSpotify" class="pill">Importar de Spotify</button>
@@ -105,11 +105,6 @@
               <button id="btnRepeat" class="icon-btn-player" aria-label="Repetir"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
           </div>
         </div>
-      </div>
-      <!-- Selector de Calidad para Archive.org -->
-      <div id="qualitySelectorContainer" class="quality-selector-container hide">
-          <label for="qualitySelector">Calidad:</label>
-          <select id="qualitySelector" class="quality-selector"></select>
       </div>
       <section id="queuePanel" class="queue-panel hide">
         <header class="section-head">
@@ -272,8 +267,6 @@
   </div>
 
   <div id="yt-holder"><div id="player"></div></div>
-  <audio id="audioPlayer" style="display:none;"></audio>
-
 
   <!-- Scripts modularizados -->
   <script src="firebase.js" defer></script>
