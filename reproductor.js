@@ -161,45 +161,66 @@ function setQueue(srcArr, type, idx){
   qIdx = idx;
 }
 
-function playCurrent(autoplay=false){
-  if (liveState.mode === 'listening' || !queue || qIdx<0 || qIdx>=queue.length) return;
-  
-  currentTrack = queue[qIdx];
-  
-  if (liveState.mode === 'broadcasting') {
-      updateLiveSession(liveState.sessionId, {
-          currentTrack: currentTrack,
-          isPlaying: autoplay,
-          currentTime: 0,
-          stateChangeTimestamp: sy_fs().serverTimestamp()
-      });
-  }
+function playCurrent(autoplay = false) {
+    if (liveState.mode === 'listening' || !queue || qIdx < 0 || qIdx >= queue.length) return;
 
-  // Detener el otro reproductor para evitar superposición
-  if (currentTrack.source === 'archive') {
-      if (YT_READY) ytPlayer.stopVideo();
-      if (!currentTrack.urls?.mp3) {
-          console.warn("Canción de Archive no tiene URL mp3, saltando...", currentTrack);
-          next(); return;
-      }
-      archivePlayer.src = currentTrack.urls.mp3;
-      archivePlayer.load();
-      if (autoplay) archivePlayer.play().catch(e => console.error("Error al reproducir audio de Archive:", e));
-  
-  } else { // Es una canción de YouTube
-      archivePlayer.pause();
-      archivePlayer.src = "";
-      if (!YT_READY || !currentTrack.id) {
-          console.warn("Canción de YT inválida o YT no está listo, saltando...", currentTrack);
-          next(); return;
-      }
-      ytPlayer.loadVideoById({videoId: currentTrack.id, startSeconds:0, suggestedQuality:"auto"});
-      if(autoplay) ytPlayer.playVideo();
-  }
+    currentTrack = queue[qIdx];
 
-  startTimer();
-  updateUIOnTrackChange();
+    if (liveState.mode === 'broadcasting') {
+        updateLiveSession(liveState.sessionId, {
+            currentTrack: currentTrack,
+            isPlaying: autoplay,
+            currentTime: 0,
+            stateChangeTimestamp: sy_fs().serverTimestamp()
+        });
+    }
+
+    // --- CORRECCIÓN: Lógica de reproducción con retraso para el host ---
+    const HOST_PLAY_DELAY = 1000; // 1 segundo de retraso
+
+    const startPlayback = () => {
+        if (currentTrack.source === 'archive') {
+            archivePlayer.play().catch(e => console.error("Error al reproducir audio de Archive:", e));
+        } else {
+            ytPlayer.playVideo();
+        }
+    };
+
+    // Carga la canción correspondiente en el reproductor adecuado
+    if (currentTrack.source === 'archive') {
+        if (YT_READY) ytPlayer.stopVideo();
+        if (!currentTrack.urls?.mp3) {
+            console.warn("Canción de Archive no tiene URL mp3, saltando...", currentTrack);
+            next();
+            return;
+        }
+        archivePlayer.src = currentTrack.urls.mp3;
+        archivePlayer.load();
+    } else { // Es una canción de YouTube
+        archivePlayer.pause();
+        archivePlayer.src = "";
+        if (!YT_READY || !currentTrack.id) {
+            console.warn("Canción de YT inválida o YT no está listo, saltando...", currentTrack);
+            next();
+            return;
+        }
+        ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: 0, suggestedQuality: "auto" });
+    }
+
+    // Inicia la reproducción (con o sin retraso)
+    if (autoplay) {
+        if (liveState.mode === 'broadcasting') {
+            setTimeout(startPlayback, HOST_PLAY_DELAY);
+        } else {
+            startPlayback();
+        }
+    }
+    // --- FIN DE LA CORRECCIÓN ---
+
+    startTimer();
+    updateUIOnTrackChange();
 }
+
 
 function togglePlay(){
   if (liveState.mode === 'listening' || !currentTrack) return;
@@ -399,7 +420,6 @@ function setPlayerControlsDisabled(disabled) {
 }
 
 async function startBroadcasting(name, genre) {
-    // Se elimina la restricción que impedía transmitir álbumes de Archive.org
     try {
         const sessionId = await createLiveSession(name, genre);
         liveState.mode = 'broadcasting';
@@ -458,11 +478,6 @@ function stopListening() {
     updateUIOnTrackChange();
 }
 
-
-/**
- * CORREGIDO: Maneja las actualizaciones de la sesión para el cliente de forma agnóstica a la fuente.
- * @param {object} sessionData - Los datos de la sesión desde Firestore.
- */
 function handleSessionUpdate(sessionData) {
     if (liveState.mode !== 'listening') return;
 
