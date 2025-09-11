@@ -70,6 +70,7 @@ async function startYoutubeSearch(query) {
   items = [];
   
   const resultsEl = $("#results");
+  resultsEl.className = 'results'; // Asegura que no tenga la clase grid-view
   resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube…</h3></div>`;
   $("#homeSection")?.classList.add("hide");
   
@@ -139,9 +140,10 @@ async function searchArchiveAlbums(query) {
     if(searchAbort) searchAbort.abort();
     searchAbort = new AbortController();
     currentSearchSource = 'archive';
-    items = []; // Limpiamos los resultados de YouTube
+    items = []; 
 
     const resultsEl = $("#results");
+    resultsEl.className = 'results grid-view'; // <-- APLICA EL ESTILO DE GRILLA
     resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando álbumes en Archive.org…</h3></div>`;
     $("#homeSection")?.classList.add("hide");
 
@@ -181,14 +183,14 @@ async function searchArchiveAlbums(query) {
 function appendArchiveResults(albums) {
     const root = $("#results");
     if (!root) return;
-    root.innerHTML = ''; // Limpiamos resultados previos
+    root.innerHTML = ''; 
     
     const grid = document.createElement('div');
-    grid.className = 'pl-grid'; // Reutilizamos el estilo de grid
+    grid.className = 'home-grid'; // <-- REUTILIZA LA CLASE DE LA GRILLA PRINCIPAL
 
     for (const album of albums) {
         const item = document.createElement("article");
-        item.className = "playlist-card"; // Reutilizamos el estilo de tarjeta
+        item.className = "playlist-card"; 
         item.dataset.albumId = album.id;
         item.dataset.source = 'archive';
         
@@ -210,32 +212,8 @@ function appendArchiveResults(albums) {
     root.appendChild(grid);
 }
 
-// --- Manejo de Clicks y Navegación ---
 
-document.addEventListener("click", (e) => {
-    const resultItem = e.target.closest(".result-item, .playlist-card");
-    if (!resultItem) return;
-    
-    // Si es un resultado de YouTube
-    if (resultItem.dataset.source === 'youtube') {
-        if (e.target.closest(".more") || e.target.closest(".fav-btn")) return;
-        const trackId = resultItem.dataset.trackId;
-        const track = items.find(it => it.id === trackId);
-        if (track) {
-            const forcePlay = !!e.target.closest(".card-play");
-            playFromSearch(track.id, forcePlay);
-        }
-    }
-
-    // Si es un resultado de Archive.org
-    if (resultItem.dataset.source === 'archive') {
-        const albumId = resultItem.dataset.albumId;
-        if (albumId) {
-            playArchiveAlbum(albumId);
-        }
-    }
-});
-
+// --- Inicialización ---
 
 function initSearch() {
     const searchOverlay = $("#searchOverlay");
@@ -259,6 +237,6 @@ function initSearch() {
         document.body.scrollTop = 0; document.documentElement.scrollTop = 0;
         
         switchView("view-search");
-        await startYoutubeSearch(q); // La búsqueda por defecto es en YouTube
+        await startYoutubeSearch(q); 
     });
 }
