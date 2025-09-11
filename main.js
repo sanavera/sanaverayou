@@ -2,7 +2,7 @@
 let activeSessions = []; // Variable global para guardar las sesiones
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
-// --- const recommendedPlaylists = {}; ---
+const recommendedPlaylists = {};
 
 // --- Utils ---
 const $  = s => document.querySelector(s);
