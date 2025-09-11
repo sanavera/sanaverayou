@@ -392,8 +392,22 @@ async function boot(){
     if (!itemEl) return;
 
     const trackId = itemEl.dataset.trackId;
-    const track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
+
+    // --- CORREGIDO (1/2): Lógica de búsqueda de track mejorada ---
+    // Busca en la playlist visible actualmente, además de la cola de reproducción.
+    // Esto permite que el menú funcione incluso antes de reproducir una canción.
+    let track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
+    if (!track && viewingPlaylistId) {
+        const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
+        if (pl) {
+            const tracksToShow = pl.spotifyTracks ?
+                pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null }) :
+                (pl.tracks || []);
+            track = tracksToShow.find(t => t && (t.id === trackId || `spotify_${t.spotifyId}` === trackId));
+        }
+    }
     if (!track) return;
+
 
     if (e.target.closest(".fav-btn")) {
         e.stopPropagation();
@@ -403,13 +417,21 @@ async function boot(){
 
     if (e.target.closest(".icon-btn.more")) {
         if(liveState.mode === 'listening') return;
+        
+        // No se pueden mostrar opciones para canciones no resueltas de Spotify
+        if (!track.id) return;
+
         const actions = [
             { id: "pl", label: "Agregar a playlist" }
         ];
 
-        if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
+        // --- CORREGIDO (2/2): Opciones de menú restauradas ---
+        // Se agregan las opciones que faltaban y se asegura que solo aparezcan
+        // en la vista de una playlist propia del usuario.
+        if (itemEl.classList.contains("queue-item") && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
+            actions.push({ id: "rename", label: "Renombrar canción" });
+            actions.push({ id: "delete", label: "Eliminar canción de este playlist", danger: true });
             actions.push({ id: "reassign", label: "Reasignar fuente" });
-            actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
         }
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
@@ -418,12 +440,14 @@ async function boot(){
             actions: actions,
             onAction: (act) => {
                 if (act === "pl") openPlaylistSheet(track);
+                if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
             }
         });
     }
   });
+
 
   window.addEventListener("scroll", heroScrollInvalidate, { passive:true });
   window.addEventListener("resize", heroScrollInvalidate, { passive:true });
