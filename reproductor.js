@@ -46,7 +46,8 @@ function initAudioPlayers() {
     archivePlayer.id = 'archivePlayer';
 
     archivePlayer.addEventListener('ended', () => {
-        if (liveState.mode !== 'listening') next();
+        if (liveState.mode !== 'listening' && repeatMode !== 'one') next();
+        else if (repeatMode === 'one') playCurrent(true);
     });
     const onStateChange = () => {
         refreshIndicators();
@@ -81,6 +82,7 @@ window.onYouTubeIframeAPIReady = function(){
 function getPlaybackState(){
   if (!currentTrack) return "none";
   if (currentTrack.source === 'archive') {
+      if (!archivePlayer) return "none";
       return archivePlayer.paused ? "paused" : "playing";
   }
   if (!YT_READY || !ytPlayer) return "none";
@@ -164,6 +166,15 @@ function playCurrent(autoplay=false){
   
   currentTrack = queue[qIdx];
   
+  if (liveState.mode === 'broadcasting') {
+      updateLiveSession(liveState.sessionId, {
+          currentTrack: currentTrack,
+          isPlaying: autoplay,
+          currentTime: 0,
+          stateChangeTimestamp: sy_fs().serverTimestamp()
+      });
+  }
+
   // Detener el otro reproductor para evitar superposición
   if (currentTrack.source === 'archive') {
       if (YT_READY) ytPlayer.stopVideo();
@@ -193,20 +204,19 @@ function playCurrent(autoplay=false){
 function togglePlay(){
   if (liveState.mode === 'listening' || !currentTrack) return;
   
+  const isCurrentlyPlaying = getPlaybackState() === 'playing';
+
   if (currentTrack.source === 'archive') {
-      archivePlayer.paused ? archivePlayer.play() : archivePlayer.pause();
+      isCurrentlyPlaying ? archivePlayer.pause() : archivePlayer.play();
   } else {
       if(!YT_READY) return;
-      const state = ytPlayer.getPlayerState();
-      const isCurrentlyPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
       isCurrentlyPlaying ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
   }
 
   if (liveState.mode === 'broadcasting') {
-      const isPlaying = getPlaybackState() === 'playing';
       const currentTime = currentTrack.source === 'archive' ? archivePlayer.currentTime : ytPlayer.getCurrentTime();
       updateLiveSession(liveState.sessionId, {
-          isPlaying: isPlaying,
+          isPlaying: !isCurrentlyPlaying,
           currentTime: currentTime || 0,
           stateChangeTimestamp: sy_fs().serverTimestamp()
       });
@@ -231,8 +241,8 @@ function next(){
     playCurrent(true);
   } else {
     currentTrack = null;
-    ytPlayer.stopVideo();
-    archivePlayer.pause();
+    if(YT_READY) ytPlayer.stopVideo();
+    if(archivePlayer) archivePlayer.pause();
     if (liveState.mode === 'broadcasting') {
         updateLiveSession(liveState.sessionId, { isPlaying: false, currentTrack: null });
     }
@@ -248,6 +258,9 @@ function prev(){
   if (currentTime > 3) {
       if (currentTrack.source === 'archive') archivePlayer.currentTime = 0;
       else ytPlayer.seekTo(0, true);
+       if (liveState.mode === 'broadcasting') {
+          updateLiveSession(liveState.sessionId, { currentTime: 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
+      }
   } else if (qIdx - 1 >= 0) {
     qIdx--;
     playCurrent(true);
@@ -290,7 +303,7 @@ function seekToFrac(frac){
 function startTimer(){
   stopTimer();
   timer = setInterval(()=>{
-    if(!currentTrack || liveState.mode === 'listening') return;
+    if(!currentTrack || (liveState.mode === 'listening')) return;
     let cur = 0, dur = 0;
     if(currentTrack.source === 'archive') {
         cur = archivePlayer.currentTime || 0;
@@ -375,7 +388,8 @@ function initPlayer() {
     window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 }
 
-// LÓGICA DE TRANSMISIONES (AJUSTADA)
+// --- LÓGICA DE TRANSMISIONES (CORREGIDA Y MEJORADA) ---
+
 function setPlayerControlsDisabled(disabled) {
     const controls = ['#npPlay', '#miniPlay', '#btnNext', '#btnPrev', '#btnShuffle', '#btnRepeat', '#seek', '#miniSeek'];
     controls.forEach(sel => {
@@ -385,10 +399,7 @@ function setPlayerControlsDisabled(disabled) {
 }
 
 async function startBroadcasting(name, genre) {
-    if (queue?.some(t => t.source === 'archive')) {
-        showToast("No se pueden transmitir álbumes de Archive.org.", true);
-        return false;
-    }
+    // Se elimina la restricción que impedía transmitir álbumes de Archive.org
     try {
         const sessionId = await createLiveSession(name, genre);
         liveState.mode = 'broadcasting';
@@ -399,7 +410,8 @@ async function startBroadcasting(name, genre) {
         }, 15000);
         window.addEventListener('beforeunload', stopBroadcasting);
         if (currentTrack) {
-            updateLiveSession(sessionId, { currentTrack, isPlaying: getPlaybackState() === 'playing', currentTime: ytPlayer.getCurrentTime() || 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
+            const currentTime = currentTrack.source === 'archive' ? archivePlayer.currentTime : ytPlayer.getCurrentTime();
+            updateLiveSession(sessionId, { currentTrack, isPlaying: getPlaybackState() === 'playing', currentTime: currentTime || 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
         }
         return true;
     } catch (e) { console.error("Error starting broadcast:", e); return false; }
@@ -440,13 +452,19 @@ function stopListening() {
     liveState.sessionId = null;
     liveState.sessionData = null;
     setPlayerControlsDisabled(false);
-    ytPlayer.pauseVideo();
+    if(YT_READY) ytPlayer.pauseVideo();
+    if(archivePlayer) archivePlayer.pause();
     showToast("Te desconectaste de la transmisión.");
     updateUIOnTrackChange();
 }
 
+
+/**
+ * CORREGIDO: Maneja las actualizaciones de la sesión para el cliente de forma agnóstica a la fuente.
+ * @param {object} sessionData - Los datos de la sesión desde Firestore.
+ */
 function handleSessionUpdate(sessionData) {
-    if (liveState.mode !== 'listening' || !YT_READY) return;
+    if (liveState.mode !== 'listening') return;
 
     if (!sessionData || sessionData.status === 'ended') {
         showToast("La transmisión finalizó.", true);
@@ -455,32 +473,54 @@ function handleSessionUpdate(sessionData) {
         updateUIOnTrackChange();
         return;
     }
+
     liveState.sessionData = sessionData;
     const remoteTrack = sessionData.currentTrack;
+
     if (!remoteTrack) {
-        ytPlayer.pauseVideo();
+        if(YT_READY) ytPlayer.pauseVideo();
+        if(archivePlayer) archivePlayer.pause();
         currentTrack = null;
         updateUIOnTrackChange();
         return;
     }
 
     const isNewTrack = remoteTrack.id !== currentTrack?.id;
+
     if (isNewTrack) {
         currentTrack = remoteTrack;
         updateUIOnTrackChange();
+
         let startSeconds = sessionData.currentTime || 0;
         if (sessionData.stateChangeTimestamp && sessionData.isPlaying) {
             const elapsed = (Date.now() - sessionData.stateChangeTimestamp.toDate().getTime()) / 1000;
             startSeconds += elapsed;
         }
-        ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: Math.max(0, startSeconds) });
-        if (sessionData.isPlaying) {
-            setTimeout(() => ytPlayer.playVideo(), 1500);
+        
+        if(currentTrack.source === 'archive') {
+            if(YT_READY) ytPlayer.stopVideo();
+            archivePlayer.src = currentTrack.urls.mp3;
+            archivePlayer.currentTime = Math.max(0, startSeconds);
+            if(sessionData.isPlaying) archivePlayer.play();
+
+        } else { // Es YouTube
+            if(archivePlayer) archivePlayer.pause();
+            ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: Math.max(0, startSeconds) });
+            if (sessionData.isPlaying) {
+                 setTimeout(() => ytPlayer.playVideo(), 500);
+            }
         }
+
     } else {
         const isPlayingRemotely = sessionData.isPlaying;
         const isPlayingLocally = getPlaybackState() === 'playing';
-        if (isPlayingRemotely && !isPlayingLocally) ytPlayer.playVideo();
-        else if (!isPlayingRemotely && isPlayingLocally) ytPlayer.pauseVideo();
+
+        if (isPlayingRemotely !== isPlayingLocally) {
+             if (currentTrack.source === 'archive') {
+                isPlayingRemotely ? archivePlayer.play() : archivePlayer.pause();
+             } else {
+                isPlayingRemotely ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+             }
+        }
     }
 }
