@@ -270,8 +270,6 @@ function heroScrollInvalidate(){
 async function boot(){
   initTheme();
   await initFirebase();
-  
-  // listenForLiveSessions(renderLiveSessions); // Desactivado por ahora
 
   renderAllHomePlaylists();
   updateHomeGridVisibility();
@@ -305,18 +303,26 @@ async function boot(){
         e.stopPropagation();
         
         const trackId = itemEl.dataset.trackId;
-        const track = [...(items || []), ...(favs || []), ...(queue || [])].find(t => t && t.id === trackId);
+        // Busca la canción en todas las fuentes de datos posibles
+        const track = [...(queue || []), ...(items || []), ...(favs || [])].find(t => t && t.id === trackId);
         if (!track) return;
 
         if (liveState.mode === 'listening') return;
         
         const actions = [
-            { id: "find_artist_archive", label: "Buscar este artista en Archive" },
             { id: "pl", label: "Agregar a playlist" }
         ];
 
+        // Opción para buscar álbumes del artista
+        if (track.author) {
+            actions.unshift({ id: "find_artist_archive", label: "Buscar álbum de este artista" });
+        }
+
+        // Opciones específicas de playlists
         if (itemEl.classList.contains("queue-item") && queueType === 'playlist' && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
-            actions.push({ id: "reassign", label: "Reasignar fuente" });
+            if (track.source === 'youtube') { // Reasignar solo tiene sentido para YouTube
+                actions.push({ id: "reassign", label: "Reasignar fuente" });
+            }
             actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
         }
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
@@ -341,7 +347,6 @@ async function boot(){
     if (favBtn) {
         e.stopPropagation();
         const trackId = itemEl.dataset.trackId;
-        // Buscamos la canción en todas las fuentes posibles (resultados, cola, favoritos)
         const track = [...(queue || []), ...(items || []), ...(favs || [])].find(t => t && t.id === trackId);
         if(track) toggleFav(track);
         return;
@@ -353,4 +358,3 @@ async function boot(){
 }
 
 document.addEventListener('DOMContentLoaded', boot);
-
