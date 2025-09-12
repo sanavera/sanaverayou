@@ -1,6 +1,6 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 let activeSessions = []; // Variable global para guardar las sesiones
-let currentSearchType = 'youtube'; // 'youtube' para canciones, 'archive' para álbumes
+let currentSearchType = 'youtube'; // 'youtube' o 'archive'
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
 const recommendedPlaylists = {};
@@ -18,6 +18,7 @@ const favIconSvg = (isFav) => isFav
 const youtubeLogoSvg = () => `<span class="source-logo youtube-logo" title="YouTube"><svg viewBox="0 0 28 20"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"/></svg></span>`;
 const spotifyLogoSvg = () => `<span class="source-logo spotify-logo" title="Spotify"><svg viewBox="0 0 167.5 167.5"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"/></svg></span>`;
 const youtubeMusicLogoSvg = () => `<span class="source-logo ytmusic-logo" title="YouTube Music"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg></span>`;
+const archiveLogoSvg = () => `<span class="source-logo archive-logo" title="Archive.org"><svg viewBox="0 0 64 64"><path fill="currentColor" d="M32 6C17.64 6 6 17.64 6 32s11.64 26 26 26s26-11.64 26-26S46.36 6 32 6zm13.6 41.51h-7.35v-2.88h4.5v-18h-4.5v-2.88h7.35v23.76zm-10.15 0h-5.06v-5.46h5.06v5.46zm-7.94 0h-5.07V27.52h5.07v19.99zm-7.93 0h-5.07V21.63h5.07v25.88z"/></svg></span>`;
 
 // --- Navegación y Vistas ---
 function switchView(id){
@@ -63,10 +64,8 @@ function updateHero(track) {
   if (queueType === 'playlist' && viewingPlaylistId) {
     const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
     plName = pl ? pl.name : "";
-  } else if (['recommended', 'youtube_playlist'].includes(queueType)) {
+  } else if (['recommended', 'youtube_playlist', 'archive_album'].includes(queueType)) {
     plName = currentQueueTitle;
-  } else if (queueType === 'archive_album') {
-      plName = currentQueueTitle;
   }
   let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
   if (liveState.mode === 'listening' && liveState.sessionData) {
@@ -88,7 +87,7 @@ function updateMiniNow() {
   if (liveState.mode === 'listening' && liveState.sessionData) {
       authorText = `De: ${liveState.sessionData.name}`;
   } else if (liveState.mode === 'broadcasting') {
-      authorText = ''; // Ocultamos el autor para dar espacio al label
+      authorText = ''; 
   }
   $("#miniAuthor").textContent = authorText;
 }
@@ -138,7 +137,14 @@ function renderPlaylistCard(playlist) {
     let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
     if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-    const logo = playlist.isRecommended ? youtubeLogoSvg() : (playlist.source === 'spotify' ? spotifyLogoSvg() : youtubeLogoSvg());
+    
+    // --- LÓGICA MODIFICADA: Añadido logo de Archive.org ---
+    let logo;
+    if (playlist.isRecommended) logo = youtubeLogoSvg();
+    else if (playlist.source === 'spotify') logo = spotifyLogoSvg();
+    else if (playlist.source === 'archive') logo = archiveLogoSvg();
+    else logo = youtubeLogoSvg();
+
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
@@ -174,8 +180,7 @@ function renderAllHomePlaylists() {
 
 function updateHomeGridVisibility(){
   const home = $("#homeSection"); if(!home) return;
-  const resultsEl = $("#results");
-  const shouldShow = (!resultsEl || resultsEl.innerHTML.trim() === "") && !$(".loading-indicator");
+  const shouldShow = (items.length===0 && !$(".loading-indicator"));
   home.classList.toggle("hide", !shouldShow);
 }
 
@@ -282,7 +287,7 @@ function heroScrollInvalidate(){
 
 // --- Lógica de UI para Transmisiones ---
 function renderLiveSessions(sessions) {
-    activeSessions = sessions; // Actualizamos la variable global
+    activeSessions = sessions;
     const listEl = $("#sessionsList");
     if (!listEl) return;
     listEl.innerHTML = "";
@@ -355,44 +360,12 @@ function initLiveStreamsUI() {
     });
 }
 
-// --- Lógica del Switch de Búsqueda ---
-function updateSearchSwitchUI() {
-    $('#searchTypeSongs')?.classList.toggle('active', currentSearchType === 'youtube');
-    $('#searchTypeAlbums')?.classList.toggle('active', currentSearchType === 'archive');
-    
-    // Cambia el placeholder del input de búsqueda
-    const placeholderText = currentSearchType === 'youtube' 
-        ? "Buscá canciones en YouTube..." 
-        : "Buscá álbumes o artistas...";
-    $('#overlaySearchInput').placeholder = placeholderText;
-}
-
-function initSearchSwitch() {
-    const btnSongs = $('#searchTypeSongs');
-    const btnAlbums = $('#searchTypeAlbums');
-
-    const handleSwitch = (type) => {
-        if (currentSearchType === type) return;
-        currentSearchType = type;
-        updateSearchSwitchUI();
-        // Limpiar resultados al cambiar de tipo para evitar confusión
-        const resultsEl = $("#results");
-        if (resultsEl) resultsEl.innerHTML = "";
-        updateHomeGridVisibility();
-    };
-
-    btnSongs?.addEventListener('click', () => handleSwitch('youtube'));
-    btnAlbums?.addEventListener('click', () => handleSwitch('archive'));
-}
-
-
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
   await initFirebase();
   
   listenForLiveSessions(renderLiveSessions);
-  initSearchSwitch();
 
   const playlistKeys = Object.keys(recommendedPlaylists);
   const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
@@ -426,9 +399,7 @@ async function boot(){
   document.addEventListener("click", async (e) => {
     const itemEl = e.target.closest("[data-track-id]");
     if (!itemEl) return;
-
     const trackId = itemEl.dataset.trackId;
-
     let track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
     if (!track && viewingPlaylistId) {
         const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
@@ -436,11 +407,10 @@ async function boot(){
             const tracksToShow = pl.spotifyTracks ?
                 pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null }) :
                 (pl.tracks || []);
-            track = tracksToShow.find(t => t && (t.id === trackId || `spotify_${t.spotifyId}` === trackId));
+            track = tracksToShow.find(t => t && (t.id === trackId || `spotify_${t.spotifyId}` === trackId || t.id === trackId));
         }
     }
     if (!track) return;
-
 
     if (e.target.closest(".fav-btn")) {
         e.stopPropagation();
@@ -450,17 +420,27 @@ async function boot(){
 
     if (e.target.closest(".icon-btn.more")) {
         if(liveState.mode === 'listening') return;
-        if (!track.id) return;
+        
+        // --- LÓGICA MODIFICADA: Permite acciones en canciones de Archive.org ---
+        // No se pueden mostrar opciones para canciones no resueltas de Spotify
+        if (track.source === 'youtube' && !track.id) return;
 
-        const actions = [
-            { id: "pl", label: "Agregar a playlist" },
-            { id: "view_albums", label: "Ver Álbumes de este Artista" }
-        ];
+        const actions = [ { id: "pl", label: "Agregar a playlist" } ];
+        
+        // La opción "Ver Álbumes" solo aparece para canciones de YouTube
+        if (track.source === 'youtube' && track.author) {
+             actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
+        }
 
+        // Renombrar/Eliminar solo en playlists propias
         if (itemEl.classList.contains("queue-item") && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
+            // Reasignar solo es para YouTube
+            if (track.source === 'youtube') {
+                 actions.push({ id: "reassign", label: "Reasignar fuente" });
+            }
+            // Renombrar y eliminar es para todas las fuentes
             actions.push({ id: "rename", label: "Renombrar canción" });
-            actions.push({ id: "delete", label: "Eliminar de esta playlist", danger: true });
-            actions.push({ id: "reassign", label: "Reasignar fuente" });
+            actions.push({ id: "delete", label: "Eliminar canción de este playlist", danger: true });
         }
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
@@ -472,20 +452,15 @@ async function boot(){
                 if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
-                if (act === "view_albums") {
-                    const artistName = cleanAuthor(track.author);
-                    if (artistName) {
-                        currentSearchType = 'archive';
-                        updateSearchSwitchUI();
-                        switchView('view-search');
-                        startSearch(artistName);
-                    }
+                if (act === "artist_albums") {
+                    switchView('view-search');
+                    $('#searchTypeArchive').click();
+                    setTimeout(() => startSearch(track.author), 50);
                 }
             }
         });
     }
   });
-
 
   window.addEventListener("scroll", heroScrollInvalidate, { passive:true });
   window.addEventListener("resize", heroScrollInvalidate, { passive:true });
