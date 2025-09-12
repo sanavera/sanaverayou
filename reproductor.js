@@ -5,7 +5,6 @@ let archivePlayer = null; // Reproductor de audio para Archive.org
 let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
-let lastPlaybackStateBeforeHidden = null; // Para la reproducción en segundo plano de YT
 
 // Estado de la cola y reproducción
 let queue = null;
@@ -403,38 +402,28 @@ function initPlayer() {
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     
-    // --- LÓGICA RESTAURADA PARA REPRODUCCIÓN EN SEGUNDO PLANO ---
+    // --- LÓGICA CORREGIDA PARA REPRODUCCIÓN CONTINUA EN SEGUNDO PLANO ---
     document.addEventListener("visibilitychange", () => {
         try {
-            if (!currentTrack || currentTrack.source !== 'youtube' || !YT_READY || !ytPlayer) {
-                return;
-            }
+            // Solo actuar si la pestaña se oculta y hay un video de YT sonando.
+            if (document.hidden && 
+                currentTrack && 
+                currentTrack.source === 'youtube' && 
+                YT_READY && 
+                ytPlayer && 
+                getPlaybackState() === 'playing') {
 
-            if (document.hidden) {
-                const state = getPlaybackState();
-                if (state === 'playing' || state === 'paused') {
-                    lastPlaybackStateBeforeHidden = {
-                        videoId: currentTrack.id,
-                        currentTime: ytPlayer.getCurrentTime(),
-                        isPlaying: state === 'playing'
-                    };
-                }
-            } else {
-                if (lastPlaybackStateBeforeHidden && currentTrack.id === lastPlaybackStateBeforeHidden.videoId) {
-                    ytPlayer.loadVideoById({
-                        videoId: lastPlaybackStateBeforeHidden.videoId,
-                        startSeconds: lastPlaybackStateBeforeHidden.currentTime
-                    });
-
-                    if (lastPlaybackStateBeforeHidden.isPlaying) {
-                        setTimeout(() => ytPlayer.playVideo(), 100);
-                    }
-                }
-                lastPlaybackStateBeforeHidden = null;
+                const currentTime = ytPlayer.getCurrentTime();
+                // El "truco": recargar el video en el mismo punto para evitar la pausa
+                // de YouTube al pasar a segundo plano.
+                ytPlayer.loadVideoById({ 
+                    videoId: currentTrack.id, 
+                    startSeconds: currentTime
+                });
+                ytPlayer.playVideo();
             }
         } catch (e) {
-            console.error("Error al manejar cambio de visibilidad:", e);
-            lastPlaybackStateBeforeHidden = null;
+            console.error("Error al intentar mantener la reproducción en segundo plano:", e);
         }
     });
 
@@ -442,7 +431,7 @@ function initPlayer() {
     window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 }
 
-// --- LÓGICA DE TRANSMISIONES (CORREGIDA Y MEJORADA) ---
+// --- LÓGICA DE TRANSMISIONES ---
 
 function setPlayerControlsDisabled(disabled) {
     const controls = ['#npPlay', '#miniPlay', '#btnNext', '#btnPrev', '#btnShuffle', '#btnRepeat', '#seek', '#miniSeek'];
