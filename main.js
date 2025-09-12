@@ -52,7 +52,7 @@ function initSearchTypeSwitch() {
  * @param {string} searchType - 'youtube' o 'archive'.
  */
 function setSearchType(searchType) {
-    if (!searchType || searchType === currentSearchType) return;
+    if (!searchType) return; // Permitir re-aplicar el estado
     currentSearchType = searchType;
 
     const switchContainer = $("#searchTypeSwitch");
@@ -68,7 +68,10 @@ function setSearchType(searchType) {
     }
 
     const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
-    $("#overlaySearchInput").placeholder = placeholder;
+    const searchInput = $("#overlaySearchInput");
+    if (searchInput) {
+        searchInput.placeholder = placeholder;
+    }
     localStorage.setItem('sy_search_type', searchType);
 }
 
