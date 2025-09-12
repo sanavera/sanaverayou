@@ -5,6 +5,7 @@ let archivePlayer = null; // Reproductor de audio para Archive.org
 let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
+let lastPlaybackStateBeforeHidden = null; // Para la reproducción en segundo plano de YT
 
 // Estado de la cola y reproducción
 let queue = null;
@@ -175,8 +176,7 @@ function playCurrent(autoplay = false) {
         });
     }
 
-    // --- CORRECCIÓN: Lógica de reproducción con retraso para el host ---
-    const HOST_PLAY_DELAY = 1000; // 1 segundo de retraso
+    const HOST_PLAY_DELAY = 1000;
 
     const startPlayback = () => {
         if (currentTrack.source === 'archive') {
@@ -186,7 +186,6 @@ function playCurrent(autoplay = false) {
         }
     };
 
-    // Carga la canción correspondiente en el reproductor adecuado
     if (currentTrack.source === 'archive') {
         if (YT_READY) ytPlayer.stopVideo();
         if (!currentTrack.urls?.mp3) {
@@ -196,7 +195,7 @@ function playCurrent(autoplay = false) {
         }
         archivePlayer.src = currentTrack.urls.mp3;
         archivePlayer.load();
-    } else { // Es una canción de YouTube
+    } else { 
         archivePlayer.pause();
         archivePlayer.src = "";
         if (!YT_READY || !currentTrack.id) {
@@ -207,7 +206,6 @@ function playCurrent(autoplay = false) {
         ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: 0, suggestedQuality: "auto" });
     }
 
-    // Inicia la reproducción (con o sin retraso)
     if (autoplay) {
         if (liveState.mode === 'broadcasting') {
             setTimeout(startPlayback, HOST_PLAY_DELAY);
@@ -215,8 +213,7 @@ function playCurrent(autoplay = false) {
             startPlayback();
         }
     }
-    // --- FIN DE LA CORRECCIÓN ---
-
+    
     startTimer();
     updateUIOnTrackChange();
 }
@@ -405,6 +402,42 @@ function initPlayer() {
     $("#btnRepeat")?.addEventListener("click", cycleRepeat);
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
+    
+    // --- LÓGICA RESTAURADA PARA REPRODUCCIÓN EN SEGUNDO PLANO ---
+    document.addEventListener("visibilitychange", () => {
+        try {
+            if (!currentTrack || currentTrack.source !== 'youtube' || !YT_READY || !ytPlayer) {
+                return;
+            }
+
+            if (document.hidden) {
+                const state = getPlaybackState();
+                if (state === 'playing' || state === 'paused') {
+                    lastPlaybackStateBeforeHidden = {
+                        videoId: currentTrack.id,
+                        currentTime: ytPlayer.getCurrentTime(),
+                        isPlaying: state === 'playing'
+                    };
+                }
+            } else {
+                if (lastPlaybackStateBeforeHidden && currentTrack.id === lastPlaybackStateBeforeHidden.videoId) {
+                    ytPlayer.loadVideoById({
+                        videoId: lastPlaybackStateBeforeHidden.videoId,
+                        startSeconds: lastPlaybackStateBeforeHidden.currentTime
+                    });
+
+                    if (lastPlaybackStateBeforeHidden.isPlaying) {
+                        setTimeout(() => ytPlayer.playVideo(), 100);
+                    }
+                }
+                lastPlaybackStateBeforeHidden = null;
+            }
+        } catch (e) {
+            console.error("Error al manejar cambio de visibilidad:", e);
+            lastPlaybackStateBeforeHidden = null;
+        }
+    });
+
     window.addEventListener('beforeunload', savePlayerState);
     window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 }
