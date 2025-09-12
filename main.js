@@ -36,21 +36,19 @@ function initSearchTypeSwitch() {
     const switchContainer = $("#searchTypeSwitch");
     if (!switchContainer) return;
 
-    const buttons = switchContainer.querySelectorAll('.switch-btn');
-
     switchContainer.addEventListener('click', (e) => {
         const clickedButton = e.target.closest('.switch-btn');
         if (!clickedButton) return;
         setSearchType(clickedButton.dataset.type);
     });
 
-    // Cargar preferencia guardada
+    // Cargar preferencia guardada al inicio
     const savedType = localStorage.getItem('sy_search_type') || 'youtube';
     setSearchType(savedType);
 }
 
 /**
- * Función centralizada para cambiar el tipo de búsqueda.
+ * Función centralizada para cambiar el tipo de búsqueda (estado y UI).
  * @param {string} searchType - 'youtube' o 'archive'.
  */
 function setSearchType(searchType) {
@@ -59,10 +57,14 @@ function setSearchType(searchType) {
 
     const switchContainer = $("#searchTypeSwitch");
     if (switchContainer) {
-        const buttons = switchContainer.querySelectorAll('.switch-btn');
-        buttons.forEach(button => {
-            button.classList.toggle('active', button.dataset.type === currentSearchType);
+        // Lógica robusta: Quita 'active' de todos y lo pone solo en el correcto.
+        switchContainer.querySelectorAll('.switch-btn').forEach(btn => {
+            btn.classList.remove('active');
         });
+        const activeButton = switchContainer.querySelector(`.switch-btn[data-type="${searchType}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
     }
 
     const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
@@ -493,11 +495,10 @@ async function boot(){
             onAction: (act) => {
                 if (act === "pl") openPlaylistSheet(track);
                 if (act === "artist_albums") {
-                    // Lógica para buscar álbumes del artista
-                    setSearchType('archive'); // Llamada directa a la función
+                    setSearchType('archive');
                     switchView('view-search');
-                    startSearch(track.author);
                     $("#overlaySearchInput").value = track.author;
+                    startSearch(track.author);
                 }
                 if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
