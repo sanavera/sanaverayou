@@ -22,19 +22,26 @@ function saveFavs() {
 }
 
 /**
- * Comprueba si una canción ya está en favoritos.
- * @param {string} id - El ID de la canción.
+ * Comprueba si una canción ya está en favoritos, usando su ID único.
+ * @param {string} id - El ID de la canción (de YouTube o Archive.org).
  * @returns {boolean} - True si es favorita, false si no.
  */
 function isFav(id) {
+    if (!id) return false;
     return favs.some(f => f.id === id);
 }
 
 /**
  * Agrega o quita una canción de la lista de favoritos.
+ * Funciona tanto para canciones de YouTube como de Archive.org.
  * @param {object} track - El objeto de la canción a agregar/quitar.
  */
 function toggleFav(track) {
+    if (!track || !track.id) {
+        showToast("No se puede agregar a favoritos esta canción.", true);
+        return;
+    }
+    
     if (isFav(track.id)) {
         favs = favs.filter(f => f.id !== track.id);
         showToast("Quitado de Favoritos");
