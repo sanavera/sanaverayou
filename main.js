@@ -41,33 +41,35 @@ function initSearchTypeSwitch() {
     switchContainer.addEventListener('click', (e) => {
         const clickedButton = e.target.closest('.switch-btn');
         if (!clickedButton) return;
-
-        const searchType = clickedButton.dataset.type;
-        if (searchType === currentSearchType) return;
-
-        currentSearchType = searchType;
-
-        // --- LÓGICA CORREGIDA Y ROBUSTA ---
-        // Se recorren todos los botones para asegurar el estado correcto.
-        buttons.forEach(button => {
-            button.classList.toggle('active', button.dataset.type === currentSearchType);
-        });
-        
-        // Actualizar placeholder del input
-        const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
-        $("#overlaySearchInput").placeholder = placeholder;
-        localStorage.setItem('sy_search_type', searchType);
+        setSearchType(clickedButton.dataset.type);
     });
 
     // Cargar preferencia guardada
     const savedType = localStorage.getItem('sy_search_type') || 'youtube';
-    currentSearchType = savedType;
-    buttons.forEach(button => {
-        button.classList.toggle('active', button.dataset.type === currentSearchType);
-    });
-    const placeholder = savedType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
-    $("#overlaySearchInput").placeholder = placeholder;
+    setSearchType(savedType);
 }
+
+/**
+ * Función centralizada para cambiar el tipo de búsqueda.
+ * @param {string} searchType - 'youtube' o 'archive'.
+ */
+function setSearchType(searchType) {
+    if (!searchType || searchType === currentSearchType) return;
+    currentSearchType = searchType;
+
+    const switchContainer = $("#searchTypeSwitch");
+    if (switchContainer) {
+        const buttons = switchContainer.querySelectorAll('.switch-btn');
+        buttons.forEach(button => {
+            button.classList.toggle('active', button.dataset.type === currentSearchType);
+        });
+    }
+
+    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
+    $("#overlaySearchInput").placeholder = placeholder;
+    localStorage.setItem('sy_search_type', searchType);
+}
+
 
 // --- Lógica de la Interfaz de Usuario (UI) ---
 function updateUIOnTrackChange() {
@@ -96,7 +98,6 @@ function updateHero(track) {
   if ($("#favNowTitle")) $("#favNowTitle").textContent = t ? t.title : "—";
   if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
 
-  // Controlar visibilidad del botón de guardar álbum
   const btnSaveAlbum = $("#btnSaveAlbum");
   if(btnSaveAlbum){
       const isArchiveAlbum = queueType === 'archive_album';
@@ -469,7 +470,7 @@ async function boot(){
         
         const actions = [{ id: "pl", label: "Agregar a playlist" }];
 
-        if (track.source !== 'archive') { // Opción específica para YouTube
+        if (track.source !== 'archive') { 
             actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
         }
         
@@ -493,8 +494,7 @@ async function boot(){
                 if (act === "pl") openPlaylistSheet(track);
                 if (act === "artist_albums") {
                     // Lógica para buscar álbumes del artista
-                    const searchTypeButton = document.querySelector('#searchTypeSwitch .switch-btn[data-type="archive"]');
-                    if (searchTypeButton) searchTypeButton.click();
+                    setSearchType('archive'); // Llamada directa a la función
                     switchView('view-search');
                     startSearch(track.author);
                     $("#overlaySearchInput").value = track.author;
