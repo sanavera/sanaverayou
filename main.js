@@ -1,6 +1,6 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
-let activeSessions = []; // Variable global para guardar las sesiones
-let currentSearchType = 'youtube'; // 'youtube' o 'archive'
+var currentSearchType = 'youtube'; // 'youtube' o 'archive' - CORREGIDO: Declarado como var para ser global
+let activeSessions = []; 
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
 const recommendedPlaylists = {};
@@ -18,7 +18,8 @@ const favIconSvg = (isFav) => isFav
 const youtubeLogoSvg = () => `<span class="source-logo youtube-logo" title="YouTube"><svg viewBox="0 0 28 20"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"/></svg></span>`;
 const spotifyLogoSvg = () => `<span class="source-logo spotify-logo" title="Spotify"><svg viewBox="0 0 167.5 167.5"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"/></svg></span>`;
 const youtubeMusicLogoSvg = () => `<span class="source-logo ytmusic-logo" title="YouTube Music"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg></span>`;
-const archiveLogoSvg = () => `<span class="source-logo archive-logo" title="Archive.org"><svg viewBox="0 0 64 64"><path fill="currentColor" d="M32 6C17.64 6 6 17.64 6 32s11.64 26 26 26s26-11.64 26-26S46.36 6 32 6zm13.6 41.51h-7.35v-2.88h4.5v-18h-4.5v-2.88h7.35v23.76zm-10.15 0h-5.06v-5.46h5.06v5.46zm-7.94 0h-5.07V27.52h5.07v19.99zm-7.93 0h-5.07V21.63h5.07v25.88z"/></svg></span>`;
+const archiveLogoSvg = () => `<span class="source-logo archive-logo" title="Archive.org"><svg viewBox="0 0 14 20"><path fill="currentColor" d="M7,0.21L0,4.91V6.28H14V4.91L7,0.21M1,7.22V18.59L7,15.25L13,18.59V7.22H1Z" /></svg></span>`;
+
 
 // --- Navegación y Vistas ---
 function switchView(id){
@@ -26,10 +27,45 @@ function switchView(id){
   const view = $("#" + id);
   if (view) view.classList.add("active");
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
-  if (id !== "view-search") {
-      updateHomeGridVisibility();
-  }
+  updateHomeGridVisibility();
   heroScrollInvalidate();
+}
+
+// --- Lógica del Switch de Búsqueda ---
+function initSearchTypeSwitch() {
+    const switchContainer = $("#searchTypeSwitch");
+    if (!switchContainer) return;
+
+    switchContainer.addEventListener('click', (e) => {
+        const button = e.target.closest('.switch-btn');
+        if (!button) return;
+
+        const searchType = button.dataset.type;
+        if (searchType === currentSearchType) return;
+
+        currentSearchType = searchType;
+
+        // Actualizar UI
+        switchContainer.querySelector('.active').classList.remove('active');
+        button.classList.add('active');
+
+        // Actualizar placeholder del input
+        const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
+        $("#overlaySearchInput").placeholder = placeholder;
+        localStorage.setItem('sy_search_type', searchType);
+    });
+
+    // Cargar preferencia guardada
+    const savedType = localStorage.getItem('sy_search_type') || 'youtube';
+    currentSearchType = savedType;
+    const activeButton = switchContainer.querySelector(`.switch-btn[data-type="${savedType}"]`);
+    if (activeButton) {
+        const currentActive = switchContainer.querySelector('.active');
+        if(currentActive) currentActive.classList.remove('active');
+        activeButton.classList.add('active');
+        const placeholder = savedType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
+        $("#overlaySearchInput").placeholder = placeholder;
+    }
 }
 
 // --- Lógica de la Interfaz de Usuario (UI) ---
@@ -138,13 +174,13 @@ function renderPlaylistCard(playlist) {
     if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     
-    // --- LÓGICA MODIFICADA: Añadido logo de Archive.org ---
     let logo;
-    if (playlist.isRecommended) logo = youtubeLogoSvg();
-    else if (playlist.source === 'spotify') logo = spotifyLogoSvg();
-    else if (playlist.source === 'archive') logo = archiveLogoSvg();
-    else logo = youtubeLogoSvg();
-
+    switch(playlist.source) {
+        case 'spotify': logo = spotifyLogoSvg(); break;
+        case 'archive': logo = archiveLogoSvg(); break;
+        default: logo = youtubeLogoSvg(); break;
+    }
+    
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
@@ -287,7 +323,7 @@ function heroScrollInvalidate(){
 
 // --- Lógica de UI para Transmisiones ---
 function renderLiveSessions(sessions) {
-    activeSessions = sessions;
+    activeSessions = sessions; 
     const listEl = $("#sessionsList");
     if (!listEl) return;
     listEl.innerHTML = "";
@@ -366,6 +402,7 @@ async function boot(){
   await initFirebase();
   
   listenForLiveSessions(renderLiveSessions);
+  initSearchTypeSwitch();
 
   const playlistKeys = Object.keys(recommendedPlaylists);
   const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
@@ -399,15 +436,14 @@ async function boot(){
   document.addEventListener("click", async (e) => {
     const itemEl = e.target.closest("[data-track-id]");
     if (!itemEl) return;
+
     const trackId = itemEl.dataset.trackId;
     let track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
+    
     if (!track && viewingPlaylistId) {
         const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
-        if (pl) {
-            const tracksToShow = pl.spotifyTracks ?
-                pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null }) :
-                (pl.tracks || []);
-            track = tracksToShow.find(t => t && (t.id === trackId || `spotify_${t.spotifyId}` === trackId || t.id === trackId));
+        if (pl && pl.tracks) {
+            track = pl.tracks.find(t => t && t.id === trackId);
         }
     }
     if (!track) return;
@@ -421,27 +457,19 @@ async function boot(){
     if (e.target.closest(".icon-btn.more")) {
         if(liveState.mode === 'listening') return;
         
-        // --- LÓGICA MODIFICADA: Permite acciones en canciones de Archive.org ---
-        // No se pueden mostrar opciones para canciones no resueltas de Spotify
-        if (track.source === 'youtube' && !track.id) return;
-
-        const actions = [ { id: "pl", label: "Agregar a playlist" } ];
+        const actions = [{ id: "pl", label: "Agregar a playlist" }];
         
-        // La opción "Ver Álbumes" solo aparece para canciones de YouTube
-        if (track.source === 'youtube' && track.author) {
-             actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
-        }
+        const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
+        const isFromYoutube = track.source !== 'archive';
 
-        // Renombrar/Eliminar solo en playlists propias
-        if (itemEl.classList.contains("queue-item") && viewingPlaylistId && isMyPlaylist(viewingPlaylistId)) {
-            // Reasignar solo es para YouTube
-            if (track.source === 'youtube') {
-                 actions.push({ id: "reassign", label: "Reasignar fuente" });
+        if (itemEl.classList.contains("queue-item") && isOwner) {
+            if (isFromYoutube) {
+                actions.push({ id: "rename", label: "Renombrar canción" });
+                actions.push({ id: "reassign", label: "Reasignar fuente" });
             }
-            // Renombrar y eliminar es para todas las fuentes
-            actions.push({ id: "rename", label: "Renombrar canción" });
-            actions.push({ id: "delete", label: "Eliminar canción de este playlist", danger: true });
+            actions.push({ id: "delete", label: "Eliminar de la playlist", danger: true });
         }
+        
         actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
         openActionSheet({
@@ -452,11 +480,6 @@ async function boot(){
                 if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
-                if (act === "artist_albums") {
-                    switchView('view-search');
-                    $('#searchTypeArchive').click();
-                    setTimeout(() => startSearch(track.author), 50);
-                }
             }
         });
     }
