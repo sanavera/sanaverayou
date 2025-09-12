@@ -32,21 +32,16 @@
 
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
+      <div class="search-type-switcher">
+          <button id="searchTypeYoutube" class="active" data-type="youtube">Canciones</button>
+          <button id="searchTypeArchive" data-type="archive">Álbumes</button>
+      </div>
       <input id="overlaySearchInput" placeholder="Buscá algo… (Enter)" autocomplete="off" />
     </div>
   </div>
 
   <main id="views">
     <section id="view-search" class="view active">
-      <!-- === INICIO: NUEVO SWITCH DE BÚSQUEDA === -->
-      <div class="search-controls">
-        <div class="search-switch-container">
-          <button id="searchTypeSongs" class="search-switch-btn active" data-type="youtube">Canciones</button>
-          <button id="searchTypeAlbums" class="search-switch-btn" data-type="archive">Álbumes</button>
-        </div>
-      </div>
-      <!-- === FIN: NUEVO SWITCH DE BÚSQUEDA === -->
-
       <section id="homeSection" class="home-section">
         <header class="home-head">
           <h3 class="home-title animated-title">
@@ -94,7 +89,14 @@
       <div class="player-header-sticky">
         <div id="npHero" class="np-hero"></div>
         <div class="np-meta">
-          <div id="npTitle" class="np-title">Elegí una canción</div>
+          <div class="np-title-wrapper">
+            <div id="npTitle" class="np-title">Elegí una canción</div>
+            <!-- Botón para guardar álbum de Archive.org -->
+            <button id="btnSaveAlbum" class="pill pill-icon hide" title="Guardar álbum como playlist">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                <span>Guardar</span>
+            </button>
+          </div>
           <div id="npSub" class="np-sub muted">-</div>
         </div>
         <div class="player-controls">
@@ -123,7 +125,6 @@
       </section>
     </section>
     
-    <!-- VISTA DE IMPORTACIÓN DE SPOTIFY (MODIFICADA) -->
     <section id="view-spotify-import-selection" class="view spotify-import-view">
         <header class="section-head sticky-head">
             <button id="spotifyImportBackBtn" class="icon-btn">
@@ -132,7 +133,6 @@
             <h3>Playlists del Usuario</h3>
         </header>
         <div id="spotifyUserPlaylistsGrid" class="pl-grid">
-            <!-- Las playlists del usuario de Spotify se insertarán aquí como tarjetas -->
         </div>
         <div class="sticky-footer">
             <button id="spotifyImportConfirmBtn" class="pill pill-large">Importar Seleccionadas</button>
@@ -214,7 +214,6 @@
     </div>
   </div>
 
-  <!-- Modales de Transmisiones -->
   <div id="sessionsSheet" class="sheet">
       <div class="sheet-content">
           <div class="sheet-title">Transmisiones Activas</div>
@@ -245,7 +244,6 @@
       </div>
   </div>
 
-  <!-- Modal de Spotify (Paso 1) -->
   <div id="sySpotifyModal" class="sheet">
       <div class="sheet-content">
           <div class="sheet-title">Importar de Spotify</div>
@@ -260,7 +258,6 @@
       </div>
   </div>
   
-  <!-- Modal de Progreso de Importación -->
   <div id="resolver-modal" class="hide">
     <div class="resolver-info">
       <img id="resolver-thumb" src="" alt="Playlist cover">
@@ -277,7 +274,6 @@
 
   <div id="yt-holder"><div id="player"></div></div>
 
-  <!-- Scripts modularizados -->
   <script src="firebase.js" defer></script>
   <script src="reproductor.js" defer></script>
   <script src="buscador.js" defer></script>
@@ -287,3 +283,5 @@
 
 </body>
 </html>
+
+
