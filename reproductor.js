@@ -402,24 +402,18 @@ function initPlayer() {
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     
-    // --- LÓGICA CORREGIDA PARA REPRODUCCIÓN CONTINUA EN SEGUNDO PLANO ---
+    // --- LÓGICA AGREGADA: Evento para el botón de guardar álbum ---
+    $("#btnSaveAlbum")?.addEventListener('click', () => {
+        if (queueType === 'archive_album' && queue && queue.length > 0) {
+            saveCurrentArchiveAlbumAsPlaylist(); 
+        }
+    });
+
     document.addEventListener("visibilitychange", () => {
         try {
-            // Solo actuar si la pestaña se oculta y hay un video de YT sonando.
-            if (document.hidden && 
-                currentTrack && 
-                currentTrack.source === 'youtube' && 
-                YT_READY && 
-                ytPlayer && 
-                getPlaybackState() === 'playing') {
-
+            if (document.hidden && currentTrack && currentTrack.source === 'youtube' && YT_READY && ytPlayer && getPlaybackState() === 'playing') {
                 const currentTime = ytPlayer.getCurrentTime();
-                // El "truco": recargar el video en el mismo punto para evitar la pausa
-                // de YouTube al pasar a segundo plano.
-                ytPlayer.loadVideoById({ 
-                    videoId: currentTrack.id, 
-                    startSeconds: currentTime
-                });
+                ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: currentTime });
                 ytPlayer.playVideo();
             }
         } catch (e) {
