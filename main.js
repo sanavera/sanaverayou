@@ -1,5 +1,5 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
-var currentSearchType = 'youtube'; // 'youtube' o 'archive' - CORREGIDO: Declarado como var para ser global
+var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
 let activeSessions = []; 
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
@@ -36,19 +36,23 @@ function initSearchTypeSwitch() {
     const switchContainer = $("#searchTypeSwitch");
     if (!switchContainer) return;
 
-    switchContainer.addEventListener('click', (e) => {
-        const button = e.target.closest('.switch-btn');
-        if (!button) return;
+    const buttons = switchContainer.querySelectorAll('.switch-btn');
 
-        const searchType = button.dataset.type;
+    switchContainer.addEventListener('click', (e) => {
+        const clickedButton = e.target.closest('.switch-btn');
+        if (!clickedButton) return;
+
+        const searchType = clickedButton.dataset.type;
         if (searchType === currentSearchType) return;
 
         currentSearchType = searchType;
 
-        // Actualizar UI
-        switchContainer.querySelector('.active').classList.remove('active');
-        button.classList.add('active');
-
+        // --- LÓGICA CORREGIDA Y ROBUSTA ---
+        // Se recorren todos los botones para asegurar el estado correcto.
+        buttons.forEach(button => {
+            button.classList.toggle('active', button.dataset.type === currentSearchType);
+        });
+        
         // Actualizar placeholder del input
         const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
         $("#overlaySearchInput").placeholder = placeholder;
@@ -58,14 +62,11 @@ function initSearchTypeSwitch() {
     // Cargar preferencia guardada
     const savedType = localStorage.getItem('sy_search_type') || 'youtube';
     currentSearchType = savedType;
-    const activeButton = switchContainer.querySelector(`.switch-btn[data-type="${savedType}"]`);
-    if (activeButton) {
-        const currentActive = switchContainer.querySelector('.active');
-        if(currentActive) currentActive.classList.remove('active');
-        activeButton.classList.add('active');
-        const placeholder = savedType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
-        $("#overlaySearchInput").placeholder = placeholder;
-    }
+    buttons.forEach(button => {
+        button.classList.toggle('active', button.dataset.type === currentSearchType);
+    });
+    const placeholder = savedType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
+    $("#overlaySearchInput").placeholder = placeholder;
 }
 
 // --- Lógica de la Interfaz de Usuario (UI) ---
@@ -94,7 +95,16 @@ function updateHero(track) {
   if (favHero) favHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
   if ($("#favNowTitle")) $("#favNowTitle").textContent = t ? t.title : "—";
   if (npHero) npHero.style.backgroundImage = t ? `url(${t.thumb})` : "none";
-  if ($("#npTitle")) $("#npTitle").textContent = t ? t.title : "Elegí una canción";
+
+  // Controlar visibilidad del botón de guardar álbum
+  const btnSaveAlbum = $("#btnSaveAlbum");
+  if(btnSaveAlbum){
+      const isArchiveAlbum = queueType === 'archive_album';
+      btnSaveAlbum.classList.toggle('hide', !isArchiveAlbum);
+  }
+
+  const npTitle = $("#npTitle");
+  if (npTitle) npTitle.textContent = t ? t.title : "Elegí una canción";
 
   let plName = "";
   if (queueType === 'playlist' && viewingPlaylistId) {
@@ -458,6 +468,10 @@ async function boot(){
         if(liveState.mode === 'listening') return;
         
         const actions = [{ id: "pl", label: "Agregar a playlist" }];
+
+        if (track.source !== 'archive') { // Opción específica para YouTube
+            actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
+        }
         
         const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
         const isFromYoutube = track.source !== 'archive';
@@ -477,6 +491,14 @@ async function boot(){
             actions: actions,
             onAction: (act) => {
                 if (act === "pl") openPlaylistSheet(track);
+                if (act === "artist_albums") {
+                    // Lógica para buscar álbumes del artista
+                    const searchTypeButton = document.querySelector('#searchTypeSwitch .switch-btn[data-type="archive"]');
+                    if (searchTypeButton) searchTypeButton.click();
+                    switchView('view-search');
+                    startSearch(track.author);
+                    $("#overlaySearchInput").value = track.author;
+                }
                 if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
