@@ -1,34 +1,257 @@
-// Contiene toda la lógica de búsqueda para YouTube (canciones) y Archive.org (álbumes).
+// Contiene la lógica de búsqueda para YouTube (canciones) y Archive.org (álbumes).
 
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false, page: 1 };
-const ARCHIVE_PAGE_SIZE = 50; // Cantidad de álbumes a cargar por vez.
+const ARCHIVE_PAGE_SIZE = 50;
+const archiveSearchCache = new Map();
 
-// --- Búsqueda en YouTube (Canciones) ---
+// --- Punto de Entrada Principal de Búsqueda ---
 
-async function searchYoutube(query) {
+async function startSearch(query) {
+  if (searchAbort) searchAbort.abort();
+  searchAbort = new AbortController();
+  
+  // Reiniciar estado para una nueva búsqueda
+  paging = { query, loading: true, page: 1 };
+  items = [];
+  archiveSearchCache.clear(); // Limpiar caché para cada nueva búsqueda
+
+  const resultsEl = $("#results");
+  resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando…</h3></div>`;
+  updateHomeGridVisibility();
+
+  if (currentSearchType === 'archive') {
+    await archiveSearchAlbums(query);
+  } else {
+    // La lógica de búsqueda de YouTube se mantiene intacta.
+    await searchYoutube(query);
+  }
+}
+
+// =======================================================
+// NUEVA LÓGICA DE BÚSQUEDA DE ÁLBUMES (ARCHIVE.ORG)
+// =======================================================
+
+/**
+ * Asigna una puntuación para ordenar los resultados de Archive.org.
+ * @param {string} title - El título del álbum.
+ * @param {string} query - La consulta de búsqueda del usuario.
+ * @returns {number} - Puntuación de relevancia (mayor es mejor).
+ */
+function getArchiveSortScore(title, query) {
+    const normalizedTitle = title.toLowerCase().trim();
+    const normalizedQuery = query.toLowerCase().trim();
+
+    if (normalizedTitle === normalizedQuery) return 3; // Coincidencia exacta
+    if (normalizedTitle.startsWith(normalizedQuery)) return 2; // Empieza con
+    if (normalizedTitle.includes(normalizedQuery)) return 1; // Contiene
+    return 0; // Sin coincidencia en el título
+}
+
+/**
+ * Realiza la búsqueda de álbumes directamente contra la API de Archive.org.
+ * @param {string} query - La consulta del usuario.
+ */
+async function archiveSearchAlbums(query) {
+    const page = paging.page;
+    const cacheKey = `${query.toLowerCase().trim()}|${page}`;
+
+    if (page === 1 && archiveSearchCache.has(cacheKey)) {
+        items = archiveSearchCache.get(cacheKey);
+        renderArchiveResults(items);
+        paging.loading = false;
+        return;
+    }
+
+    const archiveQuery = `(creator:"${query}" OR title:"${query}") AND mediatype:audio`;
+    const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(archiveQuery)}&fl[]=identifier&fl[]=title&fl[]=creator&sort[]=downloads+desc&rows=${ARCHIVE_PAGE_SIZE}&page=${page}&output=json`;
+
     try {
-        const videoResults = await scrapeYoutubeWithDetails(query, 20);
-        if (searchAbort.signal.aborted) return;
+        const response = await fetch(url, { signal: searchAbort?.signal });
+        if (!response.ok) throw new Error(`La API de Archive.org respondió con el estado ${response.status}`);
         
-        items = videoResults;
-        renderYoutubeResults(items);
+        const data = await response.json();
+        if (searchAbort.signal.aborted) return;
+
+        const docs = data.response?.docs || [];
+        
+        let newAlbums = docs.map(doc => ({
+            id: doc.identifier,
+            title: doc.title || 'Sin título',
+            author: Array.isArray(doc.creator) ? doc.creator.join(', ') : (doc.creator || 'Desconocido'),
+            thumb: `https://archive.org/services/img/${doc.identifier}`,
+            source: 'archive',
+            type: 'archive_album'
+        }));
+
+        // Aplicar ordenamiento avanzado solo en la primera página de resultados.
+        if (page === 1) {
+            newAlbums.sort((a, b) => {
+                const scoreA = getArchiveSortScore(a.title, query);
+                const scoreB = getArchiveSortScore(b.title, query);
+                return scoreB - scoreA;
+            });
+            items = newAlbums;
+            archiveSearchCache.set(cacheKey, items);
+        } else {
+            items = [...items, ...newAlbums];
+        }
+
+        renderArchiveResults(items);
 
     } catch (e) {
-        console.error('Search failed:', e);
-        $("#results").innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda de canciones. Reintentá por favor.</p></div>`;
+        if (e.name !== 'AbortError') {
+            console.error('Falló la búsqueda de álbumes:', e);
+            if (page === 1) {
+                $("#results").innerHTML = `<div class="loading-indicator"><p>Error al buscar álbumes. Intenta de nuevo.</p></div>`;
+            }
+        }
     } finally {
         paging.loading = false;
     }
 }
 
+/**
+ * Renderiza la grilla de resultados para los álbumes.
+ * @param {Array<object>} albums - La lista de álbumes a mostrar.
+ */
+function renderArchiveResults(albums) {
+    const resultsEl = $("#results");
+    
+    // Si es la primera carga, preparar el contenedor para la grilla.
+    if (paging.page === 1) {
+        resultsEl.innerHTML = "";
+        resultsEl.className = "results results-grid";
+    }
+
+    if (albums.length === 0 && paging.page === 1) {
+        resultsEl.innerHTML = `<div class="empty muted">No se encontraron álbumes.</div>`;
+        return;
+    }
+
+    const displayedCount = resultsEl.children.length;
+    const newAlbumsToRender = albums.slice(displayedCount);
+
+    newAlbumsToRender.forEach(album => {
+        const card = document.createElement("article");
+        card.className = "pl-item";
+        card.innerHTML = `
+            <img class="pl-thumb-bg" src="${album.thumb}" alt="Portada de ${album.title}" loading="lazy">
+            <div class="pl-overlay">
+                <div class="pl-meta">
+                    <div class="pl-title">${album.title}</div>
+                    <div class="pl-creator">${album.author}</div>
+                </div>
+            </div>
+            <div class="card-play" style="opacity: 1; background: transparent;">
+                 <svg style="width: 48px; height: 48px; color: rgba(255,255,255,0.8);" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
+            </div>`;
+        card.addEventListener('click', () => openArchiveAlbum(album));
+        resultsEl.appendChild(card);
+    });
+}
+
+/**
+ * Limpia un título de pista de Archive.org para mostrar solo el nombre de la canción.
+ * @param {string} rawTitle - El título original del archivo.
+ * @returns {string} - El título limpio.
+ */
+function cleanArchiveTrackTitle(rawTitle) {
+    if (!rawTitle) return "Canción sin título";
+    let title = rawTitle;
+    title = title.replace(/\.(mp3|flac|wav|ogg|m4a)$/i, '');
+    if (title.includes('/')) {
+        title = title.substring(title.lastIndexOf('/') + 1);
+    }
+    title = title.replace(/^[\[(]?\s*\d{1,3}\s*[.)\]-]?\s*/, '');
+    const parts = title.split(' - ');
+    if (parts.length > 1) {
+       title = parts[parts.length - 1];
+    }
+    return title.trim();
+}
+
+/**
+ * Obtiene los detalles de un álbum y sus pistas para enviarlos al reproductor.
+ * @param {object} album - El objeto del álbum seleccionado.
+ */
+async function openArchiveAlbum(album) {
+    showToast(`Cargando álbum: ${album.title}...`);
+    try {
+        const url = `https://archive.org/metadata/${album.id}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("No se pudo obtener la metadata del álbum.");
+        
+        const data = await response.json();
+        const AUDIO_FORMATS = ['mp3', 'flac', 'wav', 'ogg', 'm4a'];
+        const audioFiles = (data.files || []).filter(f => AUDIO_FORMATS.some(ext => new RegExp(`\\.${ext}$`, 'i').test(f.name || '')));
+
+        if (audioFiles.length === 0) {
+            showToast("Este álbum no contiene canciones de audio válidas.", true);
+            return;
+        }
+
+        const tracks = audioFiles.map(file => {
+            const format = (file.name.match(/\.(\w+)$/i) || [])[1]?.toLowerCase();
+            return {
+                id: `${album.id}/${file.name}`,
+                title: cleanArchiveTrackTitle(file.title || file.name),
+                author: album.author,
+                thumb: album.thumb,
+                source: 'archive',
+                type: 'archive_track',
+                urls: {
+                    [format]: `https://archive.org/download/${album.id}/${encodeURIComponent(file.name)}`
+                }
+            };
+        });
+
+        // Agregamos una URL 'mp3' si no existe, apuntando a la primera disponible.
+        tracks.forEach(t => {
+            if (!t.urls.mp3) {
+                const availableFormat = Object.keys(t.urls)[0];
+                t.urls.mp3 = t.urls[availableFormat];
+            }
+        });
+
+        // Enviar a la cola de reproducción
+        viewingPlaylistId = null; 
+        currentQueueTitle = album.title;
+        setQueue(tracks, 'archive_album', 0);
+        switchView('view-player');
+        renderQueue(tracks, album.title);
+        playCurrent(true);
+
+    } catch (e) {
+        showToast("No se pudo cargar el álbum.", true);
+        console.error("Error al abrir álbum de Archive:", e);
+    }
+}
+
+
+// =======================================================
+// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - SIN CAMBIOS
+// =======================================================
+
+async function searchYoutube(query) {
+  try {
+    const videoResults = await scrapeYoutubeWithDetails(query, 20);
+    if (searchAbort.signal.aborted) return;
+    items = videoResults;
+    renderYoutubeResults(items);
+  } catch (e) {
+    console.error('Search failed:', e);
+    $("#results").innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda de canciones. Reintentá por favor.</p></div>`;
+  } finally {
+    paging.loading = false;
+  }
+}
+
 function renderYoutubeResults(videos) {
     const resultsEl = $("#results");
-    if (!resultsEl) return;
     resultsEl.innerHTML = "";
-    resultsEl.className = "results"; // Asegura el layout de lista
-
+    resultsEl.className = "results"; // Layout de lista
     if (videos.length === 0) {
         resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
         return;
@@ -68,264 +291,18 @@ function appendSongResults(chunk){
       </div>`;
     item.addEventListener("click", (e) => {
         if (e.target.closest(".more") || e.target.closest(".fav-btn") || e.target.closest(".card-play")) return;
-        if (it.type === 'youtube_video') {
-            playFromSearch(it.id, true);
-        }
+        if (it.type === 'youtube_video') playFromSearch(it.id, true);
     });
-
     const cardPlayBtn = item.querySelector(".card-play");
     if (cardPlayBtn) {
         cardPlayBtn.onclick = (e) => {
             e.stopPropagation();
-            if (it.type === 'youtube_video') {
-                playFromSearch(it.id, true);
-            }
+            if (it.type === 'youtube_video') playFromSearch(it.id, true);
         };
     }
     root.appendChild(item);
   }
   refreshIndicators();
-}
-
-// --- Búsqueda en Archive.org (Álbumes) ---
-
-/**
- * --- CORRECCIÓN 1: Lógica de Priorización ---
- * Asigna una puntuación de relevancia. Una coincidencia exacta en el título
- * recibe una puntuación mucho más alta para la priorización.
- */
-function getRelevanceScore(doc, query) {
-    const title = (doc.title || '').toLowerCase();
-    const artist = (doc.artist || doc.creator || '').toLowerCase();
-    const q = query.toLowerCase();
-
-    if (title.includes(q)) {
-        return 100; // Prioridad máxima para coincidencias en el título
-    }
-    if (artist.includes(q)) {
-        return 50; // Prioridad media para coincidencias en el artista
-    }
-    return 0;
-}
-
-
-async function searchArchive(query, page = 1) {
-    const { doc, getDoc, setDoc, serverTimestamp } = sy_fs();
-    const normalizedQuery = query.toLowerCase().trim().replace(/\s+/g, '_');
-    const cacheRef = doc(db, "archive_searches", normalizedQuery);
-
-    if (page === 1) {
-        try {
-            const docSnap = await getDoc(cacheRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                const cacheAge = Date.now() - data.timestamp.toMillis();
-                if (cacheAge < 24 * 60 * 60 * 1000) {
-                    showToast("Resultados cargados desde caché.");
-                    items = data.albums;
-                    renderArchiveResults(items);
-                    paging.loading = false;
-                    return;
-                }
-            }
-        } catch (e) {
-            console.error("Error al leer caché de Firestore:", e);
-        }
-    }
-    
-    const sortParam = encodeURIComponent("downloads desc");
-    const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}+AND+mediatype:audio+AND+NOT+access-restricted-item:true&fl=identifier,title,creator,description&rows=${ARCHIVE_PAGE_SIZE}&page=${page}&output=json&sort[]=${sortParam}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-
-    try {
-        const response = await fetch(proxyUrl, { signal: searchAbort?.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        
-        let albums = (data.response?.docs || []).map(d => ({
-            id: d.identifier,
-            title: d.title || 'Sin título',
-            artist: Array.isArray(d.creator) ? d.creator.join(', ') : (d.creator || 'Desconocido'),
-            thumb: `https://archive.org/services/img/${d.identifier}`,
-            type: 'archive_album',
-            // --- CORRECCIÓN 1: Se calcula la relevancia aquí ---
-            relevance: getRelevanceScore(d, query)
-        }));
-        
-        // --- CORRECCIÓN 1: Ordenamiento con priorización ---
-        // Solo en la primera página, se reordenan los resultados para poner
-        // las coincidencias exactas del título primero.
-        if (page === 1) {
-            albums.sort((a, b) => b.relevance - a.relevance);
-            items = albums;
-            await setDoc(cacheRef, { albums: items, timestamp: serverTimestamp() });
-        } else {
-            items = [...items, ...albums];
-        }
-
-        renderArchiveResults(items);
-        paging.page = page;
-
-    } catch (e) {
-         console.error('Error en búsqueda de álbumes:', e);
-         if (page === 1) {
-            $("#results").innerHTML = `<div class="loading-indicator"><p>Error al buscar álbumes. Intenta de nuevo.</p></div>`;
-         }
-    } finally {
-        paging.loading = false;
-    }
-}
-
-
-function renderArchiveResults(albums) {
-    const resultsEl = $("#results");
-    if (!resultsEl) return;
-    
-    if (!resultsEl.classList.contains('results-grid')) {
-        resultsEl.innerHTML = "";
-        resultsEl.className = "results results-grid";
-    }
-
-    if (albums.length === 0) {
-        resultsEl.innerHTML = `<div class="empty muted">No se encontraron álbumes.</div>`;
-        return;
-    }
-
-    const displayedCount = resultsEl.children.length;
-    const newAlbums = albums.slice(displayedCount);
-    
-    newAlbums.forEach(album => appendAlbumCard(album));
-}
-
-function appendAlbumCard(album) {
-    const resultsEl = $("#results");
-    const card = document.createElement("article");
-    card.className = "pl-item";
-    card.innerHTML = `
-        <img class="pl-thumb-bg" src="${album.thumb}" alt="Portada de ${album.title}" loading="lazy">
-        <div class="pl-overlay">
-            <div class="pl-meta">
-                <div class="pl-title">${album.title}</div>
-                <div class="pl-creator">${album.artist}</div>
-            </div>
-        </div>
-        <div class="card-play" style="opacity: 1; background: transparent;">
-             <svg style="width: 48px; height: 48px; color: rgba(255,255,255,0.8);" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
-        </div>`;
-    card.addEventListener('click', () => openArchiveAlbum(album));
-    resultsEl.appendChild(card);
-}
-
-async function openArchiveAlbum(album) {
-    showToast(`Cargando álbum: ${album.title}...`);
-    try {
-        const tracks = await fetchAlbumTracks(album.id);
-        if (tracks.length === 0) {
-            showToast("Este álbum no contiene canciones de audio válidas.", true);
-            return;
-        }
-
-        viewingPlaylistId = null; 
-        currentQueueTitle = album.title;
-        setQueue(tracks, 'archive_album', 0);
-        
-        switchView('view-player');
-        renderQueue(tracks, album.title);
-        playCurrent(true);
-
-    } catch (e) {
-        showToast("No se pudo cargar el álbum.", true);
-        console.error("Error al abrir álbum de Archive:", e);
-    }
-}
-
-/**
- * --- CORRECCIÓN 2: Limpieza de Títulos de Canciones ---
- * Esta función toma un título sucio de Archive.org y lo limpia,
- * devolviendo solo el nombre de la canción.
- */
-function cleanArchiveTrackTitle(rawTitle) {
-    if (!rawTitle) return "Canción sin título";
-    let title = rawTitle;
-
-    // 1. Quitar extensión de archivo
-    title = title.replace(/\.(mp3|flac|wav|ogg|m4a)$/i, '');
-    
-    // 2. Quitar información de album/artista al principio (si la hay)
-    // Ejemplo: "Bajo Palabra - Cumbia Rapera (2001)... / 03. ..."
-    if (title.includes('/')) {
-        title = title.substring(title.lastIndexOf('/') + 1);
-    }
-    
-    // 3. Quitar numeración de track al inicio (ej: "03.", "03 - ", "(03)")
-    title = title.replace(/^[\[(]?\s*\d{1,3}\s*[.)\]-]?\s*/, '');
-    
-    // 4. Si aún queda un patrón "Artista - Título", intenta quedarse con el título.
-    // Esto es menos común después del paso 2, pero puede pasar.
-    const parts = title.split(' - ');
-    if (parts.length > 1) {
-       // Asumimos que la última parte es el título, es lo más probable.
-       title = parts[parts.length - 1];
-    }
-
-    return title.trim();
-}
-
-
-async function fetchAlbumTracks(albumId) {
-    const url = `https://archive.org/metadata/${albumId}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("No se pudo obtener la metadata del álbum.");
-    const data = await response.json();
-    
-    const AUDIO_FORMATS = ['mp3', 'flac', 'wav', 'ogg'];
-    const audioFiles = (data.files || []).filter(f => AUDIO_FORMATS.some(ext => new RegExp(`\\.${ext}$`, 'i').test(f.name || '')));
-
-    const tracksMap = new Map();
-    const artist = Array.isArray(data.metadata?.creator) ? data.metadata.creator.join(', ') : (data.metadata?.creator || data.metadata?.artist || 'Desconocido');
-
-    audioFiles.forEach(file => {
-        const baseName = (file.name || '').replace(/\.[^/.]+$/, "").toLowerCase();
-        if (!tracksMap.has(baseName)) {
-            tracksMap.set(baseName, {
-                id: `${albumId}/${file.name}`,
-                // --- CORRECCIÓN 2: Se usa la nueva función de limpieza ---
-                title: cleanArchiveTrackTitle(file.title || file.name),
-                author: artist,
-                thumb: `https://archive.org/services/img/${albumId}`,
-                source: 'archive',
-                type: 'archive_track',
-                urls: {}
-            });
-        }
-        const format = (file.name.match(/\.(\w+)$/i) || [])[1]?.toLowerCase();
-        if (format) {
-            tracksMap.get(baseName).urls[format] = `https://archive.org/download/${albumId}/${encodeURIComponent(file.name)}`;
-        }
-    });
-
-    return Array.from(tracksMap.values());
-}
-
-
-
-// --- Lógica Principal de Búsqueda y Renderizado ---
-
-async function startSearch(query) {
-  if(searchAbort) searchAbort.abort();
-  searchAbort = new AbortController();
-  paging = { query, loading: true, page: 1 };
-  items = [];
-  
-  const resultsEl = $("#results");
-  resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando…</h3></div>`;
-  updateHomeGridVisibility();
-  
-  if (currentSearchType === 'youtube') {
-      await searchYoutube(query);
-  } else {
-      await searchArchive(query, 1);
-  }
 }
 
 function initSearch() {
@@ -336,7 +313,6 @@ function initSearch() {
         searchOverlay.classList.add("show");
         setTimeout(() => { overlayInput.focus(); overlayInput.select(); }, 50);
     }
-    
     function closeSearch() { searchOverlay.classList.remove("show"); }
 
     $("#searchFab")?.addEventListener("click", openSearch);
@@ -345,25 +321,22 @@ function initSearch() {
         if (e.key !== "Enter") return;
         const q = overlayInput.value.trim();
         if (!q) return;
-
         closeSearch();
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-
+        document.body.scrollTop = 0; document.documentElement.scrollTop = 0;
         switchView("view-search");
         await startSearch(q);
     });
     
     const sentinel = $("#sentinel");
     const observer = new IntersectionObserver(async (entries) => {
-        if (entries[0].isIntersecting && currentSearchType === 'archive' && !paging.loading && items.length > 0) {
+        if (entries[0].isIntersecting && currentSearchType === 'archive' && !paging.loading && items.length >= ARCHIVE_PAGE_SIZE) {
             paging.loading = true;
-            await searchArchive(paging.query, paging.page + 1);
+            paging.page += 1;
+            await archiveSearchAlbums(paging.query);
         }
     });
     if(sentinel) observer.observe(sentinel);
 }
-
 
 // --- Funciones de scraping de YouTube (se mantienen como estaban) ---
 async function scrapeYoutubeWithDetails(query, limit = 20) {
