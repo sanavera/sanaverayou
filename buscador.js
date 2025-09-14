@@ -67,7 +67,7 @@ async function scrapeYoutubeWithCustomServer(query, limit = 20) {
     // --- CORRECCIÓN: Se añade el parámetro &sp=EgIQAQ%3D%3D para filtrar y obtener solo videos. ---
     const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
     
-    const customServerUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
+    const customServerUrl = `http://191.85.27.198:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
     
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customServerUrl)}`;
 
