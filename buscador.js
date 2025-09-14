@@ -66,15 +66,18 @@ async function searchYoutubeParallel(query) {
     const resultsEl = $("#results");
     resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube…</h3></div>`;
 
-    const ytmPromise = fetch(scraperYTM(query), { signal: searchAbort.signal }).then(parseScraperResponse);
-    const ytPromise = fetch(scraperYT(query), { signal: searchAbort.signal }).then(parseScraperResponse);
+    // --- CORRECCIÓN: Se vuelve a usar el proxy para evitar el error de "Mixed Content" ---
+    const proxiedYtmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
+    const proxiedYtUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
+
+    const ytmPromise = fetch(proxiedYtmUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
+    const ytPromise = fetch(proxiedYtUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
 
     try {
         const [ytmIds, ytIds] = await Promise.all([ytmPromise, ytPromise]);
 
         if (searchAbort.signal.aborted) return;
         
-        // Unificar resultados: YTM primero, luego YT sin duplicados.
         const ytmIdSet = new Set(ytmIds);
         const uniqueYtIds = ytIds.filter(id => !ytmIdSet.has(id));
         const combinedIds = [...ytmIds, ...uniqueYtIds];
@@ -84,10 +87,8 @@ async function searchYoutubeParallel(query) {
             return;
         }
 
-        // Obtener metadatos para todos los IDs
         const videoDetails = await fetchVideoDetailsByIds(combinedIds);
         
-        // Mapear el sourceHint para referencia interna si es necesario
         const finalResults = videoDetails.map(video => ({
             ...video,
             sourceHint: ytmIdSet.has(video.id) ? 'ytm' : 'yt'
