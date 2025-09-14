@@ -1,6 +1,8 @@
 // Manejo de playlists locales e importadas (Spotify/Archive), y la cola de reproducción.
 
 let viewingPlaylistId = null;
+let currentResolverController = null; // Controlador para cancelar trabajos de importación
+let resolverJobUnsubscribe = null; // Para el listener de Firestore
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
@@ -23,6 +25,7 @@ async function resolveTrack(track, signal) {
 
     const performFetch = async (url) => {
         const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        // Asumo que fetchWithTimeout está definida en otro script (buscador.js)
         const response = await fetchWithTimeout(proxiedUrl, { signal });
         if (!response.ok) throw new Error(`La respuesta del scraper no fue exitosa (status: ${response.status})`);
         const text = await response.text();
@@ -341,11 +344,17 @@ function renderQueue(queueItems, title) {
         const li = document.createElement("li");
         li.className = "queue-item";
         li.dataset.trackId = t.id;
-        const isResolved = !!(t.id || t.urls);
+        const isResolved = !!(t && (t.id || t.urls));
+        
+        let statusIndicator = `<div class="pending-indicator">Pendiente</div>`;
+        if (!isResolved && t && t.error) {
+            statusIndicator = `<div class="pending-indicator error" title="${t.error}">Error</div>`;
+        }
+
         li.innerHTML = `
           <div class="thumb-wrap">
             <img class="thumb" src="${t.thumb}" alt="">
-            ${isResolved ? `<button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : `<div class="pending-indicator">Pendiente</div>`}
+            ${isResolved ? `<button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : statusIndicator}
           </div>
           <div class="meta">
             <div class="title-line">
@@ -380,7 +389,7 @@ async function showPlaylistInPlayer(plId) {
     if (!pl) return;
     viewingPlaylistId = pl.id;
     switchView('view-player');
-    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
+    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? { ...st, ...pl.tracks[i] } : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
     renderQueue(tracksToShow, pl.name);
     if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status)) {
         startResolverJob(plId);
@@ -390,6 +399,13 @@ async function showPlaylistInPlayer(plId) {
 function hideQueuePanel(){ 
     $("#queuePanel")?.classList.add("hide"); 
     if ($("#queueList")) $("#queueList").innerHTML=""; 
+    
+    // Aborta cualquier trabajo de resolución en curso al salir de la vista
+    if (currentResolverController) {
+        currentResolverController.abort();
+        currentResolverController = null;
+    }
+
     if (resolverJobUnsubscribe) {
         resolverJobUnsubscribe();
         resolverJobUnsubscribe = null;
@@ -543,7 +559,7 @@ async function fetchAndImportSinglePlaylist(plData) {
 }
 
 async function processAndSavePlaylist(pl) {
-    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = sy_fs();
     const col = collection(db, 'playlists');
     const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
     const snapshot = await getDocs(q);
@@ -570,5 +586,121 @@ async function processAndSavePlaylist(pl) {
         startResolverJob(docId);
     }
 }
+
+/**
+ * --- NUEVA LÓGICA DE IMPORTACIÓN POR LOTES ---
+ * Inicia el proceso de búsqueda de videos para una playlist de Spotify.
+ * Procesa 5 canciones a la vez y es resistente a fallos.
+ * @param {string} playlistId - El ID del documento de la playlist en Firestore.
+ */
+async function startResolverJob(playlistId) {
+    if (currentResolverController && currentResolverController.playlistId !== playlistId) {
+        currentResolverController.abort();
+        currentResolverController = null;
+    }
+    if (currentResolverController && currentResolverController.playlistId === playlistId) {
+        return; // Job para esta playlist ya está en ejecución
+    }
+
+    currentResolverController = new AbortController();
+    currentResolverController.playlistId = playlistId;
+    const signal = currentResolverController.signal;
+
+    const { doc, getDoc, updateDoc, serverTimestamp } = sy_fs();
+    const plRef = doc(db, 'playlists', playlistId);
+
+    try {
+        const plDoc = await getDoc(plRef);
+        if (!plDoc.exists()) {
+            console.error("Playlist no encontrada para resolver:", playlistId);
+            return;
+        }
+
+        const pl = plDoc.data();
+        const tracksToResolve = pl.spotifyTracks
+            .map((st, i) => ({ ...st, originalIndex: i }))
+            .filter((_, i) => !pl.tracks[i]);
+
+        if (tracksToResolve.length === 0) return;
+
+        await updateDoc(plRef, { status: 'resolving', updatedAt: serverTimestamp() });
+
+        const CONCURRENT_REQUESTS = 5;
+
+        for (let i = 0; i < tracksToResolve.length; i += CONCURRENT_REQUESTS) {
+            if (signal.aborted) {
+                console.log("Trabajo de resolución abortado.");
+                break;
+            }
+
+            const batch = tracksToResolve.slice(i, i + CONCURRENT_REQUESTS);
+            const initialResolvedCount = (await getDoc(plRef)).data().resolvedCount || 0;
+            showToast(`Importando... (${initialResolvedCount}/${pl.trackCount})`);
+
+            const batchPromises = batch.map(trackInfo =>
+                resolveTrack({ title: trackInfo.title, author: trackInfo.author }, signal)
+            );
+
+            const results = await Promise.allSettled(batchPromises);
+
+            if (signal.aborted) break;
+
+            let resolvedInBatch = 0;
+            const updatePayload = {};
+
+            results.forEach((result, index) => {
+                const originalTrackInfo = batch[index];
+                const { originalIndex } = originalTrackInfo;
+
+                if (result.status === 'fulfilled') {
+                    const { videoId, backups, error } = result.value;
+                    if (videoId) {
+                        updatePayload[`tracks.${originalIndex}`] = {
+                            id: videoId,
+                            title: originalTrackInfo.title,
+                            author: originalTrackInfo.author,
+                            thumb: originalTrackInfo.thumb,
+                            source: 'youtube', type: 'youtube_video',
+                            backupUrls: backups || []
+                        };
+                        resolvedInBatch++;
+                    } else {
+                        updatePayload[`tracks.${originalIndex}`] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: error || "No se encontró video." };
+                    }
+                } else {
+                    console.error(`Error resolviendo "${originalTrackInfo.title}":`, result.reason);
+                    updatePayload[`tracks.${originalIndex}`] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: "Error de red." };
+                }
+            });
+
+            if (Object.keys(updatePayload).length > 0) {
+                const currentResolvedCount = (await getDoc(plRef)).data().resolvedCount || 0;
+                updatePayload.resolvedCount = currentResolvedCount + resolvedInBatch;
+                await updateDoc(plRef, updatePayload);
+            }
+        }
+        
+        if (!signal.aborted) {
+            const finalDoc = await getDoc(plRef);
+            const finalPl = finalDoc.data();
+            const finalResolvedCount = finalPl.tracks.filter(t => t && t.id).length;
+            const finalStatus = finalResolvedCount === finalPl.trackCount ? 'resolved' : 'partial';
+            await updateDoc(plRef, { status: finalStatus, resolvedCount: finalResolvedCount, updatedAt: serverTimestamp() });
+            showToast(`Importación finalizada para "${finalPl.name}".`);
+        }
+
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            console.error("Error grave en el trabajo de resolución:", e);
+            showToast("Ocurrió un error durante la importación.", true);
+            await updateDoc(plRef, { status: 'partial' });
+        }
+    } finally {
+        if (currentResolverController && currentResolverController.playlistId === playlistId) {
+             currentResolverController = null;
+        }
+    }
+}
+
 async function getSpotifyToken() { if (spotifyToken.value && Date.now() < spotifyToken.expires) { return spotifyToken.value; } try { const response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' }); if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`); const data = await response.json(); spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 }; return spotifyToken.value; } catch (e) { console.error("Error getting Spotify token:", e); return null; } }
 async function fetchAllSpotifyPlaylistTracks(playlistId) { const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`; while (url) { try { const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('Could not get songs from playlist'); const data = await response.json(); const tracks = data.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean); allTracks = allTracks.concat(tracks); url = data.next; } catch (e) { console.error("Error fetching Spotify playlist tracks:", e); url = null; } } return allTracks; }
