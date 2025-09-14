@@ -8,18 +8,22 @@ const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
 
 /**
- * --- LÓGICA DE RESOLUCIÓN (YouTube/YouTube Music) ---
- * Reutiliza tu servidor + AllOrigins, con timeout y reintentos.
+ * --- LÓGICA DE RESOLUCIÓN REFACTORIZADA Y ROBUSTA ---
+ * Resuelve una canción de Spotify a un video, manejando timeouts, reintentos y
+ * asegurando que el proceso nunca se cuelgue.
+ * @param {object} track - El objeto de la canción de Spotify ({ title, author }).
+ * @param {AbortSignal} signal - La señal del AbortController para cancelar la petición.
+ * @returns {Promise<{videoId: string|null, backups: string[], error: string|null}>}
  */
 async function resolveTrack(track, signal) {
     const query = `${track.author} ${track.title}`;
     const ALLOW_YT_FALLBACK = false;
     const MAX_RETRIES = 1; // 1 reintento por canción
-    const RETRY_DELAY = 1000;
+    const RETRY_DELAY = 1000; // 1 segundo de espera
 
     const performFetch = async (url) => {
         const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        const response = await fetchWithTimeout(proxiedUrl, { signal }, 15000);
+        const response = await fetchWithTimeout(proxiedUrl, { signal });
         if (!response.ok) throw new Error(`La respuesta del scraper no fue exitosa (status: ${response.status})`);
         const text = await response.text();
         return [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
@@ -27,16 +31,20 @@ async function resolveTrack(track, signal) {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
+            // 1. Intento principal con YouTube Music
             const ytmIds = await performFetch(scraperYTM(query));
             if (ytmIds.length > 0) {
                 return { videoId: ytmIds[0], backups: ytmIds.slice(1), error: null };
             }
+
+            // 2. Fallback (si está activado)
             if (ALLOW_YT_FALLBACK) {
                 const ytIds = await performFetch(scraperYT(query));
                 if (ytIds.length > 0) {
                     return { videoId: ytIds[0], backups: ytIds.slice(1), error: null };
                 }
             }
+            // Si llega aquí, significa que no hubo resultados, no es un error de red.
             return { videoId: null, backups: [], error: "No se encontraron resultados de video." };
 
         } catch (e) {
@@ -51,8 +59,9 @@ async function resolveTrack(track, signal) {
             }
         }
     }
-    return { videoId: null, backups: [], error: "Error desconocido en el resolver." };
+     return { videoId: null, backups: [], error: "Error desconocido en el resolver." };
 }
+
 
 /**
  * Guarda el álbum de Archive.org que se está reproduciendo como una nueva playlist del usuario.
@@ -534,7 +543,7 @@ async function fetchAndImportSinglePlaylist(plData) {
 }
 
 async function processAndSavePlaylist(pl) {
-    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase || sy_fs();
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
     const col = collection(db, 'playlists');
     const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
     const snapshot = await getDocs(q);
@@ -548,12 +557,9 @@ async function processAndSavePlaylist(pl) {
         status: 'unresolved',
         resolvedCount: 0,
         updatedAt: serverTimestamp(),
-        source: 'spotify',
-        isPublic: false,
-        ownerUserId: "current_user_id_placeholder"
     };
     if (snapshot.empty) {
-        const docRef = await addDoc(col, playlistData);
+        const docRef = await addDoc(col, { ...playlistData, isPublic: false, source: 'spotify', spotifyId: pl.spotifyId, ownerUserId: "current_user_id_placeholder" });
         addMyPlaylistId(docRef.id);
         startResolverJob(docRef.id);
     } else {
@@ -564,305 +570,5 @@ async function processAndSavePlaylist(pl) {
         startResolverJob(docId);
     }
 }
-
-// ----------------- TOKEN + TRACKS SPOTIFY -----------------
-async function getSpotifyToken() {
-    if (spotifyToken.value && Date.now() < spotifyToken.expires) {
-        return spotifyToken.value;
-    }
-    try {
-        const response = await fetch("https://accounts.spotify.com/api/token", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET)
-            },
-            body: 'grant_type=client_credentials'
-        });
-        if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`);
-        const data = await response.json();
-        spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 };
-        return spotifyToken.value;
-    } catch (e) {
-        console.error("Error getting Spotify token:", e);
-        return null;
-    }
-}
-
-async function fetchAllSpotifyPlaylistTracks(playlistId) {
-    const token = await getSpotifyToken();
-    if (!token) return [];
-    let allTracks = [];
-    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`;
-    while (url) {
-        try {
-            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) throw new Error('Could not get songs from playlist');
-            const data = await response.json();
-            const tracks = data.items.map(({ track }) => track ? {
-                spotifyId: track.id,
-                title: track.name,
-                author: track.artists.map(a => a.name).join(', '),
-                thumb: track.album.images?.[0]?.url || ''
-            } : null).filter(Boolean);
-            allTracks = allTracks.concat(tracks);
-            url = data.next;
-        } catch (e) {
-            console.error("Error fetching Spotify playlist tracks:", e);
-            url = null;
-        }
-    }
-    return allTracks;
-}
-
-// ==========================================================
-//   RESOLVER CONCURRENTE (5 HILOS) + ROBUSTEZ ANTI-CUELGUES
-// ==========================================================
-
-const RESOLVER_CONCURRENCY = 5;
-const RESOLVER_FETCH_TIMEOUT = 15000; // ms
-const RESOLVER_DOC_WRITE_BATCH = 3;   // cada N resoluciones, persistir
-
-// Mapa de jobs activos por playlistId
-const resolverJobs = new Map();
-// opcional: para cortar listeners antiguos si existían
-let resolverJobUnsubscribe = null;
-
-function toResolvedTrack(spTrack, videoId, backups) {
-    return {
-        id: videoId,
-        title: spTrack.title,
-        author: spTrack.author,
-        thumb: spTrack.thumb || '',
-        source: 'youtube',
-        type: 'youtube_video',
-        backupUrls: backups || []
-    };
-}
-
-async function startResolverJob(playlistId) {
-    // Evita doble arranque
-    if (resolverJobs.has(playlistId)) return;
-
-    const { doc, getDoc, updateDoc, onSnapshot, serverTimestamp } = sy_fs();
-    const plRef = doc(db, 'playlists', playlistId);
-
-    // Cargar estado actual
-    const snap = await getDoc(plRef);
-    if (!snap.exists()) return;
-    const pl = snap.data();
-
-    if (pl.source !== 'spotify') return;
-
-    // Armar job
-    const job = {
-        id: playlistId,
-        running: true,
-        controllers: new Map(), // index -> AbortController
-        inFlight: 0,
-        queue: [],
-        resolvedSinceLastWrite: 0,
-        lastPersistTime: 0
-    };
-    resolverJobs.set(playlistId, job);
-
-    // Construir lista de índices pendientes
-    const total = pl.trackCount || (pl.spotifyTracks?.length || 0);
-    const tracks = pl.tracks || Array(total).fill(null);
-    for (let i = 0; i < total; i++) {
-        if (!tracks[i] || !tracks[i].id) {
-            job.queue.push(i);
-        }
-    }
-
-    // Actualizar estado a 'resolving'
-    await safeUpdate(plRef, { status: 'resolving', updatedAt: serverTimestamp() });
-
-    // Listener para reflejar cambios externos (opcional)
-    if (resolverJobUnsubscribe) resolverJobUnsubscribe();
-    resolverJobUnsubscribe = onSnapshot(plRef, (s) => {
-        const d = s.data();
-        const myCard = communityPlaylists.find(p => p.id === playlistId);
-        if (myCard) {
-            // refrescar el “modelo local” de esa playlist
-            Object.assign(myCard, d);
-            renderPlaylists();
-            if (viewingPlaylistId === playlistId) {
-                const toShow = d.spotifyTracks
-                    ? d.spotifyTracks.map((st, i) => (d.tracks && d.tracks[i]) ? d.tracks[i] : { ...st, id: null, thumb: st.thumb || d.cover })
-                    : (d.tracks || []);
-                renderQueue(toShow, d.name);
-            }
-        }
-    });
-
-    // Función que dispara nuevos workers hasta alcanzar el límite
-    const pump = async () => {
-        if (!job.running) return;
-
-        while (job.inFlight < RESOLVER_CONCURRENCY && job.queue.length > 0) {
-            const index = job.queue.shift();
-            startWorker(playlistId, index).catch(() => {/* ya loguea adentro */});
-        }
-
-        // Si no queda nada en vuelo y cola vacía => finalizar
-        if (job.inFlight === 0 && job.queue.length === 0) {
-            await finalizeJob(playlistId);
-        }
-    };
-
-    // Lanzar primeros
-    pump();
-}
-
-async function startWorker(playlistId, index) {
-    const job = resolverJobs.get(playlistId);
-    if (!job || !job.running) return;
-
-    job.inFlight++;
-
-    const { doc, getDoc, updateDoc, serverTimestamp } = sy_fs();
-    const plRef = doc(db, 'playlists', playlistId);
-
-    // Snapshot fresco para obtener esa pista
-    const snap = await getDoc(plRef);
-    if (!snap.exists()) { job.inFlight--; return; }
-    const pl = snap.data();
-
-    const spTrack = pl.spotifyTracks?.[index];
-    if (!spTrack) { job.inFlight--; return; }
-
-    // Crear AbortController propio del worker
-    const ac = new AbortController();
-    job.controllers.set(index, ac);
-
-    try {
-        // Resolver con timeout (ya lo maneja fetchWithTimeout internamente)
-        const { videoId, backups, error } = await resolveTrack(spTrack, ac.signal);
-
-        let updatedTracks = pl.tracks || Array(pl.trackCount).fill(null);
-        if (videoId) {
-            updatedTracks[index] = toResolvedTrack(spTrack, videoId, backups);
-        } else {
-            // marcar como intentado sin id (para no bloquear; se puede reintentar luego con botón)
-            updatedTracks[index] = { ...spTrack, id: null, error: error || 'sin_resultado' };
-        }
-
-        const newResolved = updatedTracks.filter(t => t && t.id).length;
-        const newStatus =
-            newResolved === pl.trackCount ? 'resolved' :
-            newResolved > 0 ? 'partial' : 'unresolved';
-
-        // Persistencia por lote
-        job.resolvedSinceLastWrite++;
-        const shouldPersist = (job.resolvedSinceLastWrite >= RESOLVER_DOC_WRITE_BATCH) || newStatus === 'resolved';
-
-        if (shouldPersist) {
-            job.resolvedSinceLastWrite = 0;
-            await safeUpdate(plRef, {
-                tracks: updatedTracks,
-                status: newStatus,
-                resolvedCount: newResolved,
-                updatedAt: serverTimestamp()
-            });
-        } else {
-            // Persistencia ligera: solo resolvedCount/status para feedback frecuente
-            await safeUpdate(plRef, {
-                resolvedCount: newResolved,
-                status: newStatus,
-                updatedAt: serverTimestamp()
-            });
-        }
-
-    } catch (e) {
-        console.error(`Worker fallo (pl=${playlistId}, idx=${index}):`, e);
-        // No reinyecto automáticamente al final de la cola para evitar loops;
-        // si quieres reintento adicional, podrías push(index) con contador de reintentos.
-    } finally {
-        job.controllers.delete(index);
-        job.inFlight--;
-        // Bombear próximos
-        const currentJob = resolverJobs.get(playlistId);
-        if (currentJob && currentJob.running) {
-            // seguir lanzando hasta completar
-            // no await para no bloquear
-            setTimeout(() => {
-                // llamada asíncrona para no reentrar
-                if (resolverJobs.get(playlistId)?.running) {
-                    // eslint-disable-next-line no-unused-expressions
-                    (async ()=>{ 
-                        const { doc, getDoc } = sy_fs();
-                        const ref = doc(db, 'playlists', playlistId);
-                        const snap2 = await getDoc(ref);
-                        const pl2 = snap2.exists() ? snap2.data() : null;
-                        if (!pl2) return;
-                        // si aún quedan nulls, encolar (solo los que no tienen id ni error “resuelto”)
-                        // (normalmente la cola original ya estaba completa; esto es defensivo)
-                        if (currentJob.queue.length === 0) {
-                            const tcount = pl2.trackCount || (pl2.spotifyTracks?.length || 0);
-                            const tr = pl2.tracks || Array(tcount).fill(null);
-                            for (let i = 0; i < tcount; i++) {
-                                if (!tr[i] || !tr[i].id) { /* pendiente o fallado */ }
-                            }
-                        }
-                        // seguir bombeando
-                        pumpJob(playlistId);
-                    })();
-                }
-            }, 0);
-        }
-    }
-}
-
-function pumpJob(playlistId) {
-    const job = resolverJobs.get(playlistId);
-    if (!job || !job.running) return;
-    while (job.inFlight < RESOLVER_CONCURRENCY && job.queue.length > 0) {
-        const index = job.queue.shift();
-        startWorker(playlistId, index).catch(()=>{});
-    }
-    if (job.inFlight === 0 && job.queue.length === 0) {
-        finalizeJob(playlistId).catch(()=>{});
-    }
-}
-
-async function finalizeJob(playlistId) {
-    const job = resolverJobs.get(playlistId);
-    if (!job) return;
-    job.running = false;
-    job.controllers.forEach((ac) => { try { ac.abort(); } catch(_){} });
-    job.controllers.clear();
-    resolverJobs.delete(playlistId);
-
-    const { doc, getDoc, updateDoc, serverTimestamp } = sy_fs();
-    const plRef = doc(db, 'playlists', playlistId);
-    const snap = await getDoc(plRef);
-    if (!snap.exists()) return;
-
-    const pl = snap.data();
-    const resolved = (pl.tracks || []).filter(t => t && t.id).length;
-    const newStatus = resolved === pl.trackCount ? 'resolved' : (resolved > 0 ? 'partial' : 'unresolved');
-
-    await safeUpdate(plRef, { status: newStatus, resolvedCount: resolved, updatedAt: serverTimestamp() });
-    showToast(`Importación finalizada: ${resolved}/${pl.trackCount}.`);
-}
-
-async function cancelResolverJob(playlistId) {
-    const job = resolverJobs.get(playlistId);
-    if (!job) return;
-    job.running = false;
-    job.controllers.forEach((ac) => { try { ac.abort(); } catch(_){} });
-    job.controllers.clear();
-    resolverJobs.delete(playlistId);
-    showToast("Importación cancelada.");
-}
-
-// Pequeño helper con catch para evitar bloquear el job si falla un update
-async function safeUpdate(ref, data) {
-    try {
-        const { updateDoc } = sy_fs();
-        await updateDoc(ref, data);
-    } catch (e) {
-        console.warn("safeUpdate falló, se continúa:", e.message || e);
-    }
-}
+async function getSpotifyToken() { if (spotifyToken.value && Date.now() < spotifyToken.expires) { return spotifyToken.value; } try { const response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' }); if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`); const data = await response.json(); spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 }; return spotifyToken.value; } catch (e) { console.error("Error getting Spotify token:", e); return null; } }
+async function fetchAllSpotifyPlaylistTracks(playlistId) { const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`; while (url) { try { const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('Could not get songs from playlist'); const data = await response.json(); const tracks = data.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean); allTracks = allTracks.concat(tracks); url = data.next; } catch (e) { console.error("Error fetching Spotify playlist tracks:", e); url = null; } } return allTracks; }
