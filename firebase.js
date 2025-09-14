@@ -33,6 +33,34 @@ function sy_fs() {
   };
 }
 
+
+/**
+ * --- NUEVA FUNCIÓN ---
+ * Maneja la actualización en tiempo real de la playlist que se está viendo.
+ * Se llama cuando Firestore detecta un cambio (ej: se encontró una nueva canción).
+ * @param {object} newPlaylist - El objeto de la playlist actualizado desde Firestore.
+ */
+function handleRealtimeUpdate(newPlaylist) {
+    if (!newPlaylist || typeof renderQueue !== 'function') return;
+
+    // Reconstruye la lista visual combinando los tracks originales de Spotify
+    // con los que ya se encontraron, para mostrar el estado actual completo.
+    const tracksToShow = newPlaylist.spotifyTracks 
+        ? newPlaylist.spotifyTracks.map((spotifyTrack, index) => 
+            (newPlaylist.tracks && newPlaylist.tracks[index]) 
+                ? newPlaylist.tracks[index] 
+                : { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPlaylist.cover }
+          )
+        : (newPlaylist.tracks || []);
+
+    // Actualiza la cola de reproducción real (solo con canciones encontradas)
+    queue = tracksToShow.filter(t => t && t.id);
+
+    // Vuelve a renderizar la lista de canciones en la interfaz del reproductor.
+    renderQueue(tracksToShow, newPlaylist.name);
+}
+
+
 /**
  * Inicializa la aplicación de Firebase y establece el listener principal para las playlists.
  */
@@ -131,7 +159,7 @@ async function createNewPlaylist(name, creator) {
     try {
         const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), {
-            name, creator, tracks: [], updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder'
+            name, creator, tracks: [], trackCount: 0, updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder'
         });
         addMyPlaylistId(docRef.id);
         return true;
@@ -153,7 +181,7 @@ async function createNewPlaylistFromSong(name, creator, track) {
     try {
         const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), {
-            name, creator, tracks: [track], updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder'
+            name, creator, tracks: [track], trackCount: 1, updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder'
         });
         addMyPlaylistId(docRef.id);
         return true;
@@ -178,7 +206,7 @@ async function addSongToPlaylist(playlistId, track) {
     const plRef = doc(db, "playlists", playlistId);
     
     const updatedTracks = [...pl.tracks];
-    if (!updatedTracks.some(t => t.id === track.id)) { updatedTracks.unshift(track); }
+    if (!updatedTracks.some(t => t && t.id === track.id)) { updatedTracks.unshift(track); }
     
     const spotifyTracks = pl.spotifyTracks ? [...pl.spotifyTracks] : [];
     if (pl.source === 'spotify' && !spotifyTracks.some(t => t.id === track.originalId)) {
@@ -186,7 +214,7 @@ async function addSongToPlaylist(playlistId, track) {
     }
 
     try {
-        await updateDoc(plRef, { tracks: updatedTracks, spotifyTracks, updatedAt: serverTimestamp() });
+        await updateDoc(plRef, { tracks: updatedTracks, trackCount: updatedTracks.length, spotifyTracks, updatedAt: serverTimestamp() });
         return true;
     } catch(e) {
         console.error("Error adding song: ", e);
@@ -318,7 +346,7 @@ async function runJobBatch(playlistId, jobRef) {
 
     const playlist = plDoc.data();
     const job = jobDoc.data();
-    const BATCH_SIZE = 3;
+    const BATCH_SIZE = 1; // Bajado de 3 a 1 para no saturar el servidor de scraping.
     
     const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
     const unresolvedIndices = [];
