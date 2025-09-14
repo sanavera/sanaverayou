@@ -68,7 +68,7 @@ async function scrapeYoutubeWithCustomServer(query, limit = 20) {
     const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     
     // 2. URL del servidor de scraping personal (llamada directa)
-    const customServerUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
+    const customServerUrl = `http://192.168.1.47:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
 
     // 3. Obtener la lista de URLs en formato de texto plano
     const response = await fetch(customServerUrl, { signal: searchAbort?.signal });
