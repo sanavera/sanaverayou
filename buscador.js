@@ -28,7 +28,7 @@ async function startSearch(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - CORREGIDA
+// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - FINAL
 // =======================================================
 
 /**
@@ -58,33 +58,30 @@ function extractVideoId(url) {
 }
 
 /**
- * Usa el servidor personal para obtener URLs, extrae los IDs y luego usa noembed para los metadatos.
+ * Usa el servidor personal (a través de un proxy CORS) para obtener IDs y luego noembed para los metadatos.
  * @param {string} query - La consulta de búsqueda.
  * @param {number} limit - El número máximo de resultados.
  * @returns {Promise<Array<object>>} - Una lista de objetos de canción.
  */
 async function scrapeYoutubeWithCustomServer(query, limit = 20) {
-    // 1. URL de búsqueda de YouTube
     const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const customServerUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
     
-    // 2. URL del servidor de scraping personal (llamada directa)
-    const customServerUrl = `http://192.168.1.47:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
+    // --- CORRECCIÓN FINAL: Se envuelve la llamada al servidor en un proxy para evitar el error de "Mixed Content" ---
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customServerUrl)}`;
 
-    // 3. Obtener la lista de URLs en formato de texto plano
-    const response = await fetch(customServerUrl, { signal: searchAbort?.signal });
+    const response = await fetch(proxyUrl, { signal: searchAbort?.signal });
     if (!response.ok) {
-        throw new Error(`El servidor de scraping falló con el estado: ${response.status}`);
+        throw new Error(`El proxy o el servidor de scraping fallaron con el estado: ${response.status}`);
     }
     
-    // --- CORRECCIÓN: Procesar la respuesta como texto, no como JSON ---
     const textResponse = await response.text();
-    const urls = textResponse.split('\n').filter(url => url.trim() !== ''); // Dividir por saltos de línea y limpiar vacíos
+    const urls = textResponse.split('\n').filter(url => url.trim() !== '');
 
     if (!Array.isArray(urls)) {
         throw new Error("La respuesta del servidor de scraping no se pudo procesar como un array de URLs.");
     }
 
-    // 4. Extraer los IDs de las URLs y obtener metadatos
     const videoIds = urls.map(url => extractVideoId(url)).filter(Boolean);
     const uniqueIds = [...new Set(videoIds)];
 
