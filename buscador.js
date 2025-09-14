@@ -28,7 +28,7 @@ async function startSearch(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - MODIFICADA
+// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - CORREGIDA
 // =======================================================
 
 /**
@@ -51,7 +51,6 @@ function extractVideoId(url) {
             return pathnameParts[pathnameParts.length - 1];
         }
     } catch (e) {
-        // Fallback para formatos extraños.
         const match = url.match(/(?:watch\?v=|youtu\.be\/|shorts\/)([\w-]{11})/);
         return match ? match[1] : null;
     }
@@ -59,39 +58,42 @@ function extractVideoId(url) {
 }
 
 /**
- * Nueva función que usa el servidor personal para obtener IDs y luego noembed para los metadatos.
+ * Usa el servidor personal para obtener URLs, extrae los IDs y luego usa noembed para los metadatos.
  * @param {string} query - La consulta de búsqueda.
  * @param {number} limit - El número máximo de resultados.
  * @returns {Promise<Array<object>>} - Una lista de objetos de canción.
  */
 async function scrapeYoutubeWithCustomServer(query, limit = 20) {
-    // 1. Construir la URL para el servidor de scraping personal
+    // 1. URL de búsqueda de YouTube
     const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    const serverUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
+    
+    // 2. URL del servidor de scraping personal (llamada directa)
+    const customServerUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
 
-    // 2. Obtener la lista de URLs desde el servidor
-    const response = await fetch(serverUrl, { signal: searchAbort?.signal });
+    // 3. Obtener la lista de URLs en formato de texto plano
+    const response = await fetch(customServerUrl, { signal: searchAbort?.signal });
     if (!response.ok) {
         throw new Error(`El servidor de scraping falló con el estado: ${response.status}`);
     }
-    const urls = await response.json(); // Se asume que el servidor devuelve un array JSON de strings
+    
+    // --- CORRECCIÓN: Procesar la respuesta como texto, no como JSON ---
+    const textResponse = await response.text();
+    const urls = textResponse.split('\n').filter(url => url.trim() !== ''); // Dividir por saltos de línea y limpiar vacíos
 
     if (!Array.isArray(urls)) {
-        throw new Error("La respuesta del servidor de scraping no es un array válido.");
+        throw new Error("La respuesta del servidor de scraping no se pudo procesar como un array de URLs.");
     }
 
-    // 3. Extraer los IDs de las URLs
+    // 4. Extraer los IDs de las URLs y obtener metadatos
     const videoIds = urls.map(url => extractVideoId(url)).filter(Boolean);
     const uniqueIds = [...new Set(videoIds)];
 
-    // 4. Usar la función existente para obtener metadatos desde noembed.com
     return fetchVideoDetailsByIds(uniqueIds.slice(0, limit));
 }
 
 
 async function searchYoutube(query) {
   try {
-    // Se llama a la nueva función de scraping
     const videoResults = await scrapeYoutubeWithCustomServer(query, 20);
     if (searchAbort.signal.aborted) return;
     items = videoResults;
