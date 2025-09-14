@@ -1,220 +1,229 @@
-/* =========================================================================
-   SanaveraYou Pro - buscador.js (YouTube via App Android + NoEmbed)
-   -------------------------------------------------------------------------
-   - Usa tu app Android (HTTP en puerto 5000) para scrapear IDs de YouTube.
-   - Completa metadatos con NoEmbed (título, autor, thumb).
-   - No usa r.jina.ai ni otros proxys.
-   - No re-declara helpers globales (cleanTitle, cleanAuthor, $, etc.)
-   - Mantiene la UI actual: overlay de búsqueda, render de resultados.
-   ========================================================================= */
+/* ===============================
+   Buscador – YouTube + Archive.org
+   (adaptado para usar scraper Android en puerto 5000)
+   =============================== */
 
-/* ========= CONFIG EDITABLE ============================================== */
-
-// ⇣⇣⇣ CAMBIÁ SOLO ESTA IP CUANDO CAMBIE TU IP PÚBLICA ⇣⇣⇣
-const ANDROID_SCRAPER_HOST = 'http://191.85.26.215:5000';
-// ⇡⇡⇡ CAMBIÁ SOLO ESTA IP CUANDO CAMBIE TU IP PÚBLICA ⇡⇡⇡
-
-const MAX_RESULTS = 20; // cuántos videos mostrar
-const NOEMBED_URL = 'https://noembed.com/embed?url=';
-
-/* ========= ESTADO INTERNO ============================================== */
-
-let searchAbort = null;
 let items = [];
+let searchAbort = null;
 let paging = { query: "", loading: false };
 
-/* ========= HELPERS MÍNIMOS (no pisan los tuyos) ======================== */
+/* Si querés sobreescribir la IP en index.html:
+   <script>window.YT_SCRAPER_HOST = "http://TU_IP_PUBLICA:5000";</script>
+   Si no está definida, usamos la de abajo como fallback.
+*/
+const DEFAULT_SCRAPER_HOST = "http://191.85.26.215:5000";
 
-// Selección segura sin romper si no existe $
-function $(sel, root) {
-  try {
-    return (root || document).querySelector(sel);
-  } catch { return null; }
-}
-
-function $all(sel, root) {
-  try {
-    return Array.from((root || document).querySelectorAll(sel));
-  } catch { return []; }
-}
-
-// Evita crashear si no existen helpers visuales en este build
-function safe(fnName, fallback) {
-  try {
-    const fn = window[fnName];
-    return typeof fn === 'function' ? fn : fallback;
-  } catch { return fallback; }
-}
-
-// Toast opcional si lo tenés
-const toast = (msg) => {
-  const t = window.toast || window.showToast || null;
-  if (typeof t === 'function') t(msg);
-  else console.log('[toast]', msg);
-};
-
-// Mantener la home grid visible/oculta si existe esa lógica
-function updateHomeGridVisibility() {
-  try {
-    const fn = window.updateHomeGridVisibility;
-    if (typeof fn === 'function') fn();
-  } catch {}
-}
-
-// Limpia autor/título si están disponibles globalmente
-const _cleanTitle = (s) => (typeof window.cleanTitle === 'function' ? window.cleanTitle(s) : s || '');
-const _cleanAuthor = (s) => (typeof window.cleanAuthor === 'function' ? window.cleanAuthor(s) : s || '');
-
-/* ========= CORE: BUILD SEARCH URL (YouTube HTML) ======================= */
-
-function buildYouTubeSearchURL(q) {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-}
-
-/* ========= CORE: PEDIR IDs A TU APP ANDROID ============================ */
-
-async function fetchIdsViaAndroid(searchUrl, signal) {
-  const url = `${ANDROID_SCRAPER_HOST}/?url=${encodeURIComponent(searchUrl)}`;
-  const r = await fetch(url, { signal, method: 'GET' });
-  if (!r.ok) throw new Error(`Android scraper ${r.status}`);
-  const text = await r.text();
-
-  // Admite líneas con URL completa o solo ID
-  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const ids = [];
-  for (const line of lines) {
-    // URL con ?v=
-    const m = line.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    if (m) { ids.push(m[1]); continue; }
-    // ID pelado
-    if (/^[a-zA-Z0-9_-]{11}$/.test(line)) ids.push(line);
+/* -------------------------------
+   Utilidades (reintentos, helpers)
+--------------------------------- */
+async function withRetry(fn, retries = 3, delay = 500) {
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    try { return await fn(); }
+    catch (err) {
+      lastError = err;
+      console.warn(`Reintento ${i + 1}/${retries} falló:`, err);
+      if (i < retries - 1) await new Promise(r => setTimeout(r, delay * (i + 1)));
+    }
   }
-  // dedupe + recorte
-  return [...new Set(ids)].slice(0, MAX_RESULTS);
+  throw lastError;
 }
 
-/* ========= CORE: COMPLETAR METADATOS CON NOEMBED ======================= */
+// Algunas funciones utilitarias se asumen globales en tu proyecto:
+// - cleanTitle, cleanAuthor (están en main.js, NO las redefino)
+// - $, switchView, updateHomeGridVisibility, refreshIndicators
+// - isFav, favIconSvg, youtubeLogoSvg, youtubeMusicLogoSvg, spotifyLogoSvg, dotsSvg
+// - handleResultClick/playFromSearch ya están en tu proyecto (no los toco)
 
-async function fetchNoEmbedBatch(ids, signal) {
-  const results = [];
-  const CONCURRENCY = 4;
-  let cursor = 0;
+/* ---------------------------------
+   Archive.org – búsqueda de álbums
+----------------------------------- */
+async function archiveSearchAlbums(artistOrQuery, limit = 100) {
+  const q = encodeURIComponent(artistOrQuery);
+  const url = `https://archive.org/advancedsearch.php?q=${q}+mediatype%3A(audio)&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=publicdate&sort%5B%5D=downloads+desc&sort%5B%5D=&sort%5B%5D=&rows=${limit}&page=1&output=json`;
 
-  async function worker() {
-    while (cursor < ids.length) {
-      const id = ids[cursor++];
-      try {
-        const r = await fetch(`${NOEMBED_URL}https://www.youtube.com/watch?v=${id}`, { signal });
-        const meta = await r.json();
-        if (meta && !meta.error) {
-          results.push({
-            id,
-            title: _cleanTitle(meta.title || `Video ${id}`),
-            thumb: meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-            author: _cleanAuthor(meta.author_name || 'YouTube'),
-            source: 'youtube',
-            type: 'youtube_video',
-            isTopic: /topic/i.test(meta.author_name || '')
-          });
-        } else {
-          results.push({
+  const res = await fetch(url, { signal: searchAbort?.signal });
+  if (!res.ok) throw new Error(`Archive.org falló: ${res.status}`);
+  const data = await res.json();
+  const docs = data?.response?.docs || [];
+
+  // Transformo a cards de álbum (misma estructura que usás en resultados)
+  const albums = docs.map(d => ({
+    id: d.identifier,
+    title: d.title || "Sin título",
+    author: d.creator || "Desconocido",
+    thumb: `https://archive.org/services/img/${d.identifier}`,
+    source: "archive",
+    type: "archive_album"
+  }));
+
+  // Orden preferente: coincidencia exacta al inicio del título
+  const normQ = (artistOrQuery || "").toLowerCase().trim();
+  const exactFirst = [];
+  const others = [];
+  for (const a of albums) {
+    const t = (a.title || "").toLowerCase();
+    if (t.startsWith(normQ)) exactFirst.push(a);
+    else others.push(a);
+  }
+  return [...exactFirst, ...others];
+}
+
+/* -------------------------------------------------
+   YouTube – scraping IDs vía servidor Android (5000)
+   y enriquecimiento con NoEmbed
+--------------------------------------------------- */
+async function scrapeYoutubeWithDetails(query, limit = 20) {
+  // === Android scraper endpoint (plain text list of YouTube URLs) ===
+  const SCRAPER_HOST = (typeof window !== "undefined" && window.YT_SCRAPER_HOST) ? window.YT_SCRAPER_HOST : DEFAULT_SCRAPER_HOST;
+  const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+
+  const res = await fetch(`${SCRAPER_HOST}/?url=${encodeURIComponent(ytSearchUrl)}`, {
+    signal: searchAbort?.signal
+  });
+  if (!res.ok) throw new Error(`Scraper falló: ${res.status}`);
+  const text = await res.text();
+
+  // El server devuelve líneas con URLs completas; extraemos IDs únicos (11 chars)
+  const ids = Array.from(new Set(
+    Array.from(text.matchAll(/([a-zA-Z0-9_-]{11})/g)).map(m => m[1])
+  )).slice(0, limit);
+
+  if (!ids.length) return [];
+
+  // Enriquecemos con NoEmbed (título/autor/thumbnail) – fallback si falla
+  const detailed = await fetchVideoDetailsByIds(ids);
+  return detailed;
+}
+
+async function fetchVideoDetailsByIds(ids) {
+  const uniqueIds = [...new Set(ids)];
+  if (!uniqueIds.length) return [];
+
+  const metadataPromises = uniqueIds.map(id =>
+    fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)
+      .then(r => r.json())
+      .then(meta => {
+        if (meta.error) {
+          return {
             id,
             title: `Video ${id}`,
             thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-            author: 'YouTube',
+            author: "YouTube",
             source: 'youtube',
             type: 'youtube_video',
             isTopic: false
-          });
+          };
         }
-      } catch {
-        // fallback duro si noembed falla
-        results.push({
+        return {
           id,
-          title: `Video ${id}`,
-          thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-          author: 'YouTube',
+          title: cleanTitle(meta.title || `Video ${id}`),
+          thumb: (meta.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+          author: cleanAuthor(meta.author_name || "YouTube"),
           source: 'youtube',
           type: 'youtube_video',
-          isTopic: false
-        });
+          isTopic: /topic/i.test(meta.author_name || "")
+        };
+      })
+      .catch(() => ({
+        id,
+        title: `Video ${id}`,
+        thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        author: "YouTube",
+        source: 'youtube',
+        type: 'youtube_video',
+        isTopic: false
+      }))
+  );
+
+  return (await Promise.all(metadataPromises)).filter(Boolean);
+}
+
+/* -------------------------------------------------
+   Búsqueda principal (Canciones/Álbumes)
+--------------------------------------------------- */
+async function startSearch(query) {
+  if (searchAbort) searchAbort.abort();
+  searchAbort = new AbortController();
+  paging = { query, loading: true };
+  items = [];
+
+  const resultsEl = $("#results");
+  if (resultsEl) {
+    resultsEl.innerHTML = `
+      <div class="loading-indicator">
+        <h3>Buscando… espere (puede tardar unos segundos)</h3>
+      </div>`;
+  }
+  updateHomeGridVisibility?.();
+
+  try {
+    // Modo seleccionado en tu UI.
+    // Asumo que existe getSearchMode() -> 'songs' | 'albums'
+    const mode = (typeof getSearchMode === "function") ? getSearchMode() : 'songs';
+
+    if (mode === 'albums') {
+      const albums = await archiveSearchAlbums(query, 120);
+      if (searchAbort.signal.aborted) return;
+      if (resultsEl) resultsEl.innerHTML = "";
+      if (!albums.length) {
+        if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron álbumes.</p></div>`;
+        return;
       }
+      items = albums;
+      appendResults(items);
+      return;
     }
-  }
 
-  const workers = Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker);
-  await Promise.all(workers);
-  return results;
-}
+    // Canciones (YouTube)
+    const videoResults = await scrapeYoutubeWithDetails(query, 24);
+    if (searchAbort.signal.aborted) return;
 
-/* ========= RENDER DE RESULTADOS (compat con tu UI) ===================== */
+    if (resultsEl) resultsEl.innerHTML = "";
+    if (!videoResults.length) {
+      if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
+      return;
+    }
+    items = videoResults;
+    appendResults(items);
 
-function youtubeLogoSvgSafe() {
-  try {
-    return typeof window.youtubeLogoSvg === 'function'
-      ? window.youtubeLogoSvg()
-      : '<span class="logo-pill">YT</span>';
-  } catch {
-    return '<span class="logo-pill">YT</span>';
-  }
-}
-function youtubeMusicLogoSvgSafe() {
-  try {
-    return typeof window.youtubeMusicLogoSvg === 'function'
-      ? window.youtubeMusicLogoSvg()
-      : '<span class="logo-pill">YTM</span>';
-  } catch {
-    return '<span class="logo-pill">YTM</span>';
+  } catch (e) {
+    console.error('Search failed:', e);
+    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
+  } finally {
+    paging.loading = false;
   }
 }
-function spotifyLogoSvgSafe() {
-  try {
-    return typeof window.spotifyLogoSvg === 'function'
-      ? window.spotifyLogoSvg()
-      : '<span class="logo-pill">SP</span>';
-  } catch {
-    return '<span class="logo-pill">SP</span>';
-  }
-}
-function favIconSvgSafe(active) {
-  try {
-    return typeof window.favIconSvg === 'function'
-      ? window.favIconSvg(active)
-      : (active ? '★' : '☆');
-  } catch {
-    return active ? '★' : '☆';
-  }
-}
-function isFavSafe(id) {
-  try {
-    return typeof window.isFav === 'function' ? !!window.isFav(id) : false;
-  } catch { return false; }
-}
-function dotsSvgSafe() {
-  try {
-    return typeof window.dotsSvg === 'function' ? window.dotsSvg() : '⋮';
-  } catch { return '⋮'; }
-}
 
-function appendResults(chunk){
-  const root = $("#results");
-  if(!root) return;
-
-  for(const it of chunk){
+/* -------------------------------------------------
+   Render de resultados (cards)
+--------------------------------------------------- */
+function appendResults(chunk) {
+  const root = $("#results"); if (!root) return;
+  for (const it of chunk) {
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.trackId = it.id;
 
-    // marca
-    let logo = youtubeLogoSvgSafe();
-    if (it.isTopic) {
-      // si es topic, alterna visual (no afecta la lógica)
-      logo = Math.random() < 0.5 ? spotifyLogoSvgSafe() : youtubeMusicLogoSvgSafe();
+    let logo = youtubeLogoSvg?.();
+    if (it.source === "archive") {
+      // Podrías usar un ícono propio para Archive si lo tenés
+      logo = spotifyLogoSvg?.(); // placeholder si ya lo usabas
+    } else if (it.isTopic) {
+      logo = youtubeMusicLogoSvg?.();
     }
+
+    const sub = it.source === "archive"
+      ? (it.author || "")
+      : (cleanAuthor(it.author) || "");
+
+    const thumb = it.thumb || (it.source === "archive"
+      ? `https://archive.org/services/img/${it.id}`
+      : `https://i.ytimg.com/vi/${it.id}/hqdefault.jpg`);
 
     item.innerHTML = `
       <div class="thumb-wrap">
-        <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
+        <img class="thumb" loading="lazy" decoding="async" src="${thumb}" alt="">
         <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
@@ -222,23 +231,22 @@ function appendResults(chunk){
       </div>
       <div class="meta">
         <div class="title-line">
-          ${logo}
+          ${logo || ""}
           <span class="title-text">${it.title}</span>
           <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
-        <div class="subtitle">${_cleanAuthor(it.author)||""}</div>
+        <div class="subtitle">${sub}</div>
       </div>
       <div class="actions">
         <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
-            ${favIconSvgSafe(isFavSafe(it.id))}
+          ${favIconSvg?.(isFav?.(it.id))}
         </button>
-        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvgSafe()}</button>
+        <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg?.()}</button>
       </div>`;
 
-    // comportamiento click tarjeta
+    // Clicks
     item.addEventListener("click", (e) => handleResultClick(e, it));
 
-    // botón play en la tarjeta
     const cardPlayBtn = item.querySelector(".card-play");
     if (cardPlayBtn) {
       cardPlayBtn.onclick = (e) => {
@@ -246,119 +254,52 @@ function appendResults(chunk){
         handleResultClick(e, it, true);
       };
     }
-
     root.appendChild(item);
   }
-
-  // refresco visual (si existe)
-  try { if (typeof window.refreshIndicators === 'function') window.refreshIndicators(); } catch {}
+  refreshIndicators?.();
 }
 
 async function handleResultClick(event, item, forcePlay = false) {
-  // no interferir con menú ni fav
-  if (event && (event.target.closest?.(".more") || event.target.closest?.(".fav-btn") || (event.target.closest?.(".card-play") && !forcePlay))) return;
+  // Respetar tus botones internos
+  if (event.target.closest(".more") || event.target.closest(".fav-btn") || (event.target.closest(".card-play") && !forcePlay)) return;
 
   if (item.type === 'youtube_video') {
-    // usa tu reproductor si está disponible
-    if (typeof window.playFromSearch === 'function') {
-      window.playFromSearch(item.id, true);
-    } else {
-      console.warn('[buscador] playFromSearch no disponible; ID:', item.id);
-    }
+    // Reusar tu lógica de reproducción desde resultados
+    playFromSearch?.(item.id, true);
+  } else if (item.type === 'archive_album') {
+    // Abrir álbum en reproductor (tu lógica debe existir ya)
+    openArchiveAlbumInPlayer?.(item.id, item.title, item.author);
   }
 }
 
-/* ========= BÚSQUEDA PRINCIPAL ========================================== */
-
-async function startSearch(query) {
-  if (searchAbort) searchAbort.abort();
-  searchAbort = new AbortController();
-  const { signal } = searchAbort;
-
-  paging = { query, loading: true };
-  items = [];
-
-  const resultsEl = $("#results");
-  if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando… espere</h3></div>`;
-  updateHomeGridVisibility();
-
-  try {
-    // 1) URL HTML de YouTube
-    const ytUrl = buildYouTubeSearchURL(query);
-
-    // 2) IDs via App Android
-    const ids = await fetchIdsViaAndroid(ytUrl, signal);
-    if (signal.aborted) return;
-
-    if (!ids.length) {
-      if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>No se encontraron videos.</p></div>`;
-      paging.loading = false;
-      return;
-    }
-
-    // 3) Metadatos con NoEmbed
-    const enriched = await fetchNoEmbedBatch(ids, signal);
-    if (signal.aborted) return;
-
-    items = enriched;
-    if (resultsEl) resultsEl.innerHTML = '';
-    appendResults(items);
-    updateHomeGridVisibility();
-
-  } catch (e) {
-    console.error('Search failed:', e);
-    if (resultsEl) resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá.</p></div>`;
-  } finally {
-    paging.loading = false;
-  }
-}
-
-/* ========= OVERLAY / UI DE BÚSQUEDA ==================================== */
-
+/* -------------------------------------------------
+   Overlay / Input de búsqueda (UI existente)
+--------------------------------------------------- */
 function initSearch() {
   const searchOverlay = $("#searchOverlay");
-  const overlayInput  = $("#overlaySearchInput");
+  const overlayInput = $("#overlaySearchInput");
 
   function openSearch() {
-    searchOverlay?.classList.add("show");
-    setTimeout(() => { overlayInput?.focus(); overlayInput?.select(); }, 50);
+    searchOverlay.classList.add("show");
+    setTimeout(() => { overlayInput.focus(); overlayInput.select(); }, 50);
   }
-  function closeSearch() { searchOverlay?.classList.remove("show"); }
+  function closeSearch() { searchOverlay.classList.remove("show"); }
 
   $("#searchFab")?.addEventListener("click", openSearch);
-  searchOverlay?.addEventListener("click", e => { if(e.target === searchOverlay) closeSearch(); });
+  searchOverlay?.addEventListener("click", e => { if (e.target === searchOverlay) closeSearch(); });
   overlayInput?.addEventListener("keydown", async e => {
     if (e.key !== "Enter") return;
     const q = overlayInput.value.trim();
     if (!q) return;
 
     closeSearch();
-    // scroll top
     document.body.scrollTop = 0;
     document.documentElement.scrollTop = 0;
 
-    // cambiar a vista de búsqueda (si existe)
-    try { if (typeof window.switchView === 'function') window.switchView('view-search'); } catch {}
-
+    switchView?.("view-search");
     await startSearch(q);
   });
 }
 
-/* ========= EXPONE PÚBLICO ============================================== */
-
-window.Buscador = Object.freeze({
-  initSearch,
-  startSearch,
-  // config runtime por si cambiás IP sin editar archivo:
-  setAndroidScraperHost(host) {
-    if (typeof host === 'string' && host.startsWith('http')) {
-      // eslint-disable-next-line no-global-assign
-      ANDROID_SCRAPER_HOST = host; // nota: si tu bundler no permite, cambiá manual arriba
-    }
-  }
-});
-
-// auto-init si el DOM ya está
-document.addEventListener('DOMContentLoaded', () => {
-  try { initSearch(); } catch (e) { console.warn('initSearch falló:', e); }
-});
+// Export/Inicializar si corresponde
+try { initSearch(); } catch (_) {}
