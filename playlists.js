@@ -1,4 +1,17 @@
-// Manejo de playlists locales e importadas (Spotify/Archive), y la cola de reproducción.
+// --- Constantes del Scraper (Editables) ---
+const SCRAPER_HOST = "http://191.85.27.198:5000";
+
+// Endpoints del servidor
+const scraperYTM = (q) => `${SCRAPER_HOST}/?ytm=${encodeURIComponent(q)}`;
+const scraperYT = (q) => `${SCRAPER_HOST}/?url=${encodeURIComponent(`https://www.youtube.com/results?search_query=${q}`)}`;
+
+// Utilidad para extraer el videoId de cualquier URL
+const YT_ID_11 = /(?:v=|shorts\/|be\/)([a-zA-Z0-9_-]{11})/;
+const extractId = (url) => {
+  const m = url.match(YT_ID_11);
+  return m ? m[1] : null;
+};
+// --- Fin Constantes del Scraper ---
 
 let viewingPlaylistId = null;
 
@@ -7,57 +20,56 @@ const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
 const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
 
-// --- Cache para resolución de canciones ---
-const trackCache = new Map();
-
-
 /**
- * --- LÓGICA MEJORADA CON PUNTUACIÓN Y REINTENTOS ---
- * Resuelve una canción de Spotify a un video de YouTube, usando el servidor personal
- * y una lógica de puntuación para encontrar la mejor coincidencia.
- * @param {object} track - El objeto de la canción de Spotify (con .title y .author).
+ * --- LÓGICA DE RESOLUCIÓN MEJORADA ---
+ * Resuelve una canción de Spotify a un video, usando exclusivamente YouTube Music
+ * para obtener resultados de alta calidad.
+ * @param {object} track - El objeto de la canción de Spotify ({ title, author }).
  * @returns {Promise<{videoId: string|null, backups: string[], error: string|null}>}
  */
 async function resolveTrack(track) {
     const query = `${track.author} ${track.title}`;
+    const ALLOW_YT_FALLBACK = false; // Desactivado por defecto como se solicitó.
+
     try {
-        const candidates = await scrapeYoutubeWithCustomServer(query, 5);
+        // 1. Intenta resolver usando YouTube Music
+        const ytmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
+        const ytmResponse = await fetch(ytmUrl);
         
-        if (candidates.length === 0) {
-            return { videoId: null, backups: [], error: "No se encontraron videos candidatos." };
+        if (ytmResponse.ok) {
+            const text = await ytmResponse.text();
+            const ytmIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
+
+            if (ytmIds.length > 0) {
+                // Éxito: Se encontraron resultados en YouTube Music.
+                const videoId = ytmIds[0];
+                const backups = ytmIds.slice(1);
+                return { videoId, backups, error: null };
+            }
         }
 
-        // Lógica de puntuación para encontrar la mejor coincidencia
-        const scoredCandidates = candidates.map(candidate => {
-            let score = 0;
-            const videoTitle = (candidate.title || '').toLowerCase();
-            const channelName = (candidate.author || '').toLowerCase();
-            const songTitle = track.title.toLowerCase();
-            const artistName = track.author.toLowerCase();
+        // 2. (Opcional) Si YTM falla y el fallback está activado, intenta con YouTube estándar.
+        if (ALLOW_YT_FALLBACK) {
+            const ytUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
+            const ytResponse = await fetch(ytUrl);
 
-            // Criterios de puntuación positiva
-            if (videoTitle.includes(songTitle)) score += 10;
-            if (channelName.includes(artistName)) score += 5;
-            if (videoTitle.includes(artistName)) score += 2;
-            if (channelName.endsWith(" - topic")) score += 5; // Canal oficial de artista
+            if (ytResponse.ok) {
+                const text = await ytResponse.text();
+                const ytIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
 
-            // Criterios de penalización
-            const junkWords = ['cover', 'letra', 'lyrics', 'reacción', 'reaction', 'en vivo', 'live', 'tutorial', 'unboxing'];
-            if (junkWords.some(word => videoTitle.includes(word))) score -= 20;
-            
-            return { ...candidate, score };
-        });
-
-        // Ordenar candidatos por la puntuación más alta
-        scoredCandidates.sort((a, b) => b.score - a.score);
-
-        const bestMatch = scoredCandidates[0];
-        const backups = scoredCandidates.slice(1).map(v => v.id);
-
-        return { videoId: bestMatch.id, backups: backups, error: null };
+                if (ytIds.length > 0) {
+                    const videoId = ytIds[0];
+                    const backups = ytIds.slice(1);
+                    return { videoId, backups, error: null };
+                }
+            }
+        }
+        
+        // 3. Si ambas fuentes fallan o están desactivadas, retorna un error.
+        return { videoId: null, backups: [], error: "No se encontró video en las fuentes disponibles." };
 
     } catch (e) {
-        console.error(`Error resolviendo "${query}":`, e);
+        console.error(`Error resolviendo la canción "${query}":`, e);
         return { videoId: null, backups: [], error: e.message };
     }
 }
@@ -269,7 +281,7 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         showToast("Reasignando a fuente de respaldo...");
     } else {
         showToast("Buscando nueva fuente online...");
-        const newResults = await scrapeYoutubeWithDetails(`${track.author} ${track.title}`, backups.length + 2);
+        const newResults = await scrapeYoutubeWithCustomServer(`${track.author} ${track.title}`, backups.length + 2);
         if (newResults.length > backups.length + 1) {
             newVideoId = newResults[backups.length + 1].id;
         } else {
@@ -380,7 +392,7 @@ async function showPlaylistInPlayer(plId) {
     if (!pl) return;
     viewingPlaylistId = pl.id;
     switchView('view-player');
-    const tracksToShow = pl.tracks || [];
+    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
     renderQueue(tracksToShow, pl.name);
     if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status)) {
         startResolverJob(plId);
