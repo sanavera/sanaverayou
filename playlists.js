@@ -436,6 +436,11 @@ function initSpotifyImportUI() {
     };
 }
 
+/**
+ * --- CORREGIDO ---
+ * Maneja la importación de Spotify, distinguiendo entre una URL de playlist única
+ * y una URL de perfil de usuario.
+ */
 async function handleSpotifyImport() {
     const input = $("#sySmInputUrl").value.trim();
     if (!input) return;
@@ -445,23 +450,26 @@ async function handleSpotifyImport() {
     fetchBtn.textContent = 'Buscando...';
     try {
         const { type, id } = parseSpotifyLink(input);
-        let playlists = [];
+        
         if (type === 'playlist') {
             const token = await getSpotifyToken();
             const response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener la playlist.');
-            playlists = [await response.json()];
+            const playlistData = await response.json();
+            modal.classList.remove('show');
+            showToast(`Importando "${playlistData.name}"...`);
+            await fetchAndImportSinglePlaylist(playlistData);
+
         } else if (type === 'user') {
-            playlists = await fetchUserPlaylists(id);
+            const playlists = await fetchUserPlaylists(id);
+            if (playlists.length > 0) {
+                showUserPlaylistsSelectionView(playlists);
+                modal.classList.remove('show');
+            } else {
+                showToast("No se encontraron playlists públicas.", true);
+            }
         } else {
             showToast("URL o ID de usuario no válido.", true);
-            return;
-        }
-        if (playlists.length > 0) {
-            showUserPlaylistsSelectionView(playlists);
-            modal.classList.remove('show');
-        } else {
-            showToast("No se encontraron playlists públicas.", true);
         }
     } catch (e) {
         console.error("Error en importación de Spotify:", e);
@@ -471,6 +479,7 @@ async function handleSpotifyImport() {
         fetchBtn.textContent = 'Buscar';
     }
 }
+
 
 function parseSpotifyLink(input) {
     const cleanedInput = input.trim().split('?')[0];
