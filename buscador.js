@@ -1,4 +1,17 @@
-// Contiene la lógica de búsqueda para YouTube (canciones) y Archive.org (álbumes).
+// --- Constantes del Scraper (Editables) ---
+const SCRAPER_HOST = "http://191.85.27.198:5000";
+
+// Endpoints del servidor
+const scraperYTM = (q) => `${SCRAPER_HOST}/?ytm=${encodeURIComponent(q)}`;
+const scraperYT = (q) => `${SCRAPER_HOST}/?url=${encodeURIComponent(`https://www.youtube.com/results?search_query=${q}`)}`;
+
+// Utilidad para extraer el videoId de cualquier URL
+const YT_ID_11 = /(?:v=|shorts\/|be\/)([a-zA-Z0-9_-]{11})/;
+const extractId = (url) => {
+  const m = url.match(YT_ID_11);
+  return m ? m[1] : null;
+};
+// --- Fin Constantes del Scraper ---
 
 let items = [];
 let searchAbort = null;
@@ -23,85 +36,74 @@ async function startSearch(query) {
   if (currentSearchType === 'archive') {
     await archiveSearchAlbums(query);
   } else {
-    await searchYoutube(query);
+    await searchYoutubeParallel(query);
   }
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - CORREGIDA
+// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - REFACTORIZADA
 // =======================================================
 
 /**
- * Extrae el ID de un video de una URL de YouTube.
- * @param {string} url - La URL completa de YouTube.
- * @returns {string|null} - El ID del video o null si no se encuentra.
+ * Parsea la respuesta de texto plano del scraper y devuelve una lista de IDs de video.
+ * @param {Response} response - La respuesta del fetch.
+ * @returns {Promise<string[]>} - Un array de videoIds únicos.
  */
-function extractVideoId(url) {
-    if (!url) return null;
+async function parseScraperResponse(response) {
+    if (!response.ok) return [];
+    const text = await response.text();
+    const ids = text.split('\n')
+        .map(line => extractId(line.trim()))
+        .filter(Boolean); // Filtra nulos y vacíos
+    return [...new Set(ids)]; // Devuelve IDs únicos
+}
+
+/**
+ * Realiza búsquedas en YTM y YT en paralelo, unifica y renderiza los resultados.
+ * @param {string} query - La consulta del usuario.
+ */
+async function searchYoutubeParallel(query) {
+    const resultsEl = $("#results");
+    resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube…</h3></div>`;
+
+    const ytmPromise = fetch(scraperYTM(query), { signal: searchAbort.signal }).then(parseScraperResponse);
+    const ytPromise = fetch(scraperYT(query), { signal: searchAbort.signal }).then(parseScraperResponse);
+
     try {
-        const parsedUrl = new URL(url);
-        if (parsedUrl.hostname === 'youtu.be') {
-            return parsedUrl.pathname.slice(1);
+        const [ytmIds, ytIds] = await Promise.all([ytmPromise, ytPromise]);
+
+        if (searchAbort.signal.aborted) return;
+        
+        // Unificar resultados: YTM primero, luego YT sin duplicados.
+        const ytmIdSet = new Set(ytmIds);
+        const uniqueYtIds = ytIds.filter(id => !ytmIdSet.has(id));
+        const combinedIds = [...ytmIds, ...uniqueYtIds];
+
+        if (combinedIds.length === 0) {
+            resultsEl.innerHTML = `<div class="empty muted">No se encontraron resultados para "${query}".</div>`;
+            return;
         }
-        if (parsedUrl.searchParams.has("v")) {
-            return parsedUrl.searchParams.get("v");
-        }
-        const pathnameParts = parsedUrl.pathname.split('/');
-        if (pathnameParts.includes("shorts")) {
-            return pathnameParts[pathnameParts.length - 1];
-        }
+
+        // Obtener metadatos para todos los IDs
+        const videoDetails = await fetchVideoDetailsByIds(combinedIds);
+        
+        // Mapear el sourceHint para referencia interna si es necesario
+        const finalResults = videoDetails.map(video => ({
+            ...video,
+            sourceHint: ytmIdSet.has(video.id) ? 'ytm' : 'yt'
+        }));
+
+        items = finalResults;
+        renderYoutubeResults(items);
+
     } catch (e) {
-        const match = url.match(/(?:watch\?v=|youtu\.be\/|shorts\/)([\w-]{11})/);
-        return match ? match[1] : null;
+        if (e.name !== 'AbortError') {
+            console.error('Falló la búsqueda paralela:', e);
+            resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
+        }
+    } finally {
+        paging.loading = false;
     }
-    return null;
-}
-
-/**
- * Usa el servidor personal para obtener URLs, extrae los IDs y luego usa noembed para los metadatos.
- * @param {string} query - La consulta de búsqueda.
- * @param {number} limit - El número máximo de resultados.
- * @returns {Promise<Array<object>>} - Una lista de objetos de canción.
- */
-async function scrapeYoutubeWithCustomServer(query, limit = 20) {
-    // --- CORRECCIÓN: Se añade el parámetro &sp=EgIQAQ%3D%3D para filtrar y obtener solo videos. ---
-    const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
-    
-    const customServerUrl = `http://191.85.27.198:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
-    
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customServerUrl)}`;
-
-    const response = await fetch(proxyUrl, { signal: searchAbort?.signal });
-    if (!response.ok) {
-        throw new Error(`El proxy o el servidor de scraping fallaron con el estado: ${response.status}`);
-    }
-    
-    const textResponse = await response.text();
-    const urls = textResponse.split('\n').filter(url => url.trim() !== '');
-
-    if (!Array.isArray(urls)) {
-        throw new Error("La respuesta del servidor de scraping no se pudo procesar como un array de URLs.");
-    }
-
-    const videoIds = urls.map(url => extractVideoId(url)).filter(Boolean);
-    const uniqueIds = [...new Set(videoIds)];
-
-    return fetchVideoDetailsByIds(uniqueIds.slice(0, limit));
-}
-
-
-async function searchYoutube(query) {
-  try {
-    const videoResults = await scrapeYoutubeWithCustomServer(query, 20);
-    if (searchAbort.signal.aborted) return;
-    items = videoResults;
-    renderYoutubeResults(items);
-  } catch (e) {
-    console.error('Falló la búsqueda de canciones:', e);
-    $("#results").innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda de canciones. Reintentá por favor.</p></div>`;
-  } finally {
-    paging.loading = false;
-  }
 }
 
 // =======================================================
@@ -251,7 +253,7 @@ async function openArchiveAlbum(album) {
 }
 
 // =======================================================
-// FUNCIONES COMUNES Y DE YOUTUBE (SIN CAMBIOS)
+// FUNCIONES COMUNES Y DE RENDERIZADO (SIN CAMBIOS)
 // =======================================================
 
 function renderYoutubeResults(videos) {
@@ -271,7 +273,7 @@ function appendSongResults(chunk){
     const item = document.createElement("article");
     item.className = "result-item";
     item.dataset.trackId = it.id;
-    let logo = it.source === 'archive' ? '' : (it.isTopic ? (Math.random() < 0.5 ? spotifyLogoSvg() : youtubeMusicLogoSvg()) : youtubeLogoSvg());
+    let logo = it.sourceHint === 'ytm' ? youtubeMusicLogoSvg() : youtubeLogoSvg();
     item.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" loading="lazy" decoding="async" src="${it.thumb}" alt="">
