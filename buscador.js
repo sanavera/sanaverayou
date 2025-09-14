@@ -28,7 +28,7 @@ async function startSearch(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - APUNTANDO A YOUTUBE MUSIC
+// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - CORREGIDA
 // =======================================================
 
 /**
@@ -58,16 +58,16 @@ function extractVideoId(url) {
 }
 
 /**
- * Usa el servidor personal para obtener URLs de YouTube Music.
+ * Usa el servidor personal para obtener URLs, extrae los IDs y luego usa noembed para los metadatos.
  * @param {string} query - La consulta de búsqueda.
  * @param {number} limit - El número máximo de resultados.
  * @returns {Promise<Array<object>>} - Una lista de objetos de canción.
  */
 async function scrapeYoutubeWithCustomServer(query, limit = 20) {
-    // --- CAMBIO CLAVE: Ahora se apunta a YouTube Music para resultados de mayor calidad ---
-    const musicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
+    // --- CORRECCIÓN: Se añade el parámetro &sp=EgIQAQ%3D%3D para filtrar y obtener solo videos. ---
+    const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
     
-    const customServerUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(musicSearchUrl)}`;
+    const customServerUrl = `http://191.85.26.215:5000/?url=${encodeURIComponent(youtubeSearchUrl)}`;
     
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(customServerUrl)}`;
 
