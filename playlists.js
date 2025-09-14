@@ -1,17 +1,4 @@
-// --- Constantes del Scraper (Editables) ---
-const SCRAPER_HOST = "http://191.85.27.198:5000";
-
-// Endpoints del servidor
-const scraperYTM = (q) => `${SCRAPER_HOST}/?ytm=${encodeURIComponent(q)}`;
-const scraperYT = (q) => `${SCRAPER_HOST}/?url=${encodeURIComponent(`https://www.youtube.com/results?search_query=${q}`)}`;
-
-// Utilidad para extraer el videoId de cualquier URL
-const YT_ID_11 = /(?:v=|shorts\/|be\/)([a-zA-Z0-9_-]{11})/;
-const extractId = (url) => {
-  const m = url.match(YT_ID_11);
-  return m ? m[1] : null;
-};
-// --- Fin Constantes del Scraper ---
+// Manejo de playlists locales e importadas (Spotify/Archive), y la cola de reproducción.
 
 let viewingPlaylistId = null;
 
@@ -33,22 +20,23 @@ async function resolveTrack(track) {
 
     try {
         // 1. Intenta resolver usando YouTube Music
+        // Llama a scraperYTM() que está definido globalmente en buscador.js
         const ytmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
         const ytmResponse = await fetch(ytmUrl);
         
         if (ytmResponse.ok) {
             const text = await ytmResponse.text();
+            // Llama a extractId() que está definido globalmente en buscador.js
             const ytmIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
 
             if (ytmIds.length > 0) {
-                // Éxito: Se encontraron resultados en YouTube Music.
                 const videoId = ytmIds[0];
                 const backups = ytmIds.slice(1);
                 return { videoId, backups, error: null };
             }
         }
 
-        // 2. (Opcional) Si YTM falla y el fallback está activado, intenta con YouTube estándar.
+        // 2. (Opcional) Fallback a YouTube estándar.
         if (ALLOW_YT_FALLBACK) {
             const ytUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
             const ytResponse = await fetch(ytUrl);
@@ -65,7 +53,6 @@ async function resolveTrack(track) {
             }
         }
         
-        // 3. Si ambas fuentes fallan o están desactivadas, retorna un error.
         return { videoId: null, backups: [], error: "No se encontró video en las fuentes disponibles." };
 
     } catch (e) {
