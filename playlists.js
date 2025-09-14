@@ -12,26 +12,52 @@ const trackCache = new Map();
 
 
 /**
- * --- MODIFICADO ---
- * Resuelve una canción de Spotify a un video de YouTube, ahora usando el servidor personal.
- * @param {object} track - El objeto de la canción de Spotify.
+ * --- LÓGICA MEJORADA CON PUNTUACIÓN Y REINTENTOS ---
+ * Resuelve una canción de Spotify a un video de YouTube, usando el servidor personal
+ * y una lógica de puntuación para encontrar la mejor coincidencia.
+ * @param {object} track - El objeto de la canción de Spotify (con .title y .author).
  * @returns {Promise<{videoId: string|null, backups: string[], error: string|null}>}
  */
 async function resolveTrack(track) {
     const query = `${track.author} ${track.title}`;
     try {
-        // Se reemplaza la llamada a la función de scraping antigua por la nueva,
-        // que utiliza el servidor personal para obtener los resultados.
-        const results = await scrapeYoutubeWithCustomServer(query, 5);
+        const candidates = await scrapeYoutubeWithCustomServer(query, 5);
         
-        if (results.length > 0) {
-            const mainVideoId = results[0].id;
-            const backupUrls = results.slice(1).map(v => v.id);
-            return { videoId: mainVideoId, backups: backupUrls, error: null };
+        if (candidates.length === 0) {
+            return { videoId: null, backups: [], error: "No se encontraron videos candidatos." };
         }
-        return { videoId: null, backups: [], error: "No se encontraron videos." };
+
+        // Lógica de puntuación para encontrar la mejor coincidencia
+        const scoredCandidates = candidates.map(candidate => {
+            let score = 0;
+            const videoTitle = (candidate.title || '').toLowerCase();
+            const channelName = (candidate.author || '').toLowerCase();
+            const songTitle = track.title.toLowerCase();
+            const artistName = track.author.toLowerCase();
+
+            // Criterios de puntuación positiva
+            if (videoTitle.includes(songTitle)) score += 10;
+            if (channelName.includes(artistName)) score += 5;
+            if (videoTitle.includes(artistName)) score += 2;
+            if (channelName.endsWith(" - topic")) score += 5; // Canal oficial de artista
+
+            // Criterios de penalización
+            const junkWords = ['cover', 'letra', 'lyrics', 'reacción', 'reaction', 'en vivo', 'live', 'tutorial', 'unboxing'];
+            if (junkWords.some(word => videoTitle.includes(word))) score -= 20;
+            
+            return { ...candidate, score };
+        });
+
+        // Ordenar candidatos por la puntuación más alta
+        scoredCandidates.sort((a, b) => b.score - a.score);
+
+        const bestMatch = scoredCandidates[0];
+        const backups = scoredCandidates.slice(1).map(v => v.id);
+
+        return { videoId: bestMatch.id, backups: backups, error: null };
+
     } catch (e) {
-        console.error("Error resolviendo la canción con el servidor personal:", e);
+        console.error(`Error resolviendo "${query}":`, e);
         return { videoId: null, backups: [], error: e.message };
     }
 }
