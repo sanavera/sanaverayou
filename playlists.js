@@ -2,7 +2,6 @@
 
 let viewingPlaylistId = null;
 let currentResolverController = null; // Controlador para cancelar trabajos de importación
-let resolverJobUnsubscribe = null; // Para el listener de Firestore
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
@@ -406,7 +405,7 @@ function hideQueuePanel(){
         currentResolverController = null;
     }
 
-    if (resolverJobUnsubscribe) {
+    if (typeof resolverJobUnsubscribe === 'function') {
         resolverJobUnsubscribe();
         resolverJobUnsubscribe = null;
     }
@@ -619,7 +618,7 @@ async function startResolverJob(playlistId) {
         const pl = plDoc.data();
         const tracksToResolve = pl.spotifyTracks
             .map((st, i) => ({ ...st, originalIndex: i }))
-            .filter((_, i) => !pl.tracks[i]);
+            .filter((_, i) => !pl.tracks[i] || !pl.tracks[i].id);
 
         if (tracksToResolve.length === 0) return;
 
@@ -634,7 +633,8 @@ async function startResolverJob(playlistId) {
             }
 
             const batch = tracksToResolve.slice(i, i + CONCURRENT_REQUESTS);
-            const initialResolvedCount = (await getDoc(plRef)).data().resolvedCount || 0;
+            const initialDoc = await getDoc(plRef);
+            const initialResolvedCount = (initialDoc.data().resolvedCount || 0);
             showToast(`Importando... (${initialResolvedCount}/${pl.trackCount})`);
 
             const batchPromises = batch.map(trackInfo =>
@@ -645,8 +645,9 @@ async function startResolverJob(playlistId) {
 
             if (signal.aborted) break;
 
+            const currentPlDoc = await getDoc(plRef);
+            const currentTracks = currentPlDoc.data().tracks || [];
             let resolvedInBatch = 0;
-            const updatePayload = {};
 
             results.forEach((result, index) => {
                 const originalTrackInfo = batch[index];
@@ -655,7 +656,7 @@ async function startResolverJob(playlistId) {
                 if (result.status === 'fulfilled') {
                     const { videoId, backups, error } = result.value;
                     if (videoId) {
-                        updatePayload[`tracks.${originalIndex}`] = {
+                        currentTracks[originalIndex] = {
                             id: videoId,
                             title: originalTrackInfo.title,
                             author: originalTrackInfo.author,
@@ -665,19 +666,16 @@ async function startResolverJob(playlistId) {
                         };
                         resolvedInBatch++;
                     } else {
-                        updatePayload[`tracks.${originalIndex}`] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: error || "No se encontró video." };
+                        currentTracks[originalIndex] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: error || "No se encontró video." };
                     }
                 } else {
                     console.error(`Error resolviendo "${originalTrackInfo.title}":`, result.reason);
-                    updatePayload[`tracks.${originalIndex}`] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: "Error de red." };
+                    currentTracks[originalIndex] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: "Error de red." };
                 }
             });
 
-            if (Object.keys(updatePayload).length > 0) {
-                const currentResolvedCount = (await getDoc(plRef)).data().resolvedCount || 0;
-                updatePayload.resolvedCount = currentResolvedCount + resolvedInBatch;
-                await updateDoc(plRef, updatePayload);
-            }
+            const newResolvedCount = currentTracks.filter(t => t && t.id).length;
+            await updateDoc(plRef, { tracks: currentTracks, resolvedCount: newResolvedCount });
         }
         
         if (!signal.aborted) {
