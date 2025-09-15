@@ -2,6 +2,7 @@
 
 let viewingPlaylistId = null;
 let currentResolverController = null; // Controlador para cancelar trabajos de importación
+let resolverJobUnsubscribe = null; // Para el listener de Firestore
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
@@ -388,8 +389,14 @@ async function showPlaylistInPlayer(plId) {
     if (!pl) return;
     viewingPlaylistId = pl.id;
     switchView('view-player');
-    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? { ...st, ...pl.tracks[i] } : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
+    
+    // --- FIX: Correctly select and filter tracks for rendering ---
+    const tracksToShow = pl.spotifyTracks 
+        ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? { ...st, ...pl.tracks[i] } : { ...st, id: null, thumb: st.thumb || pl.cover }) 
+        : (pl.tracks || []).filter(Boolean); // Filter out any null/undefined entries for local lists
+
     renderQueue(tracksToShow, pl.name);
+    
     if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status)) {
         startResolverJob(plId);
     }
@@ -587,33 +594,24 @@ async function processAndSavePlaylist(pl) {
 }
 
 /**
- * --- NUEVA LÓGICA DE IMPORTACIÓN POR LOTES ---
+ * --- LÓGICA DE IMPORTACIÓN POR LOTES CORREGIDA Y ROBUSTA ---
  * Inicia el proceso de búsqueda de videos para una playlist de Spotify.
- * Procesa 5 canciones a la vez y es resistente a fallos.
  * @param {string} playlistId - El ID del documento de la playlist en Firestore.
  */
 async function startResolverJob(playlistId) {
-    if (currentResolverController && currentResolverController.playlistId !== playlistId) {
-        currentResolverController.abort();
-        currentResolverController = null;
-    }
-    if (currentResolverController && currentResolverController.playlistId === playlistId) {
-        return; // Job para esta playlist ya está en ejecución
-    }
+    if (currentResolverController && currentResolverController.playlistId === playlistId) return;
+    if (currentResolverController) currentResolverController.abort();
 
     currentResolverController = new AbortController();
     currentResolverController.playlistId = playlistId;
     const signal = currentResolverController.signal;
 
-    const { doc, getDoc, updateDoc, serverTimestamp } = sy_fs();
+    const { doc, getDoc, updateDoc, serverTimestamp, increment } = sy_fs();
     const plRef = doc(db, 'playlists', playlistId);
 
     try {
         const plDoc = await getDoc(plRef);
-        if (!plDoc.exists()) {
-            console.error("Playlist no encontrada para resolver:", playlistId);
-            return;
-        }
+        if (!plDoc.exists()) throw new Error("Playlist no encontrada");
 
         const pl = plDoc.data();
         const tracksToResolve = pl.spotifyTracks
@@ -625,17 +623,11 @@ async function startResolverJob(playlistId) {
         await updateDoc(plRef, { status: 'resolving', updatedAt: serverTimestamp() });
 
         const CONCURRENT_REQUESTS = 5;
-
         for (let i = 0; i < tracksToResolve.length; i += CONCURRENT_REQUESTS) {
-            if (signal.aborted) {
-                console.log("Trabajo de resolución abortado.");
-                break;
-            }
+            if (signal.aborted) break;
 
             const batch = tracksToResolve.slice(i, i + CONCURRENT_REQUESTS);
-            const initialDoc = await getDoc(plRef);
-            const initialResolvedCount = (initialDoc.data().resolvedCount || 0);
-            showToast(`Importando... (${initialResolvedCount}/${pl.trackCount})`);
+            showToast(`Importando ${i + batch.length} de ${pl.trackCount}...`);
 
             const batchPromises = batch.map(trackInfo =>
                 resolveTrack({ title: trackInfo.title, author: trackInfo.author }, signal)
@@ -645,53 +637,52 @@ async function startResolverJob(playlistId) {
 
             if (signal.aborted) break;
 
-            const currentPlDoc = await getDoc(plRef);
-            const currentTracks = currentPlDoc.data().tracks || [];
+            const updatePayload = {};
             let resolvedInBatch = 0;
 
             results.forEach((result, index) => {
-                const originalTrackInfo = batch[index];
-                const { originalIndex } = originalTrackInfo;
+                const trackInfo = batch[index];
+                const { originalIndex } = trackInfo;
 
                 if (result.status === 'fulfilled') {
                     const { videoId, backups, error } = result.value;
                     if (videoId) {
-                        currentTracks[originalIndex] = {
-                            id: videoId,
-                            title: originalTrackInfo.title,
-                            author: originalTrackInfo.author,
-                            thumb: originalTrackInfo.thumb,
-                            source: 'youtube', type: 'youtube_video',
+                        updatePayload[`tracks.${originalIndex}`] = {
+                            id: videoId, title: trackInfo.title, author: trackInfo.author,
+                            thumb: trackInfo.thumb, source: 'youtube', type: 'youtube_video',
                             backupUrls: backups || []
                         };
                         resolvedInBatch++;
                     } else {
-                        currentTracks[originalIndex] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: error || "No se encontró video." };
+                        updatePayload[`tracks.${originalIndex}`] = { id: null, title: trackInfo.title, author: trackInfo.author, thumb: trackInfo.thumb, error: error || "No encontrado." };
                     }
                 } else {
-                    console.error(`Error resolviendo "${originalTrackInfo.title}":`, result.reason);
-                    currentTracks[originalIndex] = { id: null, title: originalTrackInfo.title, author: originalTrackInfo.author, thumb: originalTrackInfo.thumb, error: "Error de red." };
+                    updatePayload[`tracks.${originalIndex}`] = { id: null, title: trackInfo.title, author: trackInfo.author, thumb: trackInfo.thumb, error: "Error de red." };
                 }
             });
 
-            const newResolvedCount = currentTracks.filter(t => t && t.id).length;
-            await updateDoc(plRef, { tracks: currentTracks, resolvedCount: newResolvedCount });
+            if (Object.keys(updatePayload).length > 0) {
+                if (resolvedInBatch > 0) {
+                    updatePayload.resolvedCount = increment(resolvedInBatch);
+                }
+                updatePayload.updatedAt = serverTimestamp();
+                await updateDoc(plRef, updatePayload);
+            }
         }
         
         if (!signal.aborted) {
             const finalDoc = await getDoc(plRef);
             const finalPl = finalDoc.data();
-            const finalResolvedCount = finalPl.tracks.filter(t => t && t.id).length;
-            const finalStatus = finalResolvedCount === finalPl.trackCount ? 'resolved' : 'partial';
-            await updateDoc(plRef, { status: finalStatus, resolvedCount: finalResolvedCount, updatedAt: serverTimestamp() });
+            const finalStatus = finalPl.resolvedCount === finalPl.trackCount ? 'resolved' : 'partial';
+            await updateDoc(plRef, { status: finalStatus, updatedAt: serverTimestamp() });
             showToast(`Importación finalizada para "${finalPl.name}".`);
         }
 
     } catch (e) {
         if (e.name !== 'AbortError') {
-            console.error("Error grave en el trabajo de resolución:", e);
+            console.error("Error en el trabajo de resolución:", e);
             showToast("Ocurrió un error durante la importación.", true);
-            await updateDoc(plRef, { status: 'partial' });
+            await updateDoc(plRef, { status: 'partial' }).catch(()=>{});
         }
     } finally {
         if (currentResolverController && currentResolverController.playlistId === playlistId) {
