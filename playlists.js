@@ -8,58 +8,57 @@ const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
 
 /**
- * --- LÓGICA DE RESOLUCIÓN REFACTORIZADA Y ROBUSTA ---
- * Resuelve una canción de Spotify a un video, manejando timeouts, reintentos y
- * asegurando que el proceso nunca se cuelgue.
+ * --- LÓGICA DE RESOLUCIÓN MEJORADA ---
+ * Resuelve una canción de Spotify a un video, usando exclusivamente YouTube Music
+ * para obtener resultados de alta calidad.
  * @param {object} track - El objeto de la canción de Spotify ({ title, author }).
- * @param {AbortSignal} signal - La señal del AbortController para cancelar la petición.
  * @returns {Promise<{videoId: string|null, backups: string[], error: string|null}>}
  */
-async function resolveTrack(track, signal) {
+async function resolveTrack(track) {
     const query = `${track.author} ${track.title}`;
-    const ALLOW_YT_FALLBACK = false;
-    const MAX_RETRIES = 1; // 1 reintento por canción
-    const RETRY_DELAY = 1000; // 1 segundo de espera
+    const ALLOW_YT_FALLBACK = false; // Desactivado por defecto como se solicitó.
 
-    const performFetch = async (url) => {
-        const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        const response = await fetchWithTimeout(proxiedUrl, { signal });
-        if (!response.ok) throw new Error(`La respuesta del scraper no fue exitosa (status: ${response.status})`);
-        const text = await response.text();
-        return [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
-    };
+    try {
+        // 1. Intenta resolver usando YouTube Music
+        // Llama a scraperYTM() que está definido globalmente en buscador.js
+        const ytmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
+        const ytmResponse = await fetch(ytmUrl);
+        
+        if (ytmResponse.ok) {
+            const text = await ytmResponse.text();
+            // Llama a extractId() que está definido globalmente en buscador.js
+            const ytmIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            // 1. Intento principal con YouTube Music
-            const ytmIds = await performFetch(scraperYTM(query));
             if (ytmIds.length > 0) {
-                return { videoId: ytmIds[0], backups: ytmIds.slice(1), error: null };
-            }
-
-            // 2. Fallback (si está activado)
-            if (ALLOW_YT_FALLBACK) {
-                const ytIds = await performFetch(scraperYT(query));
-                if (ytIds.length > 0) {
-                    return { videoId: ytIds[0], backups: ytIds.slice(1), error: null };
-                }
-            }
-            // Si llega aquí, significa que no hubo resultados, no es un error de red.
-            return { videoId: null, backups: [], error: "No se encontraron resultados de video." };
-
-        } catch (e) {
-            if (e.name === 'AbortError' || (signal && signal.aborted)) {
-                return { videoId: null, backups: [], error: "Resolución cancelada por el usuario." };
-            }
-            if (attempt < MAX_RETRIES) {
-                await new Promise(res => setTimeout(res, RETRY_DELAY));
-            } else {
-                console.error(`Error final resolviendo "${query}" después de ${MAX_RETRIES + 1} intentos:`, e);
-                return { videoId: null, backups: [], error: e.message };
+                const videoId = ytmIds[0];
+                const backups = ytmIds.slice(1);
+                return { videoId, backups, error: null };
             }
         }
+
+        // 2. (Opcional) Fallback a YouTube estándar.
+        if (ALLOW_YT_FALLBACK) {
+            const ytUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
+            const ytResponse = await fetch(ytUrl);
+
+            if (ytResponse.ok) {
+                const text = await ytResponse.text();
+                const ytIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
+
+                if (ytIds.length > 0) {
+                    const videoId = ytIds[0];
+                    const backups = ytIds.slice(1);
+                    return { videoId, backups, error: null };
+                }
+            }
+        }
+        
+        return { videoId: null, backups: [], error: "No se encontró video en las fuentes disponibles." };
+
+    } catch (e) {
+        console.error(`Error resolviendo la canción "${query}":`, e);
+        return { videoId: null, backups: [], error: e.message };
     }
-     return { videoId: null, backups: [], error: "Error desconocido en el resolver." };
 }
 
 
