@@ -38,8 +38,6 @@ async function fetchWithTimeout(url, options = {}, timeout = 15000) {
 }
 
 
-// ----------------- (lo demás queda como lo tenías) -----------------
-
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false, page: 1 };
@@ -68,7 +66,7 @@ async function startSearch(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE)
+// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - REFACTORIZADA
 // =======================================================
 
 async function parseScraperResponse(response) {
@@ -87,6 +85,7 @@ async function searchYoutubeParallel(query) {
     const proxiedYtmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
     const proxiedYtUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
 
+    // Se utiliza la nueva función con timeout
     const ytmPromise = fetchWithTimeout(proxiedYtmUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
     const ytPromise = fetchWithTimeout(proxiedYtUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
 
@@ -125,7 +124,7 @@ async function searchYoutubeParallel(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE ÁLBUMES (ARCHIVE.ORG)
+// LÓGICA DE BÚSQUEDA DE ÁLBUMES (ARCHIVE.ORG) - SIN CAMBIOS
 // =======================================================
 
 function getArchiveSortScore(title, query) {
@@ -271,7 +270,7 @@ async function openArchiveAlbum(album) {
 }
 
 // =======================================================
-// FUNCIONES COMUNES Y DE RENDERIZADO
+// FUNCIONES COMUNES Y DE RENDERIZADO (SIN CAMBIOS)
 // =======================================================
 
 function renderYoutubeResults(videos) {
@@ -382,12 +381,3 @@ async function fetchVideoDetailsByIds(ids) {
     );
     return (await Promise.all(metadataPromises)).filter(Boolean);
 }
-
-// ------ Exponer helpers para playlists.js ------
-try {
-  window.fetchWithTimeout = fetchWithTimeout;
-  window.scraperYTM = scraperYTM;
-  window.scraperYT  = scraperYT;
-  window.extractId  = extractId;
-  window.YT_ID_11   = YT_ID_11;
-} catch (_) {}
