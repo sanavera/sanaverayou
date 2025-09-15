@@ -606,7 +606,7 @@ async function startResolverJob(playlistId) {
     currentResolverController.playlistId = playlistId;
     const signal = currentResolverController.signal;
 
-    const { doc, getDoc, updateDoc, serverTimestamp, increment } = sy_fs();
+    const { doc, getDoc, updateDoc, serverTimestamp } = sy_fs();
     const plRef = doc(db, 'playlists', playlistId);
 
     try {
@@ -629,16 +629,20 @@ async function startResolverJob(playlistId) {
             const batch = tracksToResolve.slice(i, i + CONCURRENT_REQUESTS);
             showToast(`Importando ${i + batch.length} de ${pl.trackCount}...`);
 
-            const batchPromises = batch.map(trackInfo =>
+            const promises = batch.map(trackInfo =>
                 resolveTrack({ title: trackInfo.title, author: trackInfo.author }, signal)
             );
 
-            const results = await Promise.allSettled(batchPromises);
+            const results = await Promise.allSettled(promises);
 
             if (signal.aborted) break;
 
-            const updatePayload = {};
-            let resolvedInBatch = 0;
+            // --- FIX: Atomic update process ---
+            const currentPlDoc = await getDoc(plRef); // Get latest version before writing
+            if (!currentPlDoc.exists()) break;
+
+            const currentData = currentPlDoc.data();
+            const updatedTracks = [...currentData.tracks];
 
             results.forEach((result, index) => {
                 const trackInfo = batch[index];
@@ -647,27 +651,26 @@ async function startResolverJob(playlistId) {
                 if (result.status === 'fulfilled') {
                     const { videoId, backups, error } = result.value;
                     if (videoId) {
-                        updatePayload[`tracks.${originalIndex}`] = {
+                        updatedTracks[originalIndex] = {
                             id: videoId, title: trackInfo.title, author: trackInfo.author,
                             thumb: trackInfo.thumb, source: 'youtube', type: 'youtube_video',
                             backupUrls: backups || []
                         };
-                        resolvedInBatch++;
                     } else {
-                        updatePayload[`tracks.${originalIndex}`] = { id: null, title: trackInfo.title, author: trackInfo.author, thumb: trackInfo.thumb, error: error || "No encontrado." };
+                        updatedTracks[originalIndex] = { id: null, title: trackInfo.title, author: trackInfo.author, thumb: trackInfo.thumb, error: error || "No encontrado." };
                     }
                 } else {
-                    updatePayload[`tracks.${originalIndex}`] = { id: null, title: trackInfo.title, author: trackInfo.author, thumb: trackInfo.thumb, error: "Error de red." };
+                    updatedTracks[originalIndex] = { id: null, title: trackInfo.title, author: trackInfo.author, thumb: trackInfo.thumb, error: "Error de red." };
                 }
             });
 
-            if (Object.keys(updatePayload).length > 0) {
-                if (resolvedInBatch > 0) {
-                    updatePayload.resolvedCount = increment(resolvedInBatch);
-                }
-                updatePayload.updatedAt = serverTimestamp();
-                await updateDoc(plRef, updatePayload);
-            }
+            const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
+            await updateDoc(plRef, {
+                tracks: updatedTracks,
+                resolvedCount: newResolvedCount,
+                updatedAt: serverTimestamp()
+            });
+            // --- End of atomic update fix ---
         }
         
         if (!signal.aborted) {
