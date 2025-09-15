@@ -379,7 +379,7 @@ async function showPlaylistInPlayer(plId) {
     if (!pl) return;
     viewingPlaylistId = pl.id;
     switchView('view-player');
-    const tracksToShow = pl.spotifyTracks ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
+    const tracksToShow = (pl.source === 'spotify' && pl.spotifyTracks) ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover }) : (pl.tracks || []);
     renderQueue(tracksToShow, pl.name);
     if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status)) {
         startResolverJob(plId);
