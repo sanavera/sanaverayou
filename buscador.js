@@ -13,31 +13,6 @@ const extractId = (url) => {
 };
 // --- Fin Constantes del Scraper ---
 
-
-/**
- * --- NUEVA UTILIDAD ---
- * Realiza un fetch con un timeout. Si la petición tarda más de lo especificado,
- * se cancela automáticamente para evitar cuelgues.
- * @param {string} url La URL a la que hacer la petición.
- * @param {object} options Opciones para fetch.
- * @param {number} timeout Duración del timeout en milisegundos.
- * @returns {Promise<Response>}
- */
-async function fetchWithTimeout(url, options = {}, timeout = 15000) {
-    const controller = new AbortController();
-    const { signal, ...restOfOptions } = options;
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    const response = await fetch(url, {
-        ...restOfOptions,
-        signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-    return response;
-}
-
-
 let items = [];
 let searchAbort = null;
 let paging = { query: "", loading: false, page: 1 };
@@ -69,25 +44,34 @@ async function startSearch(query) {
 // LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - REFACTORIZADA
 // =======================================================
 
+/**
+ * Parsea la respuesta de texto plano del scraper y devuelve una lista de IDs de video.
+ * @param {Response} response - La respuesta del fetch.
+ * @returns {Promise<string[]>} - Un array de videoIds únicos.
+ */
 async function parseScraperResponse(response) {
     if (!response.ok) return [];
     const text = await response.text();
     const ids = text.split('\n')
         .map(line => extractId(line.trim()))
-        .filter(Boolean);
-    return [...new Set(ids)];
+        .filter(Boolean); // Filtra nulos y vacíos
+    return [...new Set(ids)]; // Devuelve IDs únicos
 }
 
+/**
+ * Realiza búsquedas en YTM y YT en paralelo, unifica y renderiza los resultados.
+ * @param {string} query - La consulta del usuario.
+ */
 async function searchYoutubeParallel(query) {
     const resultsEl = $("#results");
     resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube…</h3></div>`;
 
+    // --- CORRECCIÓN: Se vuelve a usar el proxy para evitar el error de "Mixed Content" ---
     const proxiedYtmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
     const proxiedYtUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
 
-    // Se utiliza la nueva función con timeout
-    const ytmPromise = fetchWithTimeout(proxiedYtmUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
-    const ytPromise = fetchWithTimeout(proxiedYtUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
+    const ytmPromise = fetch(proxiedYtmUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
+    const ytPromise = fetch(proxiedYtUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
 
     try {
         const [ytmIds, ytIds] = await Promise.all([ytmPromise, ytPromise]);
@@ -151,7 +135,7 @@ async function archiveSearchAlbums(query) {
     const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(archiveQuery)}&fl[]=identifier&fl[]=title&fl[]=creator&sort[]=downloads+desc&rows=${ARCHIVE_PAGE_SIZE}&page=${page}&output=json`;
 
     try {
-        const response = await fetchWithTimeout(url, { signal: searchAbort?.signal });
+        const response = await fetch(url, { signal: searchAbort?.signal });
         if (!response.ok) throw new Error(`La API de Archive.org respondió con el estado ${response.status}`);
         const data = await response.json();
         if (searchAbort.signal.aborted) return;
@@ -230,7 +214,7 @@ async function openArchiveAlbum(album) {
     showToast(`Cargando álbum: ${album.title}...`);
     try {
         const url = `https://archive.org/metadata/${album.id}`;
-        const response = await fetchWithTimeout(url);
+        const response = await fetch(url);
         if (!response.ok) throw new Error("No se pudo obtener la metadata del álbum.");
         const data = await response.json();
         const AUDIO_FORMATS = ['mp3', 'flac', 'wav', 'ogg', 'm4a'];
