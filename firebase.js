@@ -2,7 +2,7 @@
 
 let db;
 let communityPlaylists = [];
-let resolverJobUnsubscribe = null; // Declaración ÚNICA de la variable.
+let resolverJobUnsubscribe = null;
 
 // --- Helpers para IDs de playlists del usuario en Local Storage ---
 const LS_USER_PLAYLIST_IDS = "sy_user_playlist_ids_v1";
@@ -29,14 +29,13 @@ function sy_fs() {
     where: f.where || window.where,
     onSnapshot: f.onSnapshot || window.onSnapshot,
     getDocs: f.getDocs || window.getDocs,
-    getDoc: f.getDoc || window.getDoc,
-    serverTimestamp: f.serverTimestamp || window.serverTimestamp,
-    increment: f.increment || window.increment,
+    serverTimestamp: f.serverTimestamp || window.serverTimestamp
   };
 }
 
 
 /**
+ * --- NUEVA FUNCIÓN ---
  * Maneja la actualización en tiempo real de la playlist que se está viendo.
  * Se llama cuando Firestore detecta un cambio (ej: se encontró una nueva canción).
  * @param {object} newPlaylist - El objeto de la playlist actualizado desde Firestore.
@@ -47,23 +46,15 @@ function handleRealtimeUpdate(newPlaylist) {
     // Reconstruye la lista visual combinando los tracks originales de Spotify
     // con los que ya se encontraron, para mostrar el estado actual completo.
     const tracksToShow = newPlaylist.spotifyTracks 
-        ? newPlaylist.spotifyTracks.map((spotifyTrack, index) => {
-            const resolvedTrack = (newPlaylist.tracks && newPlaylist.tracks[index]) ? newPlaylist.tracks[index] : null;
-            return resolvedTrack ? { ...spotifyTrack, ...resolvedTrack } : { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPlaylist.cover };
-          })
-        : (newPlaylist.tracks || []).filter(Boolean);
+        ? newPlaylist.spotifyTracks.map((spotifyTrack, index) => 
+            (newPlaylist.tracks && newPlaylist.tracks[index]) 
+                ? newPlaylist.tracks[index] 
+                : { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPlaylist.cover }
+          )
+        : (newPlaylist.tracks || []);
 
     // Actualiza la cola de reproducción real (solo con canciones encontradas)
-    const currentPlayingTrackId = currentTrack ? currentTrack.id : null;
     queue = tracksToShow.filter(t => t && t.id);
-
-    // Si la canción que estaba sonando sigue en la cola, mantenla. Si no, no hagas nada.
-    const newCurrentTrackIndex = queue.findIndex(t => t.id === currentPlayingTrackId);
-    if(newCurrentTrackIndex === -1 && isPlaying) {
-        // La canción que sonaba ya no está, pero por ahora solo actualizamos la UI.
-    } else {
-        currentIndex = newCurrentTrackIndex;
-    }
 
     // Vuelve a renderizar la lista de canciones en la interfaz del reproductor.
     renderQueue(tracksToShow, newPlaylist.name);
@@ -76,9 +67,9 @@ function handleRealtimeUpdate(newPlaylist) {
 async function initFirebase() {
     const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
-    const { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+    const { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
     
-    window.firebase = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, increment };
+    window.firebase = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc };
     
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
@@ -99,6 +90,8 @@ async function initFirebase() {
         renderPlaylists(); 
         renderAllHomePlaylists();
     });
+
+    checkForActiveImportJob();
 }
 
 /**
@@ -108,7 +101,7 @@ async function initFirebase() {
  */
 async function handlePrivacyToggle(playlistId, isPublic) {
     try {
-        const { doc, updateDoc } = sy_fs();
+        const { doc, updateDoc } = window.firebase;
         await updateDoc(doc(db, "playlists", playlistId), { isPublic });
     } catch(e) {
         console.error("Error updating privacy:", e);
@@ -128,7 +121,7 @@ async function savePlaylistCopy(originalPlaylist) {
     }
     showToast(`Guardando copia de "${originalPlaylist.name}"...`);
     try {
-        const { collection, addDoc, serverTimestamp } = sy_fs();
+        const { collection, addDoc, serverTimestamp } = window.firebase;
         const newPlaylistData = {
             ...originalPlaylist,
             name: `${originalPlaylist.name} (Copia)`,
@@ -140,6 +133,8 @@ async function savePlaylistCopy(originalPlaylist) {
         };
         delete newPlaylistData.id;
         delete newPlaylistData.resolverJobId;
+        delete newPlaylistData.status;
+        delete newPlaylistData.resolvedCount;
         
         const docRef = await addDoc(collection(db, "playlists"), newPlaylistData);
         addMyPlaylistId(docRef.id);
@@ -162,7 +157,7 @@ async function createNewPlaylist(name, creator) {
         return false;
     }
     try {
-        const { collection, addDoc, serverTimestamp } = sy_fs();
+        const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), {
             name, creator, tracks: [], trackCount: 0, updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder'
         });
@@ -184,7 +179,7 @@ async function createNewPlaylist(name, creator) {
  */
 async function createNewPlaylistFromSong(name, creator, track) {
     try {
-        const { collection, addDoc, serverTimestamp } = sy_fs();
+        const { collection, addDoc, serverTimestamp } = window.firebase;
         const docRef = await addDoc(collection(db, "playlists"), {
             name, creator, tracks: [track], trackCount: 1, updatedAt: serverTimestamp(), isPublic: true, ownerUserId: 'current_user_id_placeholder'
         });
@@ -207,24 +202,19 @@ async function addSongToPlaylist(playlistId, track) {
     const pl = communityPlaylists.find(p => p.id === playlistId);
     if (!pl) return false;
 
-    const { doc, updateDoc, serverTimestamp } = sy_fs();
+    const { doc, updateDoc, serverTimestamp } = window.firebase;
     const plRef = doc(db, "playlists", playlistId);
     
-    // Evita agregar duplicados
-    const trackExists = (pl.tracks || []).some(t => t && t.id === track.id);
-    if (trackExists) {
-        showToast("La canción ya está en la playlist.");
-        return false;
+    const updatedTracks = [...pl.tracks];
+    if (!updatedTracks.some(t => t && t.id === track.id)) { updatedTracks.unshift(track); }
+    
+    const spotifyTracks = pl.spotifyTracks ? [...pl.spotifyTracks] : [];
+    if (pl.source === 'spotify' && !spotifyTracks.some(t => t.id === track.originalId)) {
+        spotifyTracks.unshift({ id: track.originalId || track.id, title: track.title, author: track.author, thumb: track.thumb, source: 'spotify' });
     }
 
-    const updatedTracks = [track, ...(pl.tracks || [])];
-
     try {
-        await updateDoc(plRef, { 
-            tracks: updatedTracks, 
-            trackCount: updatedTracks.length, 
-            updatedAt: serverTimestamp() 
-        });
+        await updateDoc(plRef, { tracks: updatedTracks, trackCount: updatedTracks.length, spotifyTracks, updatedAt: serverTimestamp() });
         return true;
     } catch(e) {
         console.error("Error adding song: ", e);
@@ -234,7 +224,203 @@ async function addSongToPlaylist(playlistId, track) {
 }
 
 
-// --- Funciones para Transmisiones (Sin cambios) ---
+// --- Funciones del Resolver de Spotify ---
+function showResolverModal(job, playlistName = 'Importando...', playlistCover = '') {
+    const modal = $('#resolver-modal');
+    if (!modal) return;
+    
+    $('#resolver-title').textContent = playlistName;
+    $('#resolver-thumb').src = playlistCover;
+
+    modal.classList.remove('hide');
+    updateResolverModal(job); // Initial update
+}
+
+function updateResolverModal(job) {
+    const progress = (job.done / job.total) * 100;
+    $('#resolver-progress').style.width = `${progress}%`;
+    $('#resolver-progress-text').textContent = `${job.done} / ${job.total}`;
+}
+
+function hideResolverModal() {
+    const modal = $('#resolver-modal');
+    if (modal) {
+        modal.classList.add('hide');
+    }
+    if (resolverJobUnsubscribe) {
+        resolverJobUnsubscribe();
+        resolverJobUnsubscribe = null;
+    }
+    localStorage.removeItem('sy_active_import_job');
+}
+
+
+async function checkForActiveImportJob() {
+    const activeJobInfo = localStorage.getItem('sy_active_import_job');
+    if (!activeJobInfo) return;
+
+    try {
+        const { jobId, playlistId } = JSON.parse(activeJobInfo);
+        const { doc, onSnapshot, getDoc } = window.firebase;
+
+        const pl = communityPlaylists.find(p => p.id === playlistId) || (await getDoc(doc(db, "playlists", playlistId))).data();
+        if (!pl) {
+            hideResolverModal();
+            return;
+        }
+
+        const jobRef = doc(db, "resolverJobs", jobId);
+        if (resolverJobUnsubscribe) resolverJobUnsubscribe();
+
+        resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
+            if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
+                hideResolverModal();
+                return;
+            }
+            const job = { id: docSnap.id, ...docSnap.data() };
+            showResolverModal(job, pl.name, pl.cover);
+        });
+    } catch (e) {
+        console.error("Failed to parse or resume active job:", e);
+        localStorage.removeItem('sy_active_import_job');
+    }
+}
+
+async function startResolverJob(playlistId) {
+    const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = window.firebase;
+    const plRef = doc(db, "playlists", playlistId);
+    
+    const plDoc = await getDoc(plRef);
+    if (!plDoc.exists()) { console.error("Playlist not found for resolver job:", playlistId); return; }
+    const playlist = { id: plDoc.id, ...plDoc.data() };
+
+    showResolverModal({ done: 0, total: playlist.spotifyTracks.length }, playlist.name, playlist.cover);
+
+    let jobId = playlist.resolverJobId;
+    const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
+    
+    if (!jobDoc || !jobDoc.exists() || jobDoc.data().status !== 'running') {
+        jobId = `job_${playlistId}_${Date.now()}`;
+        await updateDoc(plRef, { resolverJobId: jobId });
+    }
+    
+    const jobRef = doc(db, "resolverJobs", jobId);
+    await setDoc(jobRef, {
+        playlistRef: plRef.path, status: 'queued', total: playlist.spotifyTracks.length,
+        done: 0, errors: [], lastUpdated: serverTimestamp()
+    }, { merge: true });
+
+    await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
+    await updateDoc(plRef, { status: 'resolving' });
+    
+    localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
+    
+    if (resolverJobUnsubscribe) resolverJobUnsubscribe();
+    resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
+        if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
+            hideResolverModal();
+            return;
+        }
+        const job = { id: docSnap.id, ...docSnap.data() };
+        updateResolverModal(job);
+    });
+
+    $('#resolver-cancel')?.addEventListener('click', cancelResolverJob);
+
+    runJobBatch(playlistId, jobRef);
+}
+
+
+async function runJobBatch(playlistId, jobRef) {
+    const { doc, getDoc, updateDoc, serverTimestamp } = window.firebase;
+    const plRef = doc(db, "playlists", playlistId);
+    
+    const jobDoc = await getDoc(jobRef);
+    if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
+        if (jobDoc.data()?.status !== 'canceled') hideResolverModal();
+        return;
+    }
+    
+    const plDoc = await getDoc(plRef);
+    if (!plDoc.exists()) return;
+
+    const playlist = plDoc.data();
+    const job = jobDoc.data();
+    const BATCH_SIZE = 1; // Bajado de 3 a 1 para no saturar el servidor de scraping.
+    
+    const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
+    const unresolvedIndices = [];
+    for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) {
+        if (tracksArray[i] === null) unresolvedIndices.push(i);
+    }
+    
+    if (unresolvedIndices.length === 0) {
+        const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
+        await updateDoc(plRef, { status: finalStatus });
+        await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
+        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
+        return;
+    }
+
+    const tracksToProcess = unresolvedIndices.map(index => playlist.spotifyTracks[index]);
+    const results = await Promise.all(tracksToProcess.map(track => resolveTrack(track)));
+
+    const currentPlDoc = await getDoc(plRef);
+    const currentPlaylist = currentPlDoc.data();
+    let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
+    let errorsInBatch = [];
+
+    results.forEach((result, i) => {
+        const originalIndex = unresolvedIndices[i];
+        const spotifyTrack = playlist.spotifyTracks[originalIndex];
+        if (result.videoId) {
+            updatedTracks[originalIndex] = {
+                id: result.videoId,
+                title: spotifyTrack.title,
+                author: spotifyTrack.author,
+                thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
+                source: 'youtube',
+                originalId: spotifyTrack.spotifyId,
+                backupUrls: result.backups,
+                reassignIndex: 0
+            };
+        } else if (result.error) {
+            errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
+        }
+    });
+    
+    const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
+    await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
+    await updateDoc(jobRef, { 
+        done: newResolvedCount, lastUpdated: serverTimestamp(),
+        errors: [...(job.errors || []), ...errorsInBatch]
+    });
+
+    setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
+}
+
+async function cancelResolverJob() {
+    const activeJobInfo = localStorage.getItem('sy_active_import_job');
+    if (!activeJobInfo) return;
+    
+    try {
+        const { playlistId, jobId } = JSON.parse(activeJobInfo);
+        const { doc, updateDoc, serverTimestamp } = window.firebase;
+        const jobRef = doc(db, "resolverJobs", jobId);
+        const plRef = doc(db, "playlists", playlistId);
+        
+        await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
+        await updateDoc(plRef, { status: 'partial' });
+        
+        showToast("Importación cancelada.", true);
+        hideResolverModal();
+    } catch(e) {
+        console.error("Error cancelling job:", e);
+        hideResolverModal();
+    }
+}
+
+// --- Funciones para Transmisiones ---
 const SESSIONS_COLLECTION = "sessions";
 
 async function createLiveSession(name, genre) {
