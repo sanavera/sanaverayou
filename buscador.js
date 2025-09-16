@@ -82,8 +82,8 @@ async function searchYoutubeParallel(query) {
     const resultsEl = $("#results");
     resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube…</h3></div>`;
 
-    const proxiedYtmUrl = `http://api.allorigins.win/get?url=${encodeURIComponent(scraperYTM(query))}`;
-    const proxiedYtUrl = `http://api.allorigins.win/get?url=${encodeURIComponent(scraperYT(query))}`;
+    const proxiedYtmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
+    const proxiedYtUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
 
     // Se utiliza la nueva función con timeout
     const ytmPromise = fetchWithTimeout(proxiedYtmUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
