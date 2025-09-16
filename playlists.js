@@ -20,13 +20,19 @@ async function resolveTrack(track) {
 
     try {
         // 1. Intenta resolver usando YouTube Music
-        // Llama a scraperYTM() que está definido globalmente en buscador.js
-        const ytmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
-        const ytmResponse = await fetch(ytmUrl);
+        const ytmUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYTM(query))}`;
+        const ytmResponse = await fetch(ytmUrl, { cache: 'no-store', credentials: 'omit' });
         
         if (ytmResponse.ok) {
-            const text = await ytmResponse.text();
-            // Llama a extractId() que está definido globalmente en buscador.js
+            let text = '';
+            const contentType = ytmResponse.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const wrap = await ytmResponse.json();
+                text = wrap.contents || '';
+            } else {
+                text = await ytmResponse.text();
+            }
+            
             const ytmIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
 
             if (ytmIds.length > 0) {
@@ -38,11 +44,18 @@ async function resolveTrack(track) {
 
         // 2. (Opcional) Fallback a YouTube estándar.
         if (ALLOW_YT_FALLBACK) {
-            const ytUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
-            const ytResponse = await fetch(ytUrl);
+            const ytUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYT(query))}`;
+            const ytResponse = await fetch(ytUrl, { cache: 'no-store', credentials: 'omit' });
 
             if (ytResponse.ok) {
-                const text = await ytResponse.text();
+                let text = '';
+                const contentType = ytResponse.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const wrap = await ytResponse.json();
+                    text = wrap.contents || '';
+                } else {
+                    text = await ytResponse.text();
+                }
                 const ytIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
 
                 if (ytIds.length > 0) {
