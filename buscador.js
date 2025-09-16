@@ -1,5 +1,5 @@
 // --- Constantes del Scraper (Editables) ---
-const SCRAPER_HOST = "http://191.85.27.198:5000";
+const SCRAPER_HOST = "http://191-85-27-198.nip.io:5000";
 
 // Endpoints del servidor
 const scraperYTM = (q) => `${SCRAPER_HOST}/?ytm=${encodeURIComponent(q)}`;
@@ -71,7 +71,17 @@ async function startSearch(query) {
 
 async function parseScraperResponse(response) {
     if (!response.ok) return [];
-    const text = await response.text();
+    
+    let text = '';
+    const contentType = response.headers.get('content-type');
+
+    if (contentType && contentType.includes('application/json')) {
+        const wrap = await response.json();
+        text = wrap.contents || '';
+    } else {
+        text = await response.text();
+    }
+    
     const ids = text.split('\n')
         .map(line => extractId(line.trim()))
         .filter(Boolean);
@@ -82,12 +92,12 @@ async function searchYoutubeParallel(query) {
     const resultsEl = $("#results");
     resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube…</h3></div>`;
 
-    const proxiedYtmUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYTM(query))}`;
-    const proxiedYtUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(scraperYT(query))}`;
+    const proxiedYtmUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYTM(query))}`;
+    const proxiedYtUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYT(query))}`;
 
-    // Se utiliza la nueva función con timeout
-    const ytmPromise = fetchWithTimeout(proxiedYtmUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
-    const ytPromise = fetchWithTimeout(proxiedYtUrl, { signal: searchAbort.signal }).then(parseScraperResponse);
+    // Se utiliza la nueva función con timeout y opciones anti-cache
+    const ytmPromise = fetchWithTimeout(proxiedYtmUrl, { signal: searchAbort.signal, cache: 'no-store', credentials: 'omit' }).then(parseScraperResponse);
+    const ytPromise = fetchWithTimeout(proxiedYtUrl, { signal: searchAbort.signal, cache: 'no-store', credentials: 'omit' }).then(parseScraperResponse);
 
     try {
         const [ytmIds, ytIds] = await Promise.all([ytmPromise, ytPromise]);
