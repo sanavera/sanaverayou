@@ -1,5 +1,5 @@
 // --- Constantes del Scraper (Editables) ---
-const SCRAPER_HOST = "http://191-85-17-216.nip.io:5000";
+const SCRAPER_HOST = "http://191-85-54-30.nip.io:5000";
 
 // Endpoints del servidor
 const scraperYTM = (q) => `${SCRAPER_HOST}/?ytm=${encodeURIComponent(q)}`;
@@ -332,15 +332,6 @@ function appendSongResults(chunk){
         cardPlayBtn.onclick = (e) => {
             e.stopPropagation();
             if (it.type === 'youtube_video') playFromSearch(it.id, true);
-        };
-    }
-    const favBtn = item.querySelector('.fav-btn');
-    if (favBtn) {
-        favBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (canActivate('favorites')) {
-                toggleFav(it);
-            }
         };
     }
     root.appendChild(item);
