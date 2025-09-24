@@ -334,6 +334,15 @@ function appendSongResults(chunk){
             if (it.type === 'youtube_video') playFromSearch(it.id, true);
         };
     }
+    const favBtn = item.querySelector('.fav-btn');
+    if (favBtn) {
+        favBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (canActivate('favorites')) {
+                toggleFav(it);
+            }
+        };
+    }
     root.appendChild(item);
   }
   refreshIndicators();
