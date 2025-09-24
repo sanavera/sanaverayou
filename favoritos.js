@@ -1,13 +1,11 @@
-// favoritos.js
-import { listenToFavorites, addFavorite, removeFavorite, Session } from './firebase.js';
+import { isFav, listenToFavorites, addFavorite, removeFavorite, Session } from './firebase.js';
 
 let favs = [];
 
-// --- Cargar favoritos según estado ---
 function loadFavs() {
     if (Session.status === "logged") {
         listenToFavorites(newFavs => {
-            favs = newFavs; // ya trae {id, trackId, ...}
+            favs = newFavs.map(f => ({ ...f, id: f.trackId }));
             renderFavs();
             refreshIndicators();
         });
@@ -18,18 +16,7 @@ function loadFavs() {
     }
 }
 
-// --- Verificar si un track está en favoritos ---
-function isFav(trackId) {
-    return favs.some(f => f.trackId === trackId);
-}
-
-// --- Alternar favorito ---
 function toggleFav(track) {
-    if (Session.status !== "logged") {
-        showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
-        return;
-    }
-
     if (isFav(track.id)) {
         const favToRemove = favs.find(f => f.trackId === track.id);
         if (favToRemove) {
@@ -42,7 +29,6 @@ function toggleFav(track) {
     }
 }
 
-// --- Renderizar favoritos en la UI ---
 function renderFavs() {
     const ul = $("#favList");
     if (!ul) return;
@@ -63,7 +49,7 @@ function renderFavs() {
     favs.forEach(it => {
         const li = document.createElement("li");
         li.className = "fav-item";
-        li.dataset.trackId = it.trackId;
+        li.dataset.trackId = it.id;
         li.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" src="${it.coverUrl}" alt="">
@@ -81,7 +67,7 @@ function renderFavs() {
       </div>
       <div class="actions">
         <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
-            ${favIconSvg(isFav(it.trackId))}
+            ${favIconSvg(isFav(it.id))}
         </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
@@ -95,43 +81,22 @@ function renderFavs() {
         if (cardPlayBtn) {
             cardPlayBtn.onclick = (e) => {
                 e.stopPropagation();
-                if (currentTrack?.id === it.trackId) {
+                if (currentTrack?.id === it.id) {
                     togglePlay();
                 } else {
                     playFromFav(it, true);
                 }
             };
         }
-
-        const favBtn = li.querySelector(".fav-btn");
-        if (favBtn) {
-            favBtn.onclick = (e) => {
-                e.stopPropagation();
-                toggleFav(it);
-            };
-        }
-
         ul.appendChild(li);
     });
-
     updateHero(currentTrack);
     refreshIndicators();
 }
 
-// --- Reproducir desde favoritos ---
 function playFromFav(track, autoplay = false) {
-    const i = favs.findIndex(f => f.trackId === track.trackId);
-    setQueue(
-        favs.map(f => ({
-            id: f.trackId,
-            title: f.title,
-            author: f.artist,
-            thumb: f.coverUrl,
-            source: f.source
-        })),
-        "favs",
-        Math.max(i, 0)
-    );
+    const i = favs.findIndex(f => f.trackId === track.id);
+    setQueue(favs.map(f => ({...f, id: f.trackId, author: f.artist, thumb: f.coverUrl, source: f.source})), "favs", Math.max(i, 0));
     viewingPlaylistId = null;
     playCurrent(autoplay);
 }
