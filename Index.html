@@ -19,49 +19,56 @@
     alt="Logo"
   />
 
+  <button id="userMenuBtn" class="theme-toggle" aria-label="Menú de usuario">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.9 0 3.44 1.54 3.44 3.44S13.9 11.88 12 11.88 8.56 10.34 8.56 8.44 10.1 5 12 5zm0 14.9c-2.67 0-5.46-1.34-5.91-4.04.05-2.07 4.09-3.1 5.91-3.1s5.86 1.03 5.91 3.1c-.45 2.7-3.24 4.04-5.91 4.04z"/></svg>
+  </button>
+  
+  <div id="userMenu" class="user-menu-overlay hide">
+    <div class="user-menu">
+      <div id="userMenuGuest" class="menu-section">
+        <div class="menu-tabs">
+          <button class="tab-btn active" data-tab="login">Iniciar sesión</button>
+          <button class="tab-btn" data-tab="register">Registrarse</button>
+        </div>
+        <div id="loginFormTab" class="form-container active" data-tab-content="login">
+          <form id="loginForm" class="menu-form">
+            <input id="loginEmail" type="email" placeholder="Correo electrónico" required>
+            <input id="loginPass" type="password" placeholder="Contraseña" required>
+            <button id="loginSubmit" type="submit" class="menu-btn menu-primary-btn">Iniciar sesión</button>
+          </form>
+        </div>
+        <div id="registerFormTab" class="form-container" data-tab-content="register">
+          <form id="registerForm" class="menu-form">
+            <input id="regEmail" type="email" placeholder="Correo electrónico" required>
+            <input id="regPass" type="password" placeholder="Contraseña" required>
+            <input id="regUsername" type="text" placeholder="Nombre de usuario" required>
+            <button id="regSubmit" type="submit" class="menu-btn menu-primary-btn">Registrarse</button>
+          </form>
+        </div>
+      </div>
+      <div id="userMenuLogged" class="menu-section hide">
+        <div class="logged-info">
+          <p id="loggedUserEmail" class="logged-email"></p>
+          <p id="loggedUsername" class="logged-username"></p>
+        </div>
+        <button id="logoutBtn" class="menu-btn menu-secondary-btn">Cerrar sesión</button>
+      </div>
+      <div class="menu-footer">
+        <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
+          <span class="ico sun" aria-hidden="true"></span>
+          <span class="ico moon" aria-hidden="true"></span>
+        </button>
+        <span class="menu-footer-text">Cambiar tema</span>
+      </div>
+    </div>
+  </div>
+
+
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
     </svg>
   </button>
-
-  <button id="userMenuBtn" class="search-fab user-menu-btn" aria-label="Menu de Usuario">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.93 0 3.5 1.57 3.5 3.5S13.93 12 12 12s-3.5-1.57-3.5-3.5S10.07 5 12 5zm0 14.2c-2.82 0-5.69-1.22-8-3.65C4.21 13.98 8.08 13 12 13s7.79.98 8 2.55c-2.31 2.43-5.18 3.65-8 3.65z"/>
-    </svg>
-  </button>
-  
-  <div id="userMenuOverlay" class="user-menu-overlay hide">
-    <div id="userMenu" class="user-menu-content">
-        <div id="guestSection" class="user-menu-section">
-            <h4 class="user-menu-title">Iniciar Sesión</h4>
-            <form id="loginForm" class="user-form">
-                <input id="loginEmail" type="email" placeholder="Email" required>
-                <input id="loginPass" type="password" placeholder="Contraseña" required>
-                <button id="loginSubmit" type="submit" class="pill user-form-btn">Entrar</button>
-            </form>
-            <h4 class="user-menu-title user-menu-title-reg">Registrarse</h4>
-            <form id="registerForm" class="user-form">
-                <input id="regEmail" type="email" placeholder="Email" required>
-                <input id="regPass" type="password" placeholder="Contraseña" required>
-                <input id="regUsername" type="text" placeholder="Nombre de usuario" required>
-                <button id="regSubmit" type="submit" class="pill user-form-btn">Registrar</button>
-            </form>
-        </div>
-        <div id="loggedSection" class="user-menu-section hide">
-            <div id="userInfo" class="user-info">
-                <h4 id="userName"></h4>
-                <p id="userEmail" class="muted"></p>
-            </div>
-            <button id="logoutBtn" class="pill user-form-btn danger-btn">Cerrar Sesión</button>
-        </div>
-        <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
-            <span class="ico sun" aria-hidden="true"></span>
-            <span class="ico moon" aria-hidden="true"></span>
-            <span class="pill pill-small user-form-btn">Cambiar tema</span>
-        </button>
-    </div>
-  </div>
 
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
@@ -306,148 +313,12 @@
 
   <div id="yt-holder"><div id="player"></div></div>
 
-  <script src="firebase.js" defer type="module"></script>
-  <script src="reproductor.js" defer></script>
-  <script src="buscador.js" defer></script>
-  <script src="playlists.js" defer></script>
-  <script src="favoritos.js" defer></script>
-  <script src="main.js" defer></script>
-
-  <script>
-    // Utils globales
-    const $ = id => document.getElementById(id);
-    const $$ = selector => document.querySelectorAll(selector);
-    const createElement = html => {
-        const div = document.createElement('div');
-        div.innerHTML = html.trim();
-        return div.firstChild;
-    }
-    const showAlert = msg => {
-        const toast = createElement(`<div id="sy-toast" class="sy-toast">${msg}</div>`);
-        document.body.appendChild(toast);
-        setTimeout(() => toast.classList.add('show'), 100);
-        setTimeout(() => toast.classList.remove('show'), 4000);
-        setTimeout(() => toast.remove(), 4300);
-    };
-
-    // Lógica del minimodal
-    const userMenuBtn = $('userMenuBtn');
-    const userMenuOverlay = $('userMenuOverlay');
-    const loginForm = $('loginForm');
-    const registerForm = $('registerForm');
-    const logoutBtn = $('logoutBtn');
-    const loggedSection = $('loggedSection');
-    const guestSection = $('guestSection');
-    const userEmailEl = $('userEmail');
-    const userNameEl = $('userName');
-    
-    let userMenuOpen = false;
-
-    const toggleUserMenu = () => {
-        userMenuOpen = !userMenuOpen;
-        if (userMenuOpen) {
-            userMenuOverlay.classList.remove('hide');
-        } else {
-            userMenuOverlay.classList.add('hide');
-        }
-    };
-    
-    userMenuBtn.addEventListener('click', toggleUserMenu);
-    userMenuOverlay.addEventListener('click', (e) => {
-        if (e.target.id === 'userMenuOverlay') {
-            toggleUserMenu();
-        }
-    });
-
-    const renderUserMenu = (session) => {
-        if (session.status === 'logged') {
-            loggedSection.classList.remove('hide');
-            guestSection.classList.add('hide');
-            userEmailEl.textContent = session.email;
-            userNameEl.textContent = session.username;
-        } else {
-            loggedSection.classList.add('hide');
-            guestSection.classList.remove('hide');
-        }
-    };
-
-    const handleLogin = async (e) => {
-        e.preventDefault();
-        const email = loginForm.loginEmail.value;
-        const password = loginForm.loginPass.value;
-        try {
-            await window.signIn(email, password);
-            showAlert("¡Bienvenido de nuevo!");
-            toggleUserMenu();
-        } catch (error) {
-            showAlert(error.message || "Error al iniciar sesión.");
-        }
-    };
-
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        const email = registerForm.regEmail.value;
-        const password = registerForm.regPass.value;
-        const username = registerForm.regUsername.value;
-        try {
-            await window.signUp(email, password, username);
-            showAlert("¡Registro exitoso! ¡Bienvenido a SanaveraYou!");
-            toggleUserMenu();
-        } catch (error) {
-            showAlert(error.message || "Error al registrarse.");
-        }
-    };
-
-    const handleLogout = async () => {
-        try {
-            await window.signOutAll();
-            showAlert("Sesión cerrada correctamente.");
-        } catch (error) {
-            showAlert("Error al cerrar sesión.");
-        }
-    };
-
-    loginForm.addEventListener('submit', handleLogin);
-    registerForm.addEventListener('submit', handleRegister);
-    logoutBtn.addEventListener('click', handleLogout);
-
-    window.onAuthChange(renderUserMenu);
-
-    // Lógica de tema (reubicada)
-    const themeToggleBtn = $('themeToggle');
-    const applyThemeFromLocalStorage = () => {
-        const theme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', theme);
-    };
-
-    const toggleTheme = () => {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-    };
-
-    themeToggleBtn.addEventListener('click', toggleTheme);
-    
-    // Función de bloqueo
-    const canActivate = (feature) => {
-        const session = window.Session.get();
-        if (session.status === "guest") {
-            showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
-            return false;
-        }
-        return true;
-    };
-    window.canActivate = canActivate;
-
-    // Inicialización al cargar
-    document.addEventListener("DOMContentLoaded", () => {
-        applyThemeFromLocalStorage();
-        const session = window.Session.get();
-        renderUserMenu(session);
-    });
-
-  </script>
+  <script type="module" src="firebase.js"></script>
+  <script type="module" src="reproductor.js"></script>
+  <script type="module" src="buscador.js"></script>
+  <script type="module" src="playlists.js"></script>
+  <script type="module" src="favoritos.js"></script>
+  <script type="module" src="main.js"></script>
 
 </body>
 </html>
