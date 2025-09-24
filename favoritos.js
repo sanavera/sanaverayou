@@ -144,3 +144,5 @@ function playFromFav(track, autoplay = false) {
     viewingPlaylistId = null;
     playCurrent(autoplay);
 }
+
+export { loadFavs, toggleFav, isFav, renderFavs, playFromFav };
