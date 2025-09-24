@@ -1,4 +1,4 @@
-import { Session, getSession, onAuthChange, signOutAll, signIn, signUp, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites, createLiveSession, updateLiveSession, deleteLiveSession, listenToSessionChanges, listenForLiveSessions, communityPlaylists, checkForActiveImportJob, startResolverJob, sy_fs, isMyPlaylist } from './firebase.js';
+import { Session, getSession, initFirebase, onAuthChange, signOutAll, signIn, signUp, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites, createLiveSession, updateLiveSession, deleteLiveSession, listenToSessionChanges, listenForLiveSessions, communityPlaylists, checkForActiveImportJob, startResolverJob, sy_fs, isMyPlaylist } from './firebase.js';
 import { $, $$, fmt, cleanTitle, cleanAuthor, dotsSvg, favIconSvg, youtubeLogoSvg, spotifyLogoSvg, youtubeMusicLogoSvg, archiveLogoSvg } from './utils.js';
 
 var currentSearchType = 'youtube'; 
