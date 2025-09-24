@@ -28,10 +28,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- CONFIG DE TU PROYECTO FIREBASE ---
-// Tenés que pegar acá el objeto firebaseConfig que te da Firebase Console
-const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
+const firebaseConfig = { 
+  apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", 
+  authDomain: "sanaverayou.firebaseapp.com", 
+  projectId: "sanaverayou", 
+  storageBucket: "sanaverayou.appspot.com", 
+  messagingSenderId: "275513302327", 
+  appId: "1:275513302327:web:3b26052bf02e657d450eb2" 
+};
     
-
 // --- Inicialización ---
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -157,6 +162,32 @@ export async function deletePlaylist(id) {
     throw new Error("No tenés permisos para borrar esta playlist.");
   }
   await deleteDoc(ref);
+}
+
+// --- Agregar canción a una playlist ---
+export async function addSongToPlaylist(playlistId, trackObj) {
+  if (Session.status !== "logged") throw new Error("Requiere registro");
+
+  const ref = doc(db, "playlists", playlistId);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    throw new Error("La playlist no existe.");
+  }
+  if (snap.data().owner !== Session.uid) {
+    throw new Error("No tenés permisos para modificar esta playlist.");
+  }
+
+  await updateDoc(ref, {
+    tracks: arrayUnion({
+      id: trackObj.id,
+      title: trackObj.title,
+      artist: trackObj.author,
+      coverUrl: trackObj.thumb,
+      source: trackObj.source,
+      addedAt: serverTimestamp()
+    })
+  });
 }
 
 // --- Favoritos ---
