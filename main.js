@@ -158,8 +158,9 @@ function refreshIndicators() {
 
     const favBtn = el.querySelector(".fav-btn");
     if (favBtn) {
-        favBtn.innerHTML = favIconSvg(isFav(trackId));
-        favBtn.classList.toggle('is-fav', isFav(trackId));
+        const isFavTrack = favs.some(f => f.trackId === trackId);
+        favBtn.innerHTML = favIconSvg(isFavTrack);
+        favBtn.classList.toggle('is-fav', isFavTrack);
     }
   });
 
@@ -266,6 +267,7 @@ function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
 }
 
 async function openPlaylistSheet(track){
+  if (!canActivate("playlists")) return;
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
@@ -376,7 +378,9 @@ function initLiveStreamsUI() {
         if (liveState.mode === 'broadcasting') {
             stopBroadcasting();
         } else {
-            startStreamSheet.classList.add("show");
+            if (canActivate('cast')) {
+                startStreamSheet.classList.add("show");
+            }
         }
     });
 
@@ -454,7 +458,7 @@ async function boot(){
     if (!itemEl) return;
 
     const trackId = itemEl.dataset.trackId;
-    let track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
+    let track = items.find(x => x.id === trackId) || favs.find(f => f.trackId === trackId) || queue?.find(t => t.id === trackId);
     
     if (!track && viewingPlaylistId) {
         const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
@@ -473,7 +477,10 @@ async function boot(){
     if (e.target.closest(".icon-btn.more")) {
         if(liveState.mode === 'listening') return;
         
-        const actions = [{ id: "pl", label: "Agregar a playlist" }];
+        const actions = [];
+        if (Session.get().status === "logged") {
+            actions.push({ id: "pl", label: "Agregar a playlist" });
+        }
 
         if (track.source !== 'archive') { 
             actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
