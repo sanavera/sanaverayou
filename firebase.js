@@ -7,7 +7,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  signInWithCustomToken
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { 
   getFirestore, 
@@ -37,12 +38,18 @@ const firebaseConfig = {
   appId: "1:275513302327:web:3b26052bf02e657d450eb2" 
 };
     
-// --- Inicialización ---
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-// --- Session ---
+// --- Inicialización ---
+let app, auth, db;
+let communityPlaylists = [];
+let favs = [];
+let resolverJobUnsubscribe = null;
+const favsCollectionName = "favorites";
+let sessionListeners = [];
+
+// Session global object and helpers
 const Session = {
   status: "guest",
   uid: null,
@@ -72,7 +79,7 @@ const Session = {
     this.email = data.email || null;
     this.username = data.username || null;
     localStorage.setItem(this._key, JSON.stringify(this));
-    listeners.forEach(cb => cb(this));
+    sessionListeners.forEach(cb => cb(this));
   },
 
   clear() {
@@ -81,34 +88,46 @@ const Session = {
 };
 Session.get();
 
-let listeners = [];
-
 export function onAuthChange(cb) {
   if (typeof cb === "function") {
-    listeners.push(cb);
+    sessionListeners.push(cb);
     cb(Session);
   }
 }
 
 // --- Auth Helpers ---
 export async function signIn(email, pass) {
-  const { user } = await signInWithEmailAndPassword(auth, email, pass);
-  return user;
+  try {
+    const { user } = await signInWithEmailAndPassword(auth, email, pass);
+    return user;
+  } catch (e) {
+    console.error("Login failed:", e);
+    throw e;
+  }
 }
 
 export async function signUp(email, pass, username) {
-  const { user } = await createUserWithEmailAndPassword(auth, email, pass);
-  await setDoc(doc(db, "users", user.uid), {
-    username,
-    email,
-    createdAt: serverTimestamp()
-  });
-  return user;
+  try {
+    const { user } = await createUserWithEmailAndPassword(auth, email, pass);
+    await setDoc(doc(db, "artifacts", appId, "users", user.uid), {
+      username,
+      email,
+      createdAt: serverTimestamp()
+    });
+    return user;
+  } catch (e) {
+    console.error("Registration failed:", e);
+    throw e;
+  }
 }
 
 export async function signOutAll() {
   await signOut(auth);
   Session.clear();
+}
+
+export function isUserAuthenticated() {
+    return Session.status === 'logged';
 }
 
 // --- Firestore Helpers ---
@@ -131,8 +150,8 @@ export async function getMyPlaylists() {
   return snap.docs.map(d => ({id: d.id, ...d.data()}));
 }
 
-export async function createPlaylist({title, description, public: isPublic, tracks}) {
-  if (Session.status !== "logged") throw new Error("Requiere registro");
+export async function createPlaylist({title, description, isPublic, tracks}) {
+  if (Session.status !== "logged") throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
   return await addDoc(collection(db, "playlists"), {
     title,
     description,
@@ -145,7 +164,7 @@ export async function createPlaylist({title, description, public: isPublic, trac
 }
 
 export async function updatePlaylist(id, data) {
-  if (Session.status !== "logged") throw new Error("Requiere registro");
+  if (Session.status !== "logged") throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
   const ref = doc(db, "playlists", id);
   const snap = await getDoc(ref);
   if (!snap.exists() || snap.data().owner !== Session.uid) {
@@ -155,7 +174,7 @@ export async function updatePlaylist(id, data) {
 }
 
 export async function deletePlaylist(id) {
-  if (Session.status !== "logged") throw new Error("Requiere registro");
+  if (Session.status !== "logged") throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
   const ref = doc(db, "playlists", id);
   const snap = await getDoc(ref);
   if (!snap.exists() || snap.data().owner !== Session.uid) {
@@ -166,7 +185,7 @@ export async function deletePlaylist(id) {
 
 // --- Agregar canción a una playlist ---
 export async function addSongToPlaylist(playlistId, trackObj) {
-  if (Session.status !== "logged") throw new Error("Requiere registro");
+  if (Session.status !== "logged") throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
 
   const ref = doc(db, "playlists", playlistId);
   const snap = await getDoc(ref);
@@ -192,8 +211,8 @@ export async function addSongToPlaylist(playlistId, trackObj) {
 
 // --- Favoritos ---
 export async function addFavorite(trackObj) {
-  if (Session.status !== "logged") throw new Error("Requiere registro");
-  return await addDoc(collection(db, "users", Session.uid, "favorites"), {
+  if (Session.status !== "logged") throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+  return await addDoc(collection(db, "artifacts", appId, "users", Session.uid, favsCollectionName), {
     trackId: trackObj.id,
     title: trackObj.title,
     artist: trackObj.author,
@@ -204,14 +223,14 @@ export async function addFavorite(trackObj) {
 }
 
 export async function removeFavorite(favId) {
-  if (Session.status !== "logged") throw new Error("Requiere registro");
-  await deleteDoc(doc(db, "users", Session.uid, "favorites", favId));
+  if (Session.status !== "logged") throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+  await deleteDoc(doc(db, "artifacts", appId, "users", Session.uid, favsCollectionName, favId));
 }
 
 export function listenToFavorites(cb) {
   if (Session.status !== "logged") return () => {};
   const q = query(
-    collection(db, "users", Session.uid, "favorites"),
+    collection(db, "artifacts", appId, "users", Session.uid, favsCollectionName),
     orderBy("addedAt", "desc")
   );
   return onSnapshot(q, snap => {
@@ -220,26 +239,41 @@ export function listenToFavorites(cb) {
   });
 }
 
-// --- Community Playlists (realtime global) ---
-let communityPlaylists = [];
-const qCommunity = query(collection(db, "playlists"), orderBy("updatedAt", "desc"));
-onSnapshot(qCommunity, (snapshot) => {
-  communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-});
+// --- Main initialization logic ---
+async function initFirebase() {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
 
-// --- Inicializar Auth State ---
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    const ref = doc(db, "users", user.uid);
-    const snap = await getDoc(ref);
-    let username = "Usuario";
-    if (snap.exists()) {
-      username = snap.data().username || "Usuario";
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            const userDocRef = doc(db, "artifacts", appId, "users", user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            let username = 'Usuario';
+            if(userDocSnap.exists()) {
+                username = userDocSnap.data().username || 'Usuario';
+            }
+            Session.set({ status: "logged", uid: user.uid, email: user.email, username });
+        } else {
+            Session.clear();
+        }
+    });
+
+    onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
+        communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // re-render playlists in UI
+    });
+
+    // Use a custom token if provided
+    if (initialAuthToken) {
+        try {
+            await signInWithCustomToken(auth, initialAuthToken);
+        } catch (e) {
+            console.error("Failed to sign in with custom token:", e);
+        }
     }
-    Session.set({status:"logged", uid:user.uid, email:user.email, username});
-  } else {
-    Session.clear();
-  }
-});
+}
 
-export { Session, communityPlaylists };
+initFirebase();
+
+export { Session, communityPlaylists, favs };
