@@ -1,5 +1,5 @@
-import { onAuthChange, Session, communityPlaylists, isFav, getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, addSongToPlaylist, getSystemPlaylists, getPublicPlaylists, isUserAuthenticated, signOutAll, signIn, signUp } from './firebase.js';
-import { loadFavs, toggleFav } from './favoritos.js';
+import { onAuthChange, Session, communityPlaylists, getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, addSongToPlaylist, getSystemPlaylists, getPublicPlaylists, isUserAuthenticated, signOutAll, signIn, signUp } from './firebase.js';
+import { loadFavs, isFav, toggleFav } from './favoritos.js';
 
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
