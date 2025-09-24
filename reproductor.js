@@ -1,5 +1,5 @@
-// Contiene la l\u00f3gica del reproductor de YouTube, la cola de reproducci\u00f3n y los controles.
-import { showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateAndroidNotification, startListening, stopListening, startBroadcasting, stopBroadcasting, handleNativeControl, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle } from './main.js';
+// Contiene la lógica del reproductor de YouTube, la cola de reproducción y los controles.
+import { showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateMediaSession, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle } from './main.js';
 import { $, $$, fmt, cleanAuthor } from './utils.js';
 import { checkForActiveImportJob, startResolverJob } from './firebase.js';
 import { saveCurrentArchiveAlbumAsPlaylist, renderQueue } from './playlists.js';
@@ -11,7 +11,7 @@ let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
 
-// Estado de la cola y reproducci\u00f3n
+// Estado de la cola y reproducción
 let queue = null;
 let queueType = null;
 let qIdx = -1;
@@ -176,26 +176,6 @@ function playCurrent(autoplay = false) {
         }
     };
 
-    if (currentTrack.source === 'archive') {
-        if (YT_READY) ytPlayer.stopVideo();
-        if (!currentTrack.urls?.mp3) {
-            console.warn("Canción de Archive no tiene URL mp3, saltando...", currentTrack);
-            next();
-            return;
-        }
-        archivePlayer.src = currentTrack.urls.mp3;
-        archivePlayer.load();
-    } else {
-        archivePlayer.pause();
-        archivePlayer.src = "";
-        if (!YT_READY || !currentTrack.id) {
-            console.warn("Canción de YT inválida o YT no est\u00e1 listo, saltando...", currentTrack);
-            next();
-            return;
-        }
-        ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: 0, suggestedQuality: "auto" });
-    }
-
     if (autoplay) {
         if (liveState.mode === 'broadcasting') {
             setTimeout(startPlayback, HOST_PLAY_DELAY);
@@ -203,11 +183,10 @@ function playCurrent(autoplay = false) {
             startPlayback();
         }
     }
-
+    
     startTimer();
     updateUIOnTrackChange();
 }
-
 
 function togglePlay(){
   if (liveState.mode === 'listening' || !currentTrack) return;
