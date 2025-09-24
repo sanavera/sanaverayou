@@ -1,4 +1,4 @@
-// Contiene la lógica del reproductor de YouTube, la cola de reproducción y los controles.
+// Contiene la l\u00f3gica del reproductor de YouTube, la cola de reproducci\u00f3n y los controles.
 
 let ytPlayer = null;
 let archivePlayer = null; // Reproductor de audio para Archive.org
@@ -6,7 +6,7 @@ let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
 
-// Estado de la cola y reproducción
+// Estado de la cola y reproducci\u00f3n
 let queue = null;
 let queueType = null;
 let qIdx = -1;
@@ -19,7 +19,7 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 
-// Estado de Transmisión en Vivo
+// Estado de Transmisi\u00f3n en Vivo
 let liveState = {
     mode: 'none',
     sessionId: null,
@@ -171,7 +171,7 @@ function playCurrent(autoplay = false) {
             currentTrack: currentTrack,
             isPlaying: autoplay,
             currentTime: 0,
-            stateChangeTimestamp: sy_fs().serverTimestamp()
+            stateChangeTimestamp: window.firebase.serverTimestamp()
         });
     }
 
@@ -198,7 +198,7 @@ function playCurrent(autoplay = false) {
         archivePlayer.pause();
         archivePlayer.src = "";
         if (!YT_READY || !currentTrack.id) {
-            console.warn("Canción de YT inválida o YT no está listo, saltando...", currentTrack);
+            console.warn("Canción de YT inválida o YT no est\u00e1 listo, saltando...", currentTrack);
             next();
             return;
         }
@@ -235,7 +235,7 @@ function togglePlay(){
       updateLiveSession(liveState.sessionId, {
           isPlaying: !isCurrentlyPlaying,
           currentTime: currentTime || 0,
-          stateChangeTimestamp: sy_fs().serverTimestamp()
+          stateChangeTimestamp: window.firebase.serverTimestamp()
       });
   }
 }
@@ -276,7 +276,7 @@ function prev(){
       if (currentTrack.source === 'archive') archivePlayer.currentTime = 0;
       else ytPlayer.seekTo(0, true);
        if (liveState.mode === 'broadcasting') {
-          updateLiveSession(liveState.sessionId, { currentTime: 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
+          updateLiveSession(liveState.sessionId, { currentTime: 0, stateChangeTimestamp: window.firebase.serverTimestamp() });
       }
   } else if (qIdx - 1 >= 0) {
     qIdx--;
@@ -402,17 +402,10 @@ function initPlayer() {
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     
-    // --- LÓGICA AGREGADA: Evento para el botón de guardar álbum ---
+    // --- L\u00f3gica agregada: Evento para el bot\u00f3n de guardar \u00e1lbum ---
     $("#btnSaveAlbum")?.addEventListener('click', () => {
         if (queueType === 'archive_album' && queue && queue.length > 0) {
             saveCurrentArchiveAlbumAsPlaylist(); 
-        }
-    });
-    
-    // --- LÓGICA AGREGADA: Botón de transmitir ---
-    $("#broadcastBtn")?.addEventListener('click', () => {
-        if (canActivate("cast")) {
-            $("#startStreamSheet").classList.add("show");
         }
     });
 
@@ -424,7 +417,7 @@ function initPlayer() {
                 ytPlayer.playVideo();
             }
         } catch (e) {
-            console.error("Error al intentar mantener la reproducción en segundo plano:", e);
+            console.error("Error al intentar mantener la reproducci\u00f3n en segundo plano:", e);
         }
     });
 
@@ -432,7 +425,7 @@ function initPlayer() {
     window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 }
 
-// --- LÓGICA DE TRANSMISIONES ---
+// --- L\u00f3gica de Transmisiones ---
 
 function setPlayerControlsDisabled(disabled) {
     const controls = ['#npPlay', '#miniPlay', '#btnNext', '#btnPrev', '#btnShuffle', '#btnRepeat', '#seek', '#miniSeek'];
@@ -443,21 +436,23 @@ function setPlayerControlsDisabled(disabled) {
 }
 
 async function startBroadcasting(name, genre) {
+    if (!canActivate('cast')) return false;
+
     try {
-        const sessionId = await createLiveSession(name, genre);
+        const sessionId = await window.firebase.createLiveSession(name, genre);
         liveState.mode = 'broadcasting';
         liveState.sessionId = sessionId;
-        showToast(`Iniciaste la transmisión: ${name}`);
-        heartbeatInterval = setInterval(() => {
-            if(liveState.sessionId) updateLiveSession(liveState.sessionId, { lastSeen: sy_fs().serverTimestamp() });
+        showToast(`Iniciaste la transmisi\u00f3n: ${name}`);
+        heartbeatInterval = setInterval(async () => {
+            if(liveState.sessionId) await window.firebase.updateLiveSession(liveState.sessionId, { lastSeen: window.firebase.serverTimestamp() });
         }, 15000);
         window.addEventListener('beforeunload', stopBroadcasting);
         if (currentTrack) {
             const currentTime = currentTrack.source === 'archive' ? archivePlayer.currentTime : ytPlayer.getCurrentTime();
-            updateLiveSession(sessionId, { currentTrack, isPlaying: getPlaybackState() === 'playing', currentTime: currentTime || 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
+            await window.firebase.updateLiveSession(sessionId, { currentTrack, isPlaying: getPlaybackState() === 'playing', currentTime: currentTime || 0, stateChangeTimestamp: window.firebase.serverTimestamp() });
         }
         return true;
-    } catch (e) { console.error("Error starting broadcast:", e); return false; }
+    } catch (e) { console.error("Error starting broadcast:", e); showToast("No se pudo iniciar la transmisi\u00f3n. Reintent\u00e1 por favor.", true); return false; }
 }
 
 async function stopBroadcasting() {
@@ -465,9 +460,9 @@ async function stopBroadcasting() {
     clearInterval(heartbeatInterval);
     heartbeatInterval = null;
     window.removeEventListener('beforeunload', stopBroadcasting);
-    showToast("Transmisión finalizada.");
-    await updateLiveSession(liveState.sessionId, { status: 'ended' });
-    setTimeout(() => deleteLiveSession(liveState.sessionId), 2000);
+    showToast("Transmisi\u00f3n finalizada.");
+    await window.firebase.updateLiveSession(liveState.sessionId, { status: 'ended' });
+    setTimeout(() => window.firebase.deleteLiveSession(liveState.sessionId), 2000);
     liveState.mode = 'none';
     liveState.sessionId = null;
     liveState.sessionData = null;
@@ -479,9 +474,9 @@ function startListening(sessionId, sessionName) {
     liveState.mode = 'listening';
     liveState.sessionId = sessionId;
     setPlayerControlsDisabled(true);
-    showToast(`Conectado a la transmisión de ${sessionName}`);
+    showToast(`Conectado a la transmisi\u00f3n de ${sessionName}`);
     window.addEventListener('beforeunload', stopListening);
-    sessionUnsubscribe = listenToSessionChanges(sessionId, handleSessionUpdate);
+    sessionUnsubscribe = window.firebase.listenToSessionChanges(sessionId, handleSessionUpdate);
 }
 
 function stopListening() {
@@ -497,7 +492,7 @@ function stopListening() {
     setPlayerControlsDisabled(false);
     if(YT_READY) ytPlayer.pauseVideo();
     if(archivePlayer) archivePlayer.pause();
-    showToast("Te desconectaste de la transmisión.");
+    showToast("Te desconectaste de la transmisi\u00f3n.");
     updateUIOnTrackChange();
 }
 
@@ -505,7 +500,7 @@ function handleSessionUpdate(sessionData) {
     if (liveState.mode !== 'listening') return;
 
     if (!sessionData || sessionData.status === 'ended') {
-        showToast("La transmisión finalizó.", true);
+        showToast("La transmisi\u00f3n finaliz\u00f3.", true);
         stopListening();
         currentTrack = null;
         updateUIOnTrackChange();
