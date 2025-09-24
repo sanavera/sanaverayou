@@ -1,374 +1,310 @@
 // Contiene la inicialización de Firebase y toda la lógica de Firestore.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, updateDoc, setDoc, deleteDoc, addDoc, collection, query, where, onSnapshot, getDocs, serverTimestamp, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
-import { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
-
-const __app_id = "sanaverayou";
-const __firebase_config = '{"apiKey":"AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU","authDomain":"sanaverayou.firebaseapp.com","projectId":"sanaverayou","storageBucket":"sanaverayou.appspot.com","messagingSenderId":"275513302327","appId":"1:275513302327:web:3b26052bf02e657d450eb2"}';
+// Global variables for Firebase configuration, pre-injected by the environment.
 const firebaseConfig = JSON.parse(__firebase_config);
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-let app = null;
-let db = null;
-let auth = null;
+// Firebase instances and session state
+let app, auth, db;
 let communityPlaylists = [];
+let favs = [];
 let resolverJobUnsubscribe = null;
+const favsCollectionName = "favorites";
+let sessionListeners = [];
 
-// --- Gestor de Sesión ---
-const SESSION_KEY = "app_session";
-const DEFAULT_SESSION = { status: "guest", uid: "", email: "", username: "" };
-
-/**
- * Clase para manejar el estado de la sesión, persistiendo en localStorage.
- */
-class SessionManager {
-    constructor() {
-        this.data = this.load();
-        this.callbacks = new Set();
-    }
-
-    load() {
-        try {
-            const stored = localStorage.getItem(SESSION_KEY);
-            return stored ? { ...DEFAULT_SESSION, ...JSON.parse(stored) } : DEFAULT_SESSION;
-        } catch (e) {
-            console.error("Error loading session from localStorage:", e);
-            return DEFAULT_SESSION;
-        }
-    }
-
-    save() {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(this.data));
-    }
-
-    set(newData) {
-        this.data = { ...this.data, ...newData };
-        this.save();
-        this.callbacks.forEach(cb => cb(this.data));
-    }
+const Session = {
+    status: "guest",
+    uid: null,
+    email: null,
+    username: null,
+    
+    _sessionKey: "app_session",
 
     get() {
-        return this.data;
-    }
+        if (!this.uid) {
+            try {
+                const saved = localStorage.getItem(this._sessionKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    this.status = parsed.status;
+                    this.uid = parsed.uid;
+                    this.email = parsed.email;
+                    this.username = parsed.username;
+                }
+            } catch (e) {
+                console.error("Failed to load session from localStorage:", e);
+                this.set({status: "guest", uid: null});
+            }
+        }
+        return this;
+    },
 
-    onUpdate(callback) {
-        this.callbacks.add(callback);
+    set(data) {
+        this.status = data.status || "guest";
+        this.uid = data.uid || null;
+        this.email = data.email || null;
+        this.username = data.username || null;
+        localStorage.setItem(this._sessionKey, JSON.stringify(this));
+        
+        sessionListeners.forEach(cb => cb(this));
+    },
+
+    clear() {
+        this.set({status: "guest", uid: null, email: null, username: null});
+    }
+};
+
+let isAuthenticated = false;
+
+// --- onAuthChange helper for external modules ---
+export function onAuthChange(cb) {
+    if (typeof cb === 'function') {
+        sessionListeners.push(cb);
+        // Execute immediately if we already have a session state
+        if (Session.uid !== null) {
+            cb(Session);
+        }
     }
 }
 
-export const Session = new SessionManager();
-window.Session = Session;
-
-// --- Helpers para IDs de playlists del usuario en Local Storage ---
-const LS_USER_PLAYLIST_IDS = `sy_user_playlist_ids_v1_${Session.get().uid}`;
-function getMyPlaylistIds() { try { return JSON.parse(localStorage.getItem(LS_USER_PLAYLIST_IDS) || "[]"); } catch { return []; } }
-function addMyPlaylistId(id) { const ids = getMyPlaylistIds(); if (!ids.includes(id)) { ids.push(id); localStorage.setItem(LS_USER_PLAYLIST_IDS, JSON.stringify(ids)); } }
-function removeMyPlaylistId(id) { let ids = getMyPlaylistIds(); ids = ids.filter(pid => pid !== id); localStorage.setItem(LS_USER_PLAYLIST_IDS, JSON.stringify(ids)); }
-export function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); }
-
-/**
- * Proporciona acceso unificado a las funciones de Firestore.
- * @returns {object} - Objeto con instancias de funciones de Firestore.
- */
+// --- Firestore Helpers ---
 function sy_fs() {
-  const f = (window.firebase || {});
   return {
-    db: db || f.db,
-    doc: doc || f.doc,
-    updateDoc: updateDoc || f.updateDoc,
-    setDoc: setDoc || f.setDoc,
-    deleteDoc: deleteDoc || f.deleteDoc,
-    addDoc: addDoc || f.addDoc,
-    collection: collection || f.collection,
-    query: query || f.query,
-    where: where || f.where,
-    onSnapshot: onSnapshot || f.onSnapshot,
-    getDocs: getDocs || f.getDocs,
-    serverTimestamp: serverTimestamp || f.serverTimestamp
+    auth,
+    db,
+    doc,
+    updateDoc,
+    setDoc,
+    deleteDoc,
+    addDoc,
+    collection,
+    query,
+    where,
+    onSnapshot,
+    getDocs,
+    serverTimestamp,
+    getDoc,
+    runTransaction,
   };
 }
 
-// --- Bloqueo para invitados ---
-function checkAuth() {
-    if (Session.get().status !== "logged") {
-        throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
-    }
-    return true;
+/**
+ * Checks if the current user is authenticated.
+ * @returns {boolean}
+ */
+export function isUserAuthenticated() {
+    return isAuthenticated;
 }
 
-// --- Helpers de Firestore (actualizados) ---
-
-export async function getSystemPlaylists() {
-    try {
-        const { collection, query, where, getDocs, db } = sy_fs();
-        const q = query(collection(db, "system_playlists"));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (e) {
-        console.error("Error getting system playlists:", e);
-        return [];
-    }
-}
-
-export async function getPublicPlaylists() {
-    try {
-        const { collection, query, where, getDocs, db } = sy_fs();
-        const q = query(collection(db, "playlists"), where("isPublic", "==", true));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (e) {
-        console.error("Error getting public playlists:", e);
-        return [];
-    }
-}
-
-export async function createPlaylist(data) {
-    checkAuth();
-    try {
-        const { collection, addDoc, serverTimestamp, db } = sy_fs();
-        const { uid } = Session.get();
-        const docRef = await addDoc(collection(db, "playlists"), {
-            ...data,
-            owner: uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            trackCount: data.tracks?.length || 0,
-            resolvedCount: data.tracks?.length || 0
-        });
-        return docRef.id;
-    } catch (e) {
-        console.error("Error creating playlist:", e);
-        throw new Error("No se pudo crear la playlist. Intente de nuevo.");
-    }
-}
-
-export async function updatePlaylist(id, data) {
-    checkAuth();
-    try {
-        const { doc, updateDoc, serverTimestamp, db } = sy_fs();
-        const { uid } = Session.get();
-        const plRef = doc(db, "playlists", id);
-        const plDoc = await getDoc(plRef);
-        if (!plDoc.exists() || plDoc.data().owner !== uid) {
-            throw new Error("No tenés permisos para modificar esta playlist.");
-        }
-        await updateDoc(plRef, { ...data, updatedAt: serverTimestamp() });
-        return true;
-    } catch (e) {
-        console.error("Error updating playlist:", e);
-        throw e;
-    }
-}
-
-export async function deletePlaylist(id) {
-    checkAuth();
-    try {
-        const { doc, deleteDoc, getDoc, db } = sy_fs();
-        const { uid } = Session.get();
-        const plRef = doc(db, "playlists", id);
-        const plDoc = await getDoc(plRef);
-        if (!plDoc.exists() || plDoc.data().owner !== uid) {
-            throw new Error("No tenés permisos para modificar esta playlist.");
-        }
-        await deleteDoc(plRef);
-        return true;
-    } catch (e) {
-        console.error("Error deleting playlist:", e);
-        throw e;
-    }
-}
-
-export async function addFavorite(trackObj) {
-    checkAuth();
-    try {
-        const { doc, setDoc, db } = sy_fs();
-        const { uid } = Session.get();
-        const favId = trackObj.id;
-        const favRef = doc(db, `users/${uid}/favorites`, favId);
-        await setDoc(favRef, { ...trackObj, addedAt: serverTimestamp() });
-        return true;
-    } catch (e) {
-        console.error("Error adding favorite:", e);
-        throw e;
-    }
-}
-
-export async function removeFavorite(favId) {
-    checkAuth();
-    try {
-        const { doc, deleteDoc, db } = sy_fs();
-        const { uid } = Session.get();
-        const favRef = doc(db, `users/${uid}/favorites`, favId);
-        await deleteDoc(favRef);
-        return true;
-    } catch (e) {
-        console.error("Error removing favorite:", e);
-        throw e;
-    }
-}
-
-export async function listFavorites() {
-    checkAuth();
-    try {
-        const { collection, getDocs, db, orderBy, query } = sy_fs();
-        const { uid } = Session.get();
-        const q = query(collection(db, `users/${uid}/favorites`), orderBy("addedAt", "desc"));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (e) {
-        console.error("Error listing favorites:", e);
-        throw e;
-    }
-}
-
-// --- Lógica de Auth ---
+// --- Auth Helpers ---
 export async function signIn(email, pass) {
     try {
         const { user } = await signInWithEmailAndPassword(auth, email, pass);
-        // onAuthStateChanged se encargará de actualizar la sesión
+        // onAuthStateChanged will handle setting the session
+        return user;
     } catch (e) {
         console.error("Login failed:", e);
-        throw new Error("Credenciales incorrectas. Verificá tu email y contraseña.");
+        return null;
     }
 }
 
 export async function signUp(email, pass, username) {
     try {
         const { user } = await createUserWithEmailAndPassword(auth, email, pass);
-        const userRef = doc(db, `users/${user.uid}`);
-        await setDoc(userRef, { username, email, createdAt: serverTimestamp() });
-        // onAuthStateChanged se encargará de actualizar la sesión
+        // Create user document
+        const userRef = doc(db, 'artifacts', appId, 'users', user.uid);
+        await setDoc(userRef, {
+            username: username,
+            email: email,
+            createdAt: serverTimestamp()
+        });
+        // onAuthStateChanged will handle setting the session
+        return user;
     } catch (e) {
         console.error("Registration failed:", e);
-        if (e.code === 'auth/email-already-in-use') {
-            throw new Error("El email ya está en uso. Intentá con otro.");
-        }
-        throw new Error("Hubo un problema con el registro. Intente de nuevo.");
+        return null;
     }
 }
 
 export async function signOutAll() {
-    await signOut(auth);
-    // onAuthStateChanged se encargará de actualizar la sesión
+    try {
+        await signOut(auth);
+        Session.clear();
+    } catch (e) {
+        console.error("Sign out failed:", e);
+    }
 }
 
-// --- Inicialización y listeners ---
-function initFirebase() {
-    if (!app) {
-        app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
+// --- Firestore Functions ---
+export async function getSystemPlaylists() {
+    const { collection, query, where, getDocs } = sy_fs();
+    const q = query(collection(db, 'system_playlists'), where('public', '==', true));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getPublicPlaylists() {
+    const { collection, query, where, getDocs } = sy_fs();
+    const q = query(collection(db, 'playlists'), where('public', '==', true));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getMyPlaylists() {
+    if (Session.status !== "logged") {
+        throw new Error("Requiere registro");
     }
+    const { collection, query, where, getDocs } = sy_fs();
+    const q = query(collection(db, 'playlists'), where('owner', '==', Session.uid));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function createPlaylist({ title, description, isPublic, tracks }) {
+    if (Session.status !== "logged") {
+        throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+    }
+    const { addDoc, collection, serverTimestamp } = sy_fs();
+    const newPlaylist = {
+        title,
+        description,
+        isPublic,
+        tracks: tracks || [],
+        owner: Session.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    };
+    return await addDoc(collection(db, 'playlists'), newPlaylist);
+}
+
+export async function updatePlaylist(id, data) {
+    if (Session.status !== "logged") {
+        throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+    }
+    const { doc, updateDoc, getDoc, serverTimestamp } = sy_fs();
+    const playlistRef = doc(db, 'playlists', id);
+    const playlistSnap = await getDoc(playlistRef);
+
+    if (!playlistSnap.exists() || playlistSnap.data().owner !== Session.uid) {
+        throw new Error("No tenés permisos para modificar esta playlist.");
+    }
+
+    await updateDoc(playlistRef, { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function deletePlaylist(id) {
+    if (Session.status !== "logged") {
+        throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+    }
+    const { doc, deleteDoc, getDoc } = sy_fs();
+    const playlistRef = doc(db, 'playlists', id);
+    const playlistSnap = await getDoc(playlistRef);
+
+    if (!playlistSnap.exists() || playlistSnap.data().owner !== Session.uid) {
+        throw new Error("No tenés permisos para modificar esta playlist.");
+    }
+
+    await deleteDoc(playlistRef);
+}
+
+// --- Favorites functions ---
+export async function addFavorite(trackObj) {
+    if (Session.status !== "logged") {
+        throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+    }
+    const { collection, addDoc, serverTimestamp } = sy_fs();
+    const fav = {
+        trackId: trackObj.id,
+        title: trackObj.title,
+        artist: trackObj.author,
+        coverUrl: trackObj.thumb,
+        source: trackObj.source,
+        addedAt: serverTimestamp()
+    };
+    return await addDoc(collection(db, 'artifacts', appId, 'users', Session.uid, favsCollectionName), fav);
+}
+
+export async function removeFavorite(favId) {
+    if (Session.status !== "logged") {
+        throw new Error("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+    }
+    const { doc, deleteDoc } = sy_fs();
+    await deleteDoc(doc(db, 'artifacts', appId, 'users', Session.uid, favsCollectionName, favId));
+}
+
+export function listenToFavorites(callback) {
+    if (Session.status !== "logged") {
+        console.warn("User not logged in, cannot listen to favorites.");
+        return () => {}; // Return a no-op function
+    }
+    const { collection, onSnapshot, query, orderBy } = sy_fs();
+    const q = query(collection(db, 'artifacts', appId, 'users', Session.uid, favsCollectionName), orderBy('addedAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        favs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(favs);
+    });
+}
+
+export function isFav(trackId) {
+    if (!trackId) return false;
+    return favs.some(f => f.trackId === trackId);
+}
+
+// --- Main initialization ---
+async function initFirebase() {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
 
     onAuthStateChanged(auth, async (user) => {
         if (user) {
-            try {
-                const userRef = doc(db, `users/${user.uid}`);
-                const userDoc = await getDoc(userRef);
-                const username = userDoc.exists() ? userDoc.data().username : "Usuario";
-                Session.set({ status: "logged", uid: user.uid, email: user.email, username });
-            } catch (e) {
-                console.error("Error fetching user data:", e);
-                Session.set({ status: "logged", uid: user.uid, email: user.email, username: "Usuario" });
+            const userDocRef = doc(db, 'artifacts', appId, 'users', user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            let username = 'Usuario';
+            if(userDocSnap.exists()) {
+                username = userDocSnap.data().username || 'Usuario';
             }
+            Session.set({ status: "logged", uid: user.uid, email: user.email, username });
+            isAuthenticated = true;
         } else {
-            Session.set({ status: "guest", uid: "", email: "", username: "" });
+            Session.clear();
+            isAuthenticated = false;
         }
     });
 
     onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
+        const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
         communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (typeof window.renderPlaylists === 'function') window.renderPlaylists();
-        if (typeof window.renderAllHomePlaylists === 'function') window.renderAllHomePlaylists();
+
+        communityPlaylists.forEach(newPl => {
+            const oldPl = oldPlaylists.get(newPl.id);
+            const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
+            
+            if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
+                handleRealtimeUpdate(newPl);
+            }
+        });
+
+        renderPlaylists(); 
+        renderAllHomePlaylists();
     });
 
-    onSnapshot(collection(db, "system_playlists"), (snapshot) => {
-        const systemPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (typeof window.renderAllHomePlaylists === 'function') window.renderAllHomePlaylists(systemPlaylists);
-    });
+    checkForActiveImportJob();
 
-    window.firebase = { db, auth, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, orderBy };
+    // Use a custom token if provided
+    if (initialAuthToken) {
+        try {
+            await signInWithCustomToken(auth, initialAuthToken);
+        } catch (e) {
+            console.error("Failed to sign in with custom token:", e);
+        }
+    }
 }
 
 initFirebase();
 
-export function getSession() { return Session.get(); }
-export function setSession(data) { Session.set(data); }
-export function onAuthChange(cb) { Session.onUpdate(cb); }
-
-// Funciones para Transmisiones (mantienen la misma lógica, solo se exportan)
-const SESSIONS_COLLECTION = "sessions";
-export async function createLiveSession(name, genre) {
-    checkAuth();
-    const { addDoc, collection, serverTimestamp } = sy_fs();
-    const docRef = await addDoc(collection(db, SESSIONS_COLLECTION), {
-        name,
-        genre,
-        status: "active",
-        currentTrack: null,
-        isPlaying: false,
-        currentTime: 0,
-        stateChangeTimestamp: null,
-        createdAt: serverTimestamp(),
-        lastSeen: serverTimestamp(),
-        owner: Session.get().uid
-    });
-    return docRef.id;
-}
-
-export async function updateLiveSession(sessionId, data) {
-    checkAuth();
-    if (!sessionId) return;
-    const { doc, updateDoc, getDoc, db } = sy_fs();
-    const { uid } = Session.get();
-    const sessionRef = doc(db, SESSIONS_COLLECTION, sessionId);
-    const sessionDoc = await getDoc(sessionRef);
-    if (!sessionDoc.exists() || sessionDoc.data().owner !== uid) {
-        throw new Error("No tenés permisos para modificar esta transmisión.");
-    }
-    await updateDoc(sessionRef, data);
-}
-
-export async function deleteLiveSession(sessionId) {
-    checkAuth();
-    if (!sessionId) return;
-    const { doc, deleteDoc, getDoc, db } = sy_fs();
-    const { uid } = Session.get();
-    const sessionRef = doc(db, SESSIONS_COLLECTION, sessionId);
-    const sessionDoc = await getDoc(sessionRef);
-    if (!sessionDoc.exists() || sessionDoc.data().owner !== uid) {
-        throw new Error("No tenés permisos para detener esta transmisión.");
-    }
-    await deleteDoc(sessionRef);
-}
-
-export function listenToSessionChanges(sessionId, callback) {
-    if (!sessionId) return;
-    const { doc, onSnapshot, db } = sy_fs();
-    return onSnapshot(doc(db, SESSIONS_COLLECTION, sessionId), (doc) => {
-        callback(doc.data());
-    });
-}
-
-export function listenForLiveSessions(callback) {
-    const { collection, query, where, onSnapshot, db } = sy_fs();
-    const q = query(collection(db, SESSIONS_COLLECTION), where("status", "==", "active"));
-    
-    return onSnapshot(q, (snapshot) => {
-        const now = Date.now();
-        const thirtySecondsAgo = now - 30000;
-
-        const sessions = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(session => {
-                if (!session.lastSeen) return false;
-                const lastSeenTime = session.lastSeen.toDate().getTime();
-                return lastSeenTime > thirtySecondsAgo;
-            });
-            
-        callback(sessions);
-    }, (error) => {
-        console.error("Error listening to live sessions:", error);
-        callback([]);
-    });
-}
+export { Session, communityPlaylists, favs };
