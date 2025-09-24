@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 import { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 
+// Tu configuración de Firebase
 const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
 
 let db;
@@ -43,42 +44,17 @@ function sy_fs() {
 
 
 /**
- * Maneja la actualizaci\u00f3n en tiempo real de la playlist que se est\u00e1 viendo.
- * Se llama cuando Firestore detecta un cambio (ej: se encontr\u00f3 una nueva canci\u00f3n).
- * @param {object} newPlaylist - El objeto de la playlist actualizado desde Firestore.
- */
-function handleRealtimeUpdate(newPlaylist) {
-    if (!newPlaylist || typeof renderQueue !== 'function') return;
-
-    // Reconstruye la lista visual combinando los tracks originales de Spotify
-    // con los que ya se encontraron, para mostrar el estado actual completo.
-    const tracksToShow = newPlaylist.spotifyTracks 
-        ? newPlaylist.spotifyTracks.map((spotifyTrack, index) => 
-            (newPlaylist.tracks && newPlaylist.tracks[index]) 
-                ? newPlaylist.tracks[index] 
-                : { ...spotifyTrack, id: null, thumb: spotifyTrack.thumb || newPlaylist.cover }
-          )
-        : (newPlaylist.tracks || []);
-
-    // Actualiza la cola de reproducci\u00f3n real (solo con canciones encontradas)
-    queue = tracksToShow.filter(t => t && t.id);
-
-    // Vuelve a renderizar la lista de canciones en la interfaz del reproductor.
-    renderQueue(tracksToShow, newPlaylist.name);
-}
-
-
-/**
- * Inicializa la aplicaci\u00f3n de Firebase y establece el listener principal para las playlists.
+ * Inicializa la aplicación de Firebase.
  */
 async function initFirebase() {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-    
-    window.firebase = { 
+
+    window.firebase = {
         getAuth, getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc,
         signIn, signUp, signOutAll, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites,
+        createLiveSession, updateLiveSession, deleteLiveSession, listenToSessionChanges, listenForLiveSessions,
         Session, getSession, setSession, onAuthChange
     };
 
@@ -92,29 +68,12 @@ async function initFirebase() {
         }
     });
 
-    onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
-        const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
-        communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        communityPlaylists.forEach(newPl => {
-            const oldPl = oldPlaylists.get(newPl.id);
-            const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
-            
-            if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
-                handleRealtimeUpdate(newPl);
-            }
-        });
-
-        renderPlaylists(); 
-        renderAllHomePlaylists();
-    });
-
     checkForActiveImportJob();
 }
 
 /**
- * Manejador de estado de sesi\u00f3n.
- * @param {object} newSession - El nuevo objeto de sesi\u00f3n.
+ * Manejador de estado de sesión.
+ * @param {object} newSession - El nuevo objeto de sesión.
  */
 function setSession(newSession) {
     Session = newSession;
@@ -123,15 +82,15 @@ function setSession(newSession) {
 }
 
 /**
- * Obtiene el estado de sesi\u00f3n actual.
- * @returns {object} - El objeto de sesi\u00f3n.
+ * Obtiene el estado de sesión actual.
+ * @returns {object} - El objeto de sesión.
  */
 function getSession() {
     return Session;
 }
 
 /**
- * Establece un callback para cuando cambie el estado de la autenticaci\u00f3n.
+ * Establece un callback para cuando cambie el estado de la autenticación.
  * @param {Function} callback - El callback a ejecutar.
  */
 function onAuthChange(callback) {
@@ -139,7 +98,7 @@ function onAuthChange(callback) {
 }
 
 /**
- * Inicia sesi\u00f3n con correo y contrase\u00f1a.
+ * Inicia sesión con correo y contraseña.
  * @param {string} email
  * @param {string} pass
  */
@@ -158,7 +117,7 @@ async function signIn(email, pass) {
 }
 
 /**
- * Crea un nuevo usuario con correo y contrase\u00f1a, y guarda su informaci\u00f3n en Firestore.
+ * Crea un nuevo usuario con correo y contraseña, y guarda su información en Firestore.
  * @param {string} email
  * @param {string} pass
  * @param {string} username
@@ -180,7 +139,7 @@ async function signUp(email, pass, username) {
 }
 
 /**
- * Cierra la sesi\u00f3n del usuario actual.
+ * Cierra la sesión del usuario actual.
  */
 async function signOutAll() {
     await signOut(auth);
@@ -197,7 +156,7 @@ async function getSystemPlaylists() {
 }
 
 /**
- * Obtiene las playlists p\u00fablicas.
+ * Obtiene las playlists públicas.
  */
 async function getPublicPlaylists() {
     const q = query(collection(db, "playlists"), where("isPublic", "==", true));
@@ -229,11 +188,11 @@ async function createPlaylist(playlistData) {
 async function updatePlaylist(id, data) {
     const session = getSession();
     if (session.status !== "logged") throw new Error("Requiere registro");
-    
+
     const playlistRef = doc(db, "playlists", id);
     const playlistDoc = await getDoc(playlistRef);
     if (!playlistDoc.exists() || playlistDoc.data().owner !== session.uid) {
-        throw new Error("No ten\u00e9s permisos para modificar esta playlist.");
+        throw new Error("No tenés permisos para modificar esta playlist.");
     }
 
     return updateDoc(playlistRef, {
@@ -253,9 +212,9 @@ async function deletePlaylist(id) {
     const playlistRef = doc(db, "playlists", id);
     const playlistDoc = await getDoc(playlistRef);
     if (!playlistDoc.exists() || playlistDoc.data().owner !== session.uid) {
-        throw new Error("No ten\u00e9s permisos para modificar esta playlist.");
+        throw new Error("No tenés permisos para modificar esta playlist.");
     }
-    
+
     return deleteDoc(playlistRef);
 }
 
@@ -266,7 +225,7 @@ async function deletePlaylist(id) {
 async function addFavorite(trackObj) {
     const session = getSession();
     if (session.status !== "logged") throw new Error("Requiere registro");
-    
+
     return addDoc(collection(db, "users", session.uid, "favorites"), {
         ...trackObj,
         addedAt: serverTimestamp()
@@ -280,7 +239,7 @@ async function addFavorite(trackObj) {
 async function removeFavorite(favId) {
     const session = getSession();
     if (session.status !== "logged") throw new Error("Requiere registro");
-    
+
     return deleteDoc(doc(db, "users", session.uid, "favorites", favId));
 }
 
@@ -301,7 +260,7 @@ async function listFavorites() {
 function showResolverModal(job, playlistName = 'Importando...', playlistCover = '') {
     const modal = $('#resolver-modal');
     if (!modal) return;
-    
+
     $('#resolver-title').textContent = playlistName;
     $('#resolver-thumb').src = playlistCover;
 
@@ -351,7 +310,7 @@ async function checkForActiveImportJob() {
                 return;
             }
             const job = { id: docSnap.id, ...docSnap.data() };
-            showResolverModal(job, pl.name, pl.cover);
+            updateResolverModal(job);
         });
     } catch (e) {
         console.error("Failed to parse or resume active job:", e);
@@ -362,7 +321,7 @@ async function checkForActiveImportJob() {
 async function startResolverJob(playlistId) {
     const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = sy_fs();
     const plRef = doc(db, "playlists", playlistId);
-    
+
     const plDoc = await getDoc(plRef);
     if (!plDoc.exists()) { console.error("Playlist not found for resolver job:", playlistId); return; }
     const playlist = { id: plDoc.id, ...plDoc.data() };
@@ -371,12 +330,12 @@ async function startResolverJob(playlistId) {
 
     let jobId = playlist.resolverJobId;
     const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
-    
+
     if (!jobDoc || !jobDoc.exists() || jobDoc.data().status !== 'running') {
         jobId = `job_${playlistId}_${Date.now()}`;
         await updateDoc(plRef, { resolverJobId: jobId });
     }
-    
+
     const jobRef = doc(db, "resolverJobs", jobId);
     await setDoc(jobRef, {
         playlistRef: plRef.path, status: 'queued', total: playlist.spotifyTracks.length,
@@ -385,9 +344,9 @@ async function startResolverJob(playlistId) {
 
     await updateDoc(jobRef, { status: 'running', lastUpdated: serverTimestamp() });
     await updateDoc(plRef, { status: 'resolving' });
-    
+
     localStorage.setItem('sy_active_import_job', JSON.stringify({ playlistId, jobId }));
-    
+
     if (resolverJobUnsubscribe) resolverJobUnsubscribe();
     resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
         if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
@@ -407,31 +366,31 @@ async function startResolverJob(playlistId) {
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = sy_fs();
     const plRef = doc(db, "playlists", playlistId);
-    
+
     const jobDoc = await getDoc(jobRef);
     if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
         if (jobDoc.data()?.status !== 'canceled') hideResolverModal();
         return;
     }
-    
+
     const plDoc = await getDoc(plRef);
     if (!plDoc.exists()) return;
 
     const playlist = plDoc.data();
     const job = jobDoc.data();
     const BATCH_SIZE = 1; // Bajado de 3 a 1 para no saturar el servidor de scraping.
-    
+
     const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
     const unresolvedIndices = [];
     for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) {
         if (tracksArray[i] === null) unresolvedIndices.push(i);
     }
-    
+
     if (unresolvedIndices.length === 0) {
         const finalStatus = playlist.resolvedCount === playlist.spotifyTracks.length ? 'resolved' : 'partial';
         await updateDoc(plRef, { status: finalStatus });
         await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
-        showToast(finalStatus === 'resolved' ? `Importaci\u00f3n completa: ${playlist.name}` : `Importaci\u00f3n incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
+        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
         return;
     }
 
@@ -461,10 +420,10 @@ async function runJobBatch(playlistId, jobRef) {
             errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
         }
     });
-    
+
     const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
     await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
-    await updateDoc(jobRef, { 
+    await updateDoc(jobRef, {
         done: newResolvedCount, lastUpdated: serverTimestamp(),
         errors: [...(job.errors || []), ...errorsInBatch]
     });
@@ -475,17 +434,17 @@ async function runJobBatch(playlistId, jobRef) {
 async function cancelResolverJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
-    
+
     try {
         const { playlistId, jobId } = JSON.parse(activeJobInfo);
         const { doc, updateDoc, serverTimestamp } = sy_fs();
         const jobRef = doc(db, "resolverJobs", jobId);
         const plRef = doc(db, "playlists", playlistId);
-        
+
         await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
         await updateDoc(plRef, { status: 'partial' });
-        
-        showToast("Importaci\u00f3n cancelada.", true);
+
+        showToast("Importación cancelada.", true);
         hideResolverModal();
     } catch(e) {
         console.error("Error cancelling job:", e);
@@ -538,7 +497,7 @@ function listenToSessionChanges(sessionId, callback) {
 function listenForLiveSessions(callback) {
     const { collection, query, where, onSnapshot } = sy_fs();
     const q = query(collection(db, SESSIONS_COLLECTION), where("status", "==", "active"));
-    
+
     return onSnapshot(q, (snapshot) => {
         const now = Date.now();
         const thirtySecondsAgo = now - 30000;
@@ -550,7 +509,7 @@ function listenForLiveSessions(callback) {
                 const lastSeenTime = session.lastSeen.toDate().getTime();
                 return lastSeenTime > thirtySecondsAgo;
             });
-            
+
         callback(sessions);
     }, (error) => {
         console.error("Error listening to live sessions:", error);
