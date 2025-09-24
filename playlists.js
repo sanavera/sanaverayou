@@ -1,3 +1,9 @@
+import { isFav, toggleFav } from './favoritos.js';
+import { showToast, openActionSheet, switchView, setQueue, playCurrent, refreshIndicators, currentQueueTitle, queue, queueType, updateHero, getPlaybackState, isMyPlaylist, viewingPlaylistId, startResolverJob, checkForActiveImportJob, showResolverModal, hideResolverModal, updateResolverModal } from './main.js';
+import { $, $$, dotsSvg, favIconSvg, archiveLogoSvg, spotifyLogoSvg, cleanAuthor } from './utils.js';
+import { scrapeYoutubeWithCustomServer } from './buscador.js';
+import { getSession } from './firebase.js';
+
 // Manejo de playlists locales e importadas (Spotify/Archive), y la cola de reproducción.
 
 let viewingPlaylistId = null;
@@ -22,7 +28,7 @@ async function resolveTrack(track) {
         // 1. Intenta resolver usando YouTube Music
         const ytmUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYTM(query))}`;
         const ytmResponse = await fetch(ytmUrl, { cache: 'no-store', credentials: 'omit' });
-        
+
         if (ytmResponse.ok) {
             let text = '';
             const contentType = ytmResponse.headers.get('content-type');
@@ -32,7 +38,7 @@ async function resolveTrack(track) {
             } else {
                 text = await ytmResponse.text();
             }
-            
+
             const ytmIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
 
             if (ytmIds.length > 0) {
@@ -65,7 +71,7 @@ async function resolveTrack(track) {
                 }
             }
         }
-        
+
         return { videoId: null, backups: [], error: "No se encontró video en las fuentes disponibles." };
 
     } catch (e) {
@@ -87,7 +93,7 @@ async function saveCurrentArchiveAlbumAsPlaylist() {
     }
 
     let creator = window.Session.username;
-    
+
     const albumData = {
         title: currentQueueTitle,
         description: "",
@@ -136,7 +142,7 @@ function renderPlaylists() {
         card.className="pl-item";
         card.dataset.plId = pl.id;
         const cover = pl.cover || pl.tracks?.[0]?.thumb || pl.spotifyTracks?.[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
-        
+
         const total = pl.trackCount || pl.spotifyTracks?.length || pl.tracks?.length || 0;
         let statusText = `${total} temas`;
         if (pl.source === 'spotify') {
@@ -195,7 +201,7 @@ async function openPlaylistOptionsMenu(pl) {
       actions.push({ id: "save_copy", label: "Guardar una copia" });
   }
   actions.push({ id: "cancel", label: "Cancelar", ghost: true });
-  
+
   openActionSheet({
     title: pl.title,
     actions: actions,
@@ -211,8 +217,8 @@ async function openPlaylistOptionsMenu(pl) {
         openActionSheet({
             title: `¿Eliminar "${pl.title}"?`,
             actions: [{id: "confirm_delete", label: "Sí, eliminar", danger: true}, {id: "cancel", label: "Cancelar", ghost: true}],
-            onAction: async (confirmAct) => { 
-                if(confirmAct === 'confirm_delete') { 
+            onAction: async (confirmAct) => {
+                if(confirmAct === 'confirm_delete') {
                     const result = await window.firebase.deletePlaylist(pl.id);
                     if (!result.success) showToast(result.error, true);
                 }
@@ -320,7 +326,7 @@ async function reassignTrackSource(playlistId, oldTrackId) {
                 const queueIndex = queue.findIndex(t => t.id === oldTrackId);
                 if (queueIndex !== -1) {
                     queue[queueIndex] = updatedTrack;
-                    renderQueue(queue, currentQueueTitle); 
+                    renderQueue(queue, currentQueueTitle);
                     if (currentTrack && currentTrack.id === oldTrackId) {
                         currentTrack = updatedTrack;
                         playCurrent(true);
@@ -418,15 +424,15 @@ async function showPlaylistInPlayer(plId) {
     }
 }
 
-function hideQueuePanel(){ 
-    $("#queuePanel")?.classList.add("hide"); 
-    if ($("#queueList")) $("#queueList").innerHTML=""; 
+function hideQueuePanel(){
+    $("#queuePanel")?.classList.add("hide");
+    if ($("#queueList")) $("#queueList").innerHTML="";
     if (resolverJobUnsubscribe) {
         resolverJobUnsubscribe();
         resolverJobUnsubscribe = null;
     }
-    viewingPlaylistId=null; 
-    renderPlaylists(); 
+    viewingPlaylistId=null;
+    renderPlaylists();
 }
 
 function initPlaylistModals() {
@@ -452,8 +458,8 @@ function initPlaylistModals() {
         });
         if (result.success) {
             addMyPlaylistId(result.id);
-            $("#newPlName").value = ""; 
-            $("#newPlCreator").value = ""; 
+            $("#newPlName").value = "";
+            $("#newPlCreator").value = "";
             $("#createPlaylistSheet").classList.remove("show");
             showToast(`Playlist "${name}" creada.`);
         } else {
@@ -472,7 +478,7 @@ function initSpotifyImportUI() {
         $("#sySmInputUrl").value = "";
         switchView('view-playlists');
     });
-    
+
     $("#spotifyImportConfirmBtn").onclick = async () => {
         const grid = $("#spotifyUserPlaylistsGrid");
         const selectedPlaylists = Array.from(grid.querySelectorAll(".spotify-pl-card.selected"))
@@ -600,7 +606,7 @@ async function fetchAndImportSinglePlaylist(plData) {
 async function processAndSavePlaylist(pl) {
     const { collection, query, where, getDocs, addDoc, updateDoc, doc } = window.firebase;
     const col = collection(db, 'playlists');
-    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("owner", "==", window.Session.uid));
+    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("owner", "==", window.getSession().uid));
     const snapshot = await getDocs(q);
     const playlistData = {
         title: pl.name,
@@ -616,22 +622,24 @@ async function processAndSavePlaylist(pl) {
     };
     if (snapshot.empty) {
         const result = await window.firebase.createPlaylist(playlistData);
-        if (result.success) {
+        if (result) {
             addMyPlaylistId(result.id);
             startResolverJob(result.id);
         } else {
-            showToast(result.error, true);
+            showToast('Error al crear la playlist.', true);
         }
     } else {
         const docId = snapshot.docs[0].id;
         const result = await window.firebase.updatePlaylist(docId, playlistData);
-        if (result.success) {
+        if (result) {
             showToast(`Playlist "${pl.name}" actualizada.`);
             startResolverJob(docId);
         } else {
-            showToast(result.error, true);
+            showToast('Error al actualizar la playlist.', true);
         }
     }
 }
 async function getSpotifyToken() { if (spotifyToken.value && Date.now() < spotifyToken.expires) { return spotifyToken.value; } try { const response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' }); if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`); const data = await response.json(); spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 }; return spotifyToken.value; } catch (e) { console.error("Error getting Spotify token:", e); return null; } }
 async function fetchAllSpotifyPlaylistTracks(playlistId) { const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`; while (url) { try { const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('Could not get songs from playlist'); const data = await response.json(); const tracks = data.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean); allTracks = allTracks.concat(tracks); url = data.next; } catch (e) { console.error("Error fetching Spotify playlist tracks:", e); url = null; } } return allTracks; }
+
+export { renderPlaylists, showPlaylistInPlayer, renderQueue, hideQueuePanel, initPlaylistModals, initSpotifyImportUI, openPlaylistOptionsMenu, removeFromPlaylist, renameTrackInPlaylist, reassignTrackSource, playFromPlaylist };
