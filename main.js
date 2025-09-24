@@ -1,11 +1,8 @@
-import { onAuthChange, Session, communityPlaylists, getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, addSongToPlaylist, getSystemPlaylists, getPublicPlaylists, isUserAuthenticated, signOutAll, signIn, signUp } from './firebase.js';
-import { loadFavs, isFav, toggleFav } from './favoritos.js';
-
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
 let activeSessions = []; 
 
-// --- Listas de reproducción recomendadas (datos estáticos) ---
+// --- Listas de reproducci\u00f3n recomendadas (datos est\u00e1ticos) ---
 const recommendedPlaylists = {};
 
 // --- Utils ---
@@ -24,7 +21,7 @@ const youtubeMusicLogoSvg = () => `<span class="source-logo ytmusic-logo" title=
 const archiveLogoSvg = () => `<span class="source-logo archive-logo" title="Archive.org"><svg viewBox="0 0 14 20"><path fill="currentColor" d="M7,0.21L0,4.91V6.28H14V4.91L7,0.21M1,7.22V18.59L7,15.25L13,18.59V7.22H1Z" /></svg></span>`;
 
 
-// --- Navegación y Vistas ---
+// --- Navegaci\u00f3n y Vistas ---
 function switchView(id){
   $$(".view").forEach(v => v.classList.remove("active"));
   const view = $("#" + id);
@@ -34,7 +31,7 @@ function switchView(id){
   heroScrollInvalidate();
 }
 
-// --- Lógica del Switch de Búsqueda ---
+// --- L\u00f3gica del Switch de B\u00fasqueda ---
 function initSearchTypeSwitch() {
     const switchContainer = $("#searchTypeSwitch");
     if (!switchContainer) return;
@@ -51,7 +48,7 @@ function initSearchTypeSwitch() {
 }
 
 /**
- * Función centralizada para cambiar el tipo de búsqueda (estado y UI).
+ * Funci\u00f3n centralizada para cambiar el tipo de b\u00fasqueda (estado y UI).
  * @param {string} searchType - 'youtube' o 'archive'.
  */
 function setSearchType(searchType) {
@@ -60,7 +57,7 @@ function setSearchType(searchType) {
 
     const switchContainer = $("#searchTypeSwitch");
     if (switchContainer) {
-        // Lógica robusta: Quita 'active' de todos y lo pone solo en el correcto.
+        // L\u00f3gica robusta: Quita 'active' de todos y lo pone solo en el correcto.
         switchContainer.querySelectorAll('.switch-btn').forEach(btn => {
             btn.classList.remove('active');
         });
@@ -70,7 +67,7 @@ function setSearchType(searchType) {
         }
     }
 
-    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
+    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar \u00e1lbumes...';
     const searchInput = $("#overlaySearchInput");
     if (searchInput) {
         searchInput.placeholder = placeholder;
@@ -79,7 +76,7 @@ function setSearchType(searchType) {
 }
 
 
-// --- Lógica de la Interfaz de Usuario (UI) ---
+// --- L\u00f3gica de la Interfaz de Usuario (UI) ---
 function updateUIOnTrackChange() {
   updateHero(currentTrack);
   updateMiniNow();
@@ -94,7 +91,7 @@ function updateUIOnTrackChange() {
   }
   const broadcastBtn = $("#broadcastBtn");
   if(broadcastBtn){
-      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisión" : "Iniciar transmisión";
+      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisi\u00f3n" : "Iniciar transmisi\u00f3n";
   }
 }
 
@@ -113,7 +110,7 @@ function updateHero(track) {
   }
 
   const npTitle = $("#npTitle");
-  if (npTitle) npTitle.textContent = t ? t.title : "Elegí una canción";
+  if (npTitle) npTitle.textContent = t ? t.title : "Eleg\u00ed una canci\u00f3n";
 
   let plName = "";
   if (queueType === 'playlist' && viewingPlaylistId) {
@@ -122,7 +119,7 @@ function updateHero(track) {
   } else if (['recommended', 'youtube_playlist', 'archive_album'].includes(queueType)) {
     plName = currentQueueTitle;
   }
-  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
+  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` \u2022 ${plName}` : ""}` : (plName || "—");
   if (liveState.mode === 'listening' && liveState.sessionData) {
       subText = `Escuchando a: ${liveState.sessionData.name}`;
   } else if (liveState.mode === 'broadcasting') {
@@ -239,7 +236,7 @@ function updateHomeGridVisibility(){
   home.classList.toggle("hide", !shouldShow);
 }
 
-// --- Sheets, Toasts & Menús ---
+// --- Sheets, Toasts & Men\u00fas ---
 function showToast(message, isError = false) {
     let toast = document.getElementById('sy-toast');
     if (!toast) {
@@ -269,11 +266,11 @@ function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
 }
 
 async function openPlaylistSheet(track){
-  if (!canActivate("playlists")) return;
+  if (!canActivate('createPlaylist')) return;
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
-  const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
+  const myPlaylists = communityPlaylists.filter(p => window.firebase.isMyPlaylist(p.id));
   myPlaylists.forEach(pl=>{
     const btn = document.createElement("button");
     btn.className="sheet-item";
@@ -289,8 +286,7 @@ async function openPlaylistSheet(track){
   $("#plCreateFromSong").onclick = async () => {
     const name = $("#plNewNameFromSong").value.trim();
     if (!name) return;
-    const creator = prompt("Tu nombre (creador):")?.trim();
-    if (!creator) return;
+    const creator = window.Session.username || window.Session.email.split('@')[0];
     if (await createNewPlaylistFromSong(name, creator, track)) {
         $("#plNewNameFromSong").value = "";
         sheet.classList.remove("show");
@@ -341,7 +337,7 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
-// --- Lógica de UI para Transmisiones ---
+// --- L\u00f3gica de UI para Transmisiones ---
 function renderLiveSessions(sessions) {
     activeSessions = sessions; 
     const listEl = $("#sessionsList");
@@ -377,12 +373,11 @@ function initLiveStreamsUI() {
     const sessionsSheet = $("#sessionsSheet");
 
     $("#broadcastBtn")?.addEventListener("click", () => {
+        if (!canActivate('cast')) return;
         if (liveState.mode === 'broadcasting') {
             stopBroadcasting();
         } else {
-            if (canActivate('cast')) {
-                startStreamSheet.classList.add("show");
-            }
+            startStreamSheet.classList.add("show");
         }
     });
 
@@ -391,23 +386,23 @@ function initLiveStreamsUI() {
         const name = $("#streamNameInput").value.trim();
         const genre = $("#streamGenreSelect").value;
         if (!name) {
-            showToast("Por favor, ingresa un nombre para la transmisión.", true);
+            showToast("Por favor, ingresa un nombre para la transmisi\u00f3n.", true);
             return;
         }
         startStreamSheet.classList.remove("show");
         const success = await startBroadcasting(name, genre);
         if (!success) {
-             showToast("No se pudo iniciar la transmisión.", true);
+             showToast("No se pudo iniciar la transmisi\u00f3n.", true);
         }
     });
 
     $("#btnShowStreams")?.addEventListener("click", async () => {
         if (liveState.mode === 'broadcasting') {
-            showToast("No puedes ver transmisiones mientras estás transmitiendo.");
+            showToast("No puedes ver transmisiones mientras est\u00e1s transmitiendo.");
             return;
         }
         sessionsSheet.classList.add("show");
-        renderLiveSessions(activeSessions);
+        window.firebase.listenForLiveSessions(renderLiveSessions);
         $("#leaveStreamBtn").classList.toggle("hide", liveState.mode !== 'listening');
     });
 
@@ -418,89 +413,12 @@ function initLiveStreamsUI() {
     });
 }
 
-function canActivate(feature) {
-  if (Session.status === "guest") {
-    showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
-    return false;
-  }
-  return true;
-}
-
-function showAlert(msg) {
-  let toast = document.getElementById('sy-toast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'sy-toast';
-        document.body.appendChild(toast);
-    }
-    toast.textContent = msg;
-    toast.className = 'show';
-    toast.classList.add('error');
-    setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 5000);
-}
-
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
+  await initFirebase();
   
-  onAuthChange(session => {
-    // Re-render UI based on auth state
-    const isLogged = session.status === "logged";
-    $("#userMenuLogged").classList.toggle("hide", !isLogged);
-    $("#userMenuGuest").classList.toggle("hide", isLogged);
-    if(isLogged) {
-      $("#loggedUserEmail").textContent = session.email;
-      $("#loggedUsername").textContent = session.username;
-    }
-    loadFavs();
-    renderPlaylists();
-    renderAllHomePlaylists();
-  });
-  
-  // Set up auth form handlers
-  $("#loginForm")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = $("#loginEmail").value;
-    const pass = $("#loginPass").value;
-    const user = await signIn(email, pass);
-    if (!user) showAlert("Credenciales inválidas.");
-  });
-  
-  $("#registerForm")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = $("#regEmail").value;
-    const pass = $("#regPass").value;
-    const username = $("#regUsername").value;
-    const user = await signUp(email, pass, username);
-    if (!user) showAlert("Error al registrar el usuario.");
-  });
-
-  $("#logoutBtn")?.addEventListener("click", async () => {
-    await signOutAll();
-    $("#userMenu").classList.add("hide");
-    showToast("Sesión cerrada.");
-  });
-
-  $("#userMenuBtn")?.addEventListener("click", () => {
-    $("#userMenu").classList.toggle("hide");
-  });
-
-  $("#userMenu")?.addEventListener("click", (e) => {
-    if (e.target.id === "userMenu") {
-      $("#userMenu").classList.add("hide");
-    }
-  });
-
-  $$("#userMenuGuest .tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      $$("#userMenuGuest .tab-btn").forEach(b => b.classList.remove("active"));
-      $$("#userMenuGuest .form-container").forEach(c => c.classList.remove("active"));
-      btn.classList.add("active");
-      $(`[data-tab-content="${btn.dataset.tab}"]`).classList.add("active");
-    });
-  });
-
-  listenForLiveSessions(renderLiveSessions);
+  initLiveStreamsUI();
   initSearchTypeSwitch();
 
   const playlistKeys = Object.keys(recommendedPlaylists);
@@ -511,14 +429,13 @@ async function boot(){
   renderAllHomePlaylists();
   updateHomeGridVisibility();
 
-  loadFavs();
+  await loadFavs();
   renderFavs();
   initPlayer();
   loadYTApi();
   initSearch();
   initPlaylistModals();
   initSpotifyImportUI();
-  initLiveStreamsUI();
 
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
@@ -537,7 +454,7 @@ async function boot(){
     if (!itemEl) return;
 
     const trackId = itemEl.dataset.trackId;
-    let track = items.find(x => x.id === trackId) || favs.find(f => f.trackId === trackId) || queue?.find(t => t.id === trackId);
+    let track = items.find(x => x.id === trackId) || favs.find(f => f.id === trackId) || queue?.find(t => t.id === trackId);
     
     if (!track && viewingPlaylistId) {
         const pl = communityPlaylists.find(p => p.id === viewingPlaylistId);
@@ -549,30 +466,25 @@ async function boot(){
 
     if (e.target.closest(".fav-btn")) {
         e.stopPropagation();
-        if (canActivate('favorites')) {
-            toggleFav(track);
-        }
+        toggleFav(track);
         return;
     }
 
     if (e.target.closest(".icon-btn.more")) {
         if(liveState.mode === 'listening') return;
         
-        const actions = [];
-        if (Session.status === "logged") {
-            actions.push({ id: "pl", label: "Agregar a playlist" });
-        }
+        const actions = [{ id: "pl", label: "Agregar a playlist" }];
 
         if (track.source !== 'archive') { 
-            actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
+            actions.push({ id: "artist_albums", label: "Ver \u00c1lbumes de este Artista" });
         }
         
-        const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
+        const isOwner = viewingPlaylistId && window.firebase.isMyPlaylist(viewingPlaylistId);
         const isFromYoutube = track.source !== 'archive';
 
         if (itemEl.classList.contains("queue-item") && isOwner) {
             if (isFromYoutube) {
-                actions.push({ id: "rename", label: "Renombrar canción" });
+                actions.push({ id: "rename", label: "Renombrar canci\u00f3n" });
                 actions.push({ id: "reassign", label: "Reasignar fuente" });
             }
             actions.push({ id: "delete", label: "Eliminar de la playlist", danger: true });
