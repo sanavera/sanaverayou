@@ -408,6 +408,13 @@ function initPlayer() {
             saveCurrentArchiveAlbumAsPlaylist(); 
         }
     });
+    
+    // --- LÓGICA AGREGADA: Botón de transmitir ---
+    $("#broadcastBtn")?.addEventListener('click', () => {
+        if (canActivate("cast")) {
+            $("#startStreamSheet").classList.add("show");
+        }
+    });
 
     document.addEventListener("visibilitychange", () => {
         try {
