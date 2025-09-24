@@ -220,6 +220,13 @@ export function listenToFavorites(cb) {
   });
 }
 
+// --- Community Playlists (realtime global) ---
+let communityPlaylists = [];
+const qCommunity = query(collection(db, "playlists"), orderBy("updatedAt", "desc"));
+onSnapshot(qCommunity, (snapshot) => {
+  communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+});
+
 // --- Inicializar Auth State ---
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -235,4 +242,4 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-export { Session };
+export { Session, communityPlaylists };
