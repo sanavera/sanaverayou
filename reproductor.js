@@ -1,5 +1,5 @@
 // Contiene la l\u00f3gica del reproductor de YouTube, la cola de reproducci\u00f3n y los controles.
-import { showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateMediaSession, updateAndroidNotification, startListening, stopListening, startBroadcasting, stopBroadcasting, handleNativeControl, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle } from './main.js';
+import { showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateAndroidNotification, startListening, stopListening, startBroadcasting, stopBroadcasting, handleNativeControl, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle } from './main.js';
 import { $, $$, fmt, cleanAuthor } from './utils.js';
 import { checkForActiveImportJob, startResolverJob } from './firebase.js';
 import { saveCurrentArchiveAlbumAsPlaylist, renderQueue } from './playlists.js';
