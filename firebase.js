@@ -558,4 +558,4 @@ function listenForLiveSessions(callback) {
     });
 }
 
-export { Session, getSession, setSession, onAuthChange, signIn, signUp, signOutAll, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites, createLiveSession, updateLiveSession, deleteLiveSession, listenToSessionChanges, listenForLiveSessions, communityPlaylists, checkForActiveImportJob, startResolverJob, sy_fs, isMyPlaylist };
+export { initFirebase, Session, getSession, setSession, onAuthChange, signIn, signUp, signOutAll, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites, createLiveSession, updateLiveSession, deleteLiveSession, listenToSessionChanges, listenForLiveSessions, communityPlaylists, checkForActiveImportJob, startResolverJob, sy_fs, isMyPlaylist };
