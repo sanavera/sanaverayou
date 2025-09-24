@@ -29,14 +29,8 @@ import {
 
 // --- CONFIG DE TU PROYECTO FIREBASE ---
 // Tenés que pegar acá el objeto firebaseConfig que te da Firebase Console
-const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROJECT_ID.firebaseapp.com",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_PROJECT_ID.appspot.com",
-  messagingSenderId: "NUM",
-  appId: "NUM"
-};
+const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
+    
 
 // --- Inicialización ---
 const app = initializeApp(firebaseConfig);
