@@ -1,3 +1,7 @@
+import { onAuthChange, Session, communityPlaylists, isFav, getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, addSongToPlaylist, getSystemPlaylists, getPublicPlaylists, isUserAuthenticated, signOutAll, signIn, signUp } from './firebase.js';
+import { loadFavs, toggleFav } from './favoritos.js';
+
+// Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
 let activeSessions = []; 
 
@@ -157,9 +161,8 @@ function refreshIndicators() {
 
     const favBtn = el.querySelector(".fav-btn");
     if (favBtn) {
-        const isFavTrack = favs.some(f => f.trackId === trackId);
-        favBtn.innerHTML = favIconSvg(isFavTrack);
-        favBtn.classList.toggle('is-fav', isFavTrack);
+        favBtn.innerHTML = favIconSvg(isFav(trackId));
+        favBtn.classList.toggle('is-fav', isFav(trackId));
     }
   });
 
@@ -415,11 +418,88 @@ function initLiveStreamsUI() {
     });
 }
 
+function canActivate(feature) {
+  if (Session.status === "guest") {
+    showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+    return false;
+  }
+  return true;
+}
+
+function showAlert(msg) {
+  let toast = document.getElementById('sy-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'sy-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.className = 'show';
+    toast.classList.add('error');
+    setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 5000);
+}
+
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
-  await initFirebase();
   
+  onAuthChange(session => {
+    // Re-render UI based on auth state
+    const isLogged = session.status === "logged";
+    $("#userMenuLogged").classList.toggle("hide", !isLogged);
+    $("#userMenuGuest").classList.toggle("hide", isLogged);
+    if(isLogged) {
+      $("#loggedUserEmail").textContent = session.email;
+      $("#loggedUsername").textContent = session.username;
+    }
+    loadFavs();
+    renderPlaylists();
+    renderAllHomePlaylists();
+  });
+  
+  // Set up auth form handlers
+  $("#loginForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#loginEmail").value;
+    const pass = $("#loginPass").value;
+    const user = await signIn(email, pass);
+    if (!user) showAlert("Credenciales inválidas.");
+  });
+  
+  $("#registerForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("#regEmail").value;
+    const pass = $("#regPass").value;
+    const username = $("#regUsername").value;
+    const user = await signUp(email, pass, username);
+    if (!user) showAlert("Error al registrar el usuario.");
+  });
+
+  $("#logoutBtn")?.addEventListener("click", async () => {
+    await signOutAll();
+    $("#userMenu").classList.add("hide");
+    showToast("Sesión cerrada.");
+  });
+
+  $("#userMenuBtn")?.addEventListener("click", () => {
+    $("#userMenu").classList.toggle("hide");
+  });
+
+  $("#userMenu")?.addEventListener("click", (e) => {
+    if (e.target.id === "userMenu") {
+      $("#userMenu").classList.add("hide");
+    }
+  });
+
+  $$("#userMenuGuest .tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      $$("#userMenuGuest .tab-btn").forEach(b => b.classList.remove("active"));
+      $$("#userMenuGuest .form-container").forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      $(`[data-tab-content="${btn.dataset.tab}"]`).classList.add("active");
+    });
+  });
+
   listenForLiveSessions(renderLiveSessions);
   initSearchTypeSwitch();
 
@@ -469,7 +549,9 @@ async function boot(){
 
     if (e.target.closest(".fav-btn")) {
         e.stopPropagation();
-        toggleFav(track);
+        if (canActivate('favorites')) {
+            toggleFav(track);
+        }
         return;
     }
 
@@ -477,7 +559,7 @@ async function boot(){
         if(liveState.mode === 'listening') return;
         
         const actions = [];
-        if (Session.get().status === "logged") {
+        if (Session.status === "logged") {
             actions.push({ id: "pl", label: "Agregar a playlist" });
         }
 
