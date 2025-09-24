@@ -1,4 +1,9 @@
 // Contiene la l\u00f3gica del reproductor de YouTube, la cola de reproducci\u00f3n y los controles.
+import { canActivate, showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateMediaSession, updateAndroidNotification, startListening, stopListening, startBroadcasting, stopBroadcasting, handleNativeControl, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle, queue, queueType, setQueue, playCurrent, playFromSearch, togglePlay, next, prev } from './main.js';
+import { $, $$, fmt, cleanAuthor } from './utils.js';
+import { checkForActiveImportJob, startResolverJob } from './firebase.js';
+import { saveCurrentArchiveAlbumAsPlaylist, renderQueue } from './playlists.js';
+
 
 let ytPlayer = null;
 let archivePlayer = null; // Reproductor de audio para Archive.org
@@ -6,27 +11,7 @@ let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
 
-// Estado de la cola y reproducci\u00f3n
-let queue = null;
-let queueType = null;
-let qIdx = -1;
-let currentTrack = null;
-let currentQueueTitle = "";
-
-// Estado de los controles
-let isShuffle = false;
-let repeatMode = 'none'; // 'none', 'one', 'all'
-
 const PLAYER_STATE_KEY = "sy_player_state_v2";
-
-// Estado de Transmisi\u00f3n en Vivo
-let liveState = {
-    mode: 'none',
-    sessionId: null,
-    sessionData: null,
-};
-let sessionUnsubscribe = null;
-let heartbeatInterval = null;
 
 /**
  * Carga la API de IFrame de YouTube y crea el reproductor de audio nativo.
@@ -194,7 +179,7 @@ function playCurrent(autoplay = false) {
         }
         archivePlayer.src = currentTrack.urls.mp3;
         archivePlayer.load();
-    } else { 
+    } else {
         archivePlayer.pause();
         archivePlayer.src = "";
         if (!YT_READY || !currentTrack.id) {
@@ -212,7 +197,7 @@ function playCurrent(autoplay = false) {
             startPlayback();
         }
     }
-    
+
     startTimer();
     updateUIOnTrackChange();
 }
@@ -220,7 +205,7 @@ function playCurrent(autoplay = false) {
 
 function togglePlay(){
   if (liveState.mode === 'listening' || !currentTrack) return;
-  
+
   const isCurrentlyPlaying = getPlaybackState() === 'playing';
 
   if (currentTrack.source === 'archive') {
@@ -269,7 +254,7 @@ function next(){
 
 function prev(){
   if (liveState.mode === 'listening' || !queue) return;
-  
+
   const currentTime = currentTrack.source === 'archive' ? archivePlayer.currentTime : ytPlayer.getCurrentTime();
 
   if (currentTime > 3) {
@@ -401,11 +386,11 @@ function initPlayer() {
     $("#btnRepeat")?.addEventListener("click", cycleRepeat);
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
-    
+
     // --- L\u00f3gica agregada: Evento para el bot\u00f3n de guardar \u00e1lbum ---
     $("#btnSaveAlbum")?.addEventListener('click', () => {
         if (queueType === 'archive_album' && queue && queue.length > 0) {
-            saveCurrentArchiveAlbumAsPlaylist(); 
+            saveCurrentArchiveAlbumAsPlaylist();
         }
     });
 
@@ -425,7 +410,6 @@ function initPlayer() {
     window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 }
 
-// --- L\u00f3gica de Transmisiones ---
 
 function setPlayerControlsDisabled(disabled) {
     const controls = ['#npPlay', '#miniPlay', '#btnNext', '#btnPrev', '#btnShuffle', '#btnRepeat', '#seek', '#miniSeek'];
@@ -529,7 +513,7 @@ function handleSessionUpdate(sessionData) {
             const elapsed = (Date.now() - sessionData.stateChangeTimestamp.toDate().getTime()) / 1000;
             startSeconds += elapsed;
         }
-        
+
         if(currentTrack.source === 'archive') {
             if(YT_READY) ytPlayer.stopVideo();
             archivePlayer.src = currentTrack.urls.mp3;
@@ -557,3 +541,5 @@ function handleSessionUpdate(sessionData) {
         }
     }
 }
+
+export { loadYTApi, initPlayer, getPlaybackState, savePlayerState, loadPlayerState, restorePlayerState, setQueue, playCurrent, togglePlay, next, prev, toggleShuffle, cycleRepeat, seekToFrac, startTimer, stopTimer, updateMediaSession, canUseAndroidBridge, updateAndroidNotification, setPlayerControlsDisabled, startBroadcasting, stopBroadcasting, startListening, stopListening, handleSessionUpdate };
