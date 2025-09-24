@@ -1,13 +1,42 @@
 import { Session, getSession, initFirebase, onAuthChange, signOutAll, signIn, signUp, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites, createLiveSession, updateLiveSession, deleteLiveSession, listenToSessionChanges, listenForLiveSessions, communityPlaylists, checkForActiveImportJob, startResolverJob, sy_fs, isMyPlaylist } from './firebase.js';
 import { $, $$, fmt, cleanTitle, cleanAuthor, dotsSvg, favIconSvg, youtubeLogoSvg, spotifyLogoSvg, youtubeMusicLogoSvg, archiveLogoSvg } from './utils.js';
+import { playCurrent, setQueue, updateMediaSession, updateAndroidNotification, loadYTApi, initPlayer, togglePlay, next, prev, getPlaybackState, savePlayerState, loadPlayerState, restorePlayerState, isShuffle, repeatMode, liveState, cycleRepeat, toggleShuffle, seekToFrac, currentTrack, currentQueueTitle, queueType, queue, viewingPlaylistId, handleNativeControl, stopBroadcasting, startBroadcasting, stopListening, startListening } from './reproductor.js';
+import { isFav, loadFavs, renderFavs } from './favoritos.js';
+import { renderPlaylists, showPlaylistInPlayer, renderQueue, hideQueuePanel, initPlaylistModals, initSpotifyImportUI, openPlaylistOptionsMenu, removeFromPlaylist, renameTrackInPlaylist, reassignTrackSource, playFromPlaylist } from './playlists.js';
+import { items, startSearch, initSearch, fetchVideoDetailsByIds, playFromSearch } from './buscador.js';
 
-var currentSearchType = 'youtube'; 
-let activeSessions = []; 
 
-// --- Listas de reproducci\u00f3n recomendadas (datos est\u00e1ticos) ---
-const recommendedPlaylists = {};
+var currentSearchType = 'youtube';
+let activeSessions = [];
+let recommendedPlaylists = {};
 
-// --- Navegaci\u00f3n y Vistas ---
+
+// --- Funciones de utilidad movidas aquí para evitar duplicación
+function canActivate(feature) {
+    if (getSession().status === "guest") {
+        showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+        return false;
+    }
+    return true;
+}
+
+function showAlert(msg) {
+    const alertModal = document.getElementById("alertModal");
+    const alertMsg = document.getElementById("alertMsg");
+    if (alertModal && alertMsg) {
+        alertMsg.textContent = msg;
+        alertModal.classList.add("show");
+    }
+}
+function hideAlert() {
+    const alertModal = document.getElementById("alertModal");
+    if (alertModal) {
+        alertModal.classList.remove("show");
+    }
+}
+
+
+// --- Navegación y Vistas ---
 function switchView(id){
   $$(".view").forEach(v => v.classList.remove("active"));
   const view = $("#" + id);
@@ -15,9 +44,16 @@ function switchView(id){
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
   updateHomeGridVisibility();
   heroScrollInvalidate();
+  if (id === 'view-playlists') renderPlaylists();
+  if (id === 'view-favs') renderFavs();
+  if (id === 'view-player') {
+      if (queue?.length) renderQueue(queue, currentQueueTitle);
+  } else {
+      hideQueuePanel();
+  }
 }
 
-// --- L\u00f3gica del Switch de B\u00fasqueda ---
+// --- Lógica del Switch de Búsqueda ---
 function initSearchTypeSwitch() {
     const switchContainer = $("#searchTypeSwitch");
     if (!switchContainer) return;
@@ -28,22 +64,16 @@ function initSearchTypeSwitch() {
         setSearchType(clickedButton.dataset.type);
     });
 
-    // Cargar preferencia guardada al inicio
     const savedType = localStorage.getItem('sy_search_type') || 'youtube';
     setSearchType(savedType);
 }
 
-/**
- * Funci\u00f3n centralizada para cambiar el tipo de b\u00fasqueda (estado y UI).
- * @param {string} searchType - 'youtube' o 'archive'.
- */
 function setSearchType(searchType) {
-    if (!searchType) return; // Permitir re-aplicar el estado
+    if (!searchType) return;
     currentSearchType = searchType;
 
     const switchContainer = $("#searchTypeSwitch");
     if (switchContainer) {
-        // L\u00f3gica robusta: Quita 'active' de todos y lo pone solo en el correcto.
         switchContainer.querySelectorAll('.switch-btn').forEach(btn => {
             btn.classList.remove('active');
         });
@@ -53,7 +83,7 @@ function setSearchType(searchType) {
         }
     }
 
-    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar \u00e1lbumes...';
+    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
     const searchInput = $("#overlaySearchInput");
     if (searchInput) {
         searchInput.placeholder = placeholder;
@@ -62,7 +92,7 @@ function setSearchType(searchType) {
 }
 
 
-// --- L\u00f3gica de la Interfaz de Usuario (UI) ---
+// --- Lógica de la Interfaz de Usuario (UI) ---
 function updateUIOnTrackChange() {
   updateHero(currentTrack);
   updateMiniNow();
@@ -70,14 +100,14 @@ function updateUIOnTrackChange() {
   updateControlStates();
   updateMediaSession(currentTrack);
   updateAndroidNotification();
-  
+
   const broadcastWrapper = $("#broadcastWrapper");
   if (broadcastWrapper) {
       broadcastWrapper.classList.toggle("broadcasting", liveState.mode === 'broadcasting');
   }
   const broadcastBtn = $("#broadcastBtn");
   if(broadcastBtn){
-      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisi\u00f3n" : "Iniciar transmisi\u00f3n";
+      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisión" : "Iniciar transmisión";
   }
 }
 
@@ -96,7 +126,7 @@ function updateHero(track) {
   }
 
   const npTitle = $("#npTitle");
-  if (npTitle) npTitle.textContent = t ? t.title : "Eleg\u00ed una canci\u00f3n";
+  if (npTitle) npTitle.textContent = t ? t.title : "Elegí una canción";
 
   let plName = "";
   if (queueType === 'playlist' && viewingPlaylistId) {
@@ -105,7 +135,7 @@ function updateHero(track) {
   } else if (['recommended', 'youtube_playlist', 'archive_album'].includes(queueType)) {
     plName = currentQueueTitle;
   }
-  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` \u2022 ${plName}` : ""}` : (plName || "—");
+  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
   if (liveState.mode === 'listening' && liveState.sessionData) {
       subText = `Escuchando a: ${liveState.sessionData.name}`;
   } else if (liveState.mode === 'broadcasting') {
@@ -125,7 +155,7 @@ function updateMiniNow() {
   if (liveState.mode === 'listening' && liveState.sessionData) {
       authorText = `De: ${liveState.sessionData.name}`;
   } else if (liveState.mode === 'broadcasting') {
-      authorText = ''; 
+      authorText = '';
   }
   $("#miniAuthor").textContent = authorText;
 }
@@ -175,14 +205,14 @@ function renderPlaylistCard(playlist) {
     let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
     if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
-    
+
     let logo;
     switch(playlist.source) {
         case 'spotify': logo = spotifyLogoSvg(); break;
         case 'archive': logo = archiveLogoSvg(); break;
         default: logo = youtubeLogoSvg(); break;
     }
-    
+
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id || playlist.title;
@@ -195,9 +225,6 @@ function renderPlaylistCard(playlist) {
     card.onclick = async () => {
         if (playlist.isRecommended) {
             setQueue(playlist.data, 'recommended', 0);
-            viewingPlaylistId = null;
-            renderQueue(playlist.data, playlist.title);
-            switchView('view-player');
             playCurrent(true);
         } else {
              await showPlaylistInPlayer(playlist.id);
@@ -222,7 +249,7 @@ function updateHomeGridVisibility(){
   home.classList.toggle("hide", !shouldShow);
 }
 
-// --- Sheets, Toasts & Men\u00fas ---
+// --- Sheets, Toasts & Menús ---
 function showToast(message, isError = false) {
     let toast = document.getElementById('sy-toast');
     if (!toast) {
@@ -323,9 +350,9 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
-// --- L\u00f3gica de UI para Transmisiones ---
+// --- Lógica de UI para Transmisiones ---
 function renderLiveSessions(sessions) {
-    activeSessions = sessions; 
+    activeSessions = sessions;
     const listEl = $("#sessionsList");
     if (!listEl) return;
     listEl.innerHTML = "";
@@ -372,19 +399,19 @@ function initLiveStreamsUI() {
         const name = $("#streamNameInput").value.trim();
         const genre = $("#streamGenreSelect").value;
         if (!name) {
-            showToast("Por favor, ingresa un nombre para la transmisi\u00f3n.", true);
+            showToast("Por favor, ingresa un nombre para la transmisión.", true);
             return;
         }
         startStreamSheet.classList.remove("show");
         const success = await startBroadcasting(name, genre);
         if (!success) {
-             showToast("No se pudo iniciar la transmisi\u00f3n.", true);
+             showToast("No se pudo iniciar la transmisión.", true);
         }
     });
 
     $("#btnShowStreams")?.addEventListener("click", async () => {
         if (liveState.mode === 'broadcasting') {
-            showToast("No puedes ver transmisiones mientras est\u00e1s transmitiendo.");
+            showToast("No puedes ver transmisiones mientras estás transmitiendo.");
             return;
         }
         sessionsSheet.classList.add("show");
@@ -403,12 +430,30 @@ function initLiveStreamsUI() {
 async function boot(){
   initTheme();
   await initFirebase();
-  
+  initUserMenu();
   initLiveStreamsUI();
   initSearchTypeSwitch();
 
+  // Hardcoded playlists for now
+  recommendedPlaylists['viejitos-pero-bonitos'] = {
+      title: 'Viejitos pero bonitos',
+      source: 'youtube',
+      creator: 'SanaveraYou',
+      isRecommended: true,
+      data: [],
+      ids: ["u9J62J_v_Wc", "e5u3Wz3g-yU", "qO3eT9l-mS8", "C_Cg8w-q-jM", "t-hBw2d64gM"]
+  };
+  recommendedPlaylists['rock-nacional'] = {
+      title: 'Rock Nacional',
+      source: 'youtube',
+      creator: 'SanaveraYou',
+      isRecommended: true,
+      data: [],
+      ids: ["L9qX22r0Y4c", "H8JjX0K_cSA", "k45T2I3X8aI", "F5b12D1fLgM"]
+  };
+
   const playlistKeys = Object.keys(recommendedPlaylists);
-  const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlayations[key].ids));
+  const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
   const results = await Promise.all(fetchPromises);
   playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; });
 
@@ -429,7 +474,6 @@ async function boot(){
   heroScrollInvalidate();
   document.title = "SanaveraYou Pro";
 
-  // Event Listeners globales
   $("#bottomNav").addEventListener("click", e=>{
     const btn = e.target.closest(".nav-btn"); if(!btn || btn.classList.contains('active')) return;
     switchView(btn.dataset.view);
@@ -462,7 +506,7 @@ async function boot(){
         const actions = [{ id: "pl", label: "Agregar a playlist" }];
 
         if (track.source !== 'archive') { 
-            actions.push({ id: "artist_albums", label: "Ver \u00c1lbumes de este Artista" });
+            actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
         }
         
         const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
@@ -470,7 +514,7 @@ async function boot(){
 
         if (itemEl.classList.contains("queue-item") && isOwner) {
             if (isFromYoutube) {
-                actions.push({ id: "rename", label: "Renombrar canci\u00f3n" });
+                actions.push({ id: "rename", label: "Renombrar canción" });
                 actions.push({ id: "reassign", label: "Reasignar fuente" });
             }
             actions.push({ id: "delete", label: "Eliminar de la playlist", danger: true });
@@ -501,27 +545,7 @@ async function boot(){
   window.addEventListener("resize", heroScrollInvalidate, { passive:true });
 }
 
-document.addEventListener('DOMContentLoaded', boot);
-
-// --- Funciones de utilidad movidas aqu\u00ed para evitar duplicaci\u00f3n
-function canActivate(feature) {
-    if (getSession().status === "guest") {
-        showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
-        return false;
-    }
-    return true;
-}
-
-function showAlert(msg) {
-    const alertModal = document.getElementById("alertModal");
-    const alertMsg = document.getElementById("alertMsg");
-    if (alertModal && alertMsg) {
-        alertMsg.textContent = msg;
-        alertModal.classList.add("show");
-    }
-}
-
-// L\u00f3gica del minimodal
+// Lógica del minimodal
 function initUserMenu() {
     const userMenuBtn = $('#userMenuBtn');
     const userMenu = $('#userMenu');
@@ -533,19 +557,19 @@ function initUserMenu() {
             minimodalContent.innerHTML = `
                 <div class="user-menu-guest">
                     <div class="tabs">
-                        <button class="tab-btn active" data-form="login">Iniciar sesi\u00f3n</button>
+                        <button class="tab-btn active" data-form="login">Iniciar sesión</button>
                         <button class="tab-btn" data-form="register">Registrarse</button>
                     </div>
                     <form id="loginForm" class="form-section active">
-                        <h3>Iniciar sesi\u00f3n</h3>
+                        <h3>Iniciar sesión</h3>
                         <input id="loginEmail" type="email" placeholder="Email" required />
-                        <input id="loginPass" type="password" placeholder="Contrase\u00f1a" required />
+                        <input id="loginPass" type="password" placeholder="Contraseña" required />
                         <button id="loginSubmit" type="submit" class="pill">Entrar</button>
                     </form>
                     <form id="registerForm" class="form-section">
                         <h3>Registrarse</h3>
                         <input id="regEmail" type="email" placeholder="Email" required />
-                        <input id="regPass" type="password" placeholder="Contrase\u00f1a" required />
+                        <input id="regPass" type="password" placeholder="Contraseña" required />
                         <input id="regUsername" type="text" placeholder="Nombre de usuario" required />
                         <button id="regSubmit" type="submit" class="pill">Registrarse</button>
                     </form>
@@ -562,10 +586,10 @@ function initUserMenu() {
                 const pass = $('#loginPass').value;
                 const success = await signIn(email, pass);
                 if (success) {
-                    showToast('Sesi\u00f3n iniciada correctamente.');
+                    showToast('Sesión iniciada correctamente.');
                     userMenu.classList.remove('show');
                 } else {
-                    showAlert('Error al iniciar sesi\u00f3n. Verific\u00e1 tus credenciales.');
+                    showAlert('Error al iniciar sesión. Verificá tus credenciales.');
                 }
             });
             $('#registerForm').addEventListener('submit', async (e) => {
@@ -594,7 +618,7 @@ function initUserMenu() {
                 <div class="user-menu-logged">
                     <p class="user-info">Conectado como:</p>
                     <p class="user-name">${session.username || session.email}</p>
-                    <button id="logoutBtn" class="pill pill-small">Cerrar sesi\u00f3n</button>
+                    <button id="logoutBtn" class="pill pill-small">Cerrar sesión</button>
                     <button id="themeToggle" class="pill pill-small theme-toggle-btn">
                       <span class="ico sun" aria-hidden="true"></span>
                       <span class="ico moon" aria-hidden="true"></span>
@@ -604,7 +628,7 @@ function initUserMenu() {
             `;
             $('#logoutBtn').addEventListener('click', async () => {
                 await signOutAll();
-                showToast('Sesi\u00f3n cerrada.');
+                showToast('Sesión cerrada.');
                 userMenu.classList.remove('show');
             });
         }
@@ -622,7 +646,7 @@ function initUserMenu() {
             };
         }
     };
-    
+
     userMenuBtn.addEventListener('click', () => {
         const isShown = userMenu.classList.toggle('show');
         if (isShown) {
@@ -639,16 +663,4 @@ function initUserMenu() {
     onAuthChange(renderMinimodal);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initUserMenu();
-    // Leer localStorage al cargar la p\u00e1gina
-    const savedSession = localStorage.getItem('app_session');
-    if (savedSession) {
-        const sessionData = JSON.parse(savedSession);
-        // La inicializaci\u00f3n de Firebase manejar\u00e1 la transici\u00f3n de estado
-        // si el usuario no est\u00e1 realmente autenticado.
-        if (sessionData.status === 'logged') {
-            Session.status = 'guest'; // Forzar guest para que onAuthStateChanged tome el control
-        }
-    }
-});
+document.addEventListener('DOMContentLoaded', boot);
