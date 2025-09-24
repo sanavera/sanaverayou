@@ -1,4 +1,3 @@
-// Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
 let activeSessions = []; 
 
