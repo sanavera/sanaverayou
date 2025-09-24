@@ -19,49 +19,14 @@
     alt="Logo"
   />
 
-  <!-- NUEVO: Botón de menú de usuario -->
-  <button id="userMenuBtn" class="user-menu-btn" aria-label="Menú de usuario">
-    <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.74 0 3.32.89 4.21 2.25C15.93 7.82 14.07 8 12 8s-3.93-.18-4.21-.75C8.68 5.89 10.26 5 12 5zm0 14c-2.07 0-3.93-.18-4.21-.75-.89-1.36-.61-2.91.21-3.66C8.88 14.54 10.42 15 12 15s3.12-.46 3.99-1.41c.82.75 1.1 2.3.21 3.66-.28.57-2.14.75-4.21.75zM12 9c-2.48 0-4.5 1.79-4.5 4s2.02 4 4.5 4 4.5-1.79 4.5-4-2.02-4-4.5-4z"/></svg>
+  <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
+    <span class="ico sun" aria-hidden="true"></span>
+    <span class="ico moon" aria-hidden="true"></span>
   </button>
 
-  <!-- NUEVO: Contenedor del minimodal -->
-  <div id="userMenu" class="user-menu-modal">
-    <div class="user-menu-content">
-      <div id="userMenuGuest" class="menu-state">
-        <div class="menu-tabs">
-          <button class="tab-btn active" data-tab="login">Iniciar sesión</button>
-          <button class="tab-btn" data-tab="register">Registrarse</button>
-        </div>
-        <div class="menu-tab-content active" data-content="login">
-          <form id="loginForm" class="menu-form">
-            <input id="loginEmail" type="email" placeholder="Email" required>
-            <input id="loginPass" type="password" placeholder="Contraseña" required>
-            <button id="loginSubmit" class="pill" type="submit">Entrar</button>
-          </form>
-        </div>
-        <div class="menu-tab-content" data-content="register">
-          <form id="registerForm" class="menu-form">
-            <input id="regUsername" type="text" placeholder="Nombre de usuario" required>
-            <input id="regEmail" type="email" placeholder="Email" required>
-            <input id="regPass" type="password" placeholder="Contraseña" required>
-            <button id="regSubmit" class="pill" type="submit">Registrarme</button>
-          </form>
-        </div>
-      </div>
-      <div id="userMenuLogged" class="menu-state hide">
-        <p class="menu-user-info"><span id="userEmail"></span></p>
-        <button id="logoutBtn" class="sheet-item ghost">Cerrar sesión</button>
-      </div>
-      <div class="menu-theme-toggle">
-        <span>Tema:</span>
-        <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
-          <span class="ico sun" aria-hidden="true"></span>
-          <span class="ico moon" aria-hidden="true"></span>
-        </button>
-      </div>
-    </div>
-  </div>
-
+  <button id="userMenuBtn" class="search-fab user-menu-btn" aria-label="Men\u00fa de usuario">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.93 0 3.5 1.57 3.5 3.5S13.93 12 12 12 8.5 10.43 8.5 8.5 10.07 5 12 5zm0 14.2c-2.82 0-5.63-1.07-8-3.11-.08-.07-.15-.15-.22-.24-.48-.68-.84-1.4-1.06-2.17.48-.11.97-.24 1.48-.36.96-.24 1.95-.39 2.97-.47 1.05-.08 2.11-.1 3.19-.06 1.08.04 2.14.12 3.2.2 1.02.08 2.02.23 3 .47.51.12 1 .25 1.48.36-.22.77-.58 1.49-1.06 2.17-.07.09-.14.17-.22.24-2.37 2.04-5.18 3.11-8 3.11z"/></svg>
+  </button>
 
   <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -69,12 +34,18 @@
     </svg>
   </button>
 
+  <div id="userMenu" class="minimodal-overlay hide">
+    <div class="minimodal-container">
+      <div id="minimodalContent"></div>
+    </div>
+  </div>
+
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
       <input id="overlaySearchInput" placeholder="Buscar canciones..." autocomplete="off" />
       <div id="searchTypeSwitch" class="search-type-switch">
           <button class="switch-btn active" data-type="youtube">Canciones</button>
-          <button class="switch-btn" data-type="archive">Álbumes</button>
+          <button class="switch-btn" data-type="archive">\u00c1lbumes</button>
       </div>
     </div>
   </div>
@@ -92,7 +63,7 @@
             </button>
         </header>
         <div id="allPlaylistsContainer" class="home-grid">
-            <!-- Todas las playlists (recomendadas y de usuarios) se insertarán aquí -->
+            <!-- Todas las playlists (recomendadas y de usuarios) se insertar\u00e1n aqu\u00ed -->
         </div>
       </section>
 
@@ -108,6 +79,7 @@
         </div>
       </div>
       <section class="fav-list-wrap">
+        <div id="favsEmpty" class="empty muted hide">Registrate para guardar tus canciones favoritas.</div>
         <ul id="favList" class="fav-list"></ul>
       </section>
     </section>
@@ -121,14 +93,14 @@
             </div>
         </header>
         <div id="plList" class="pl-grid"></div>
-        <div id="plEmpty" class="empty muted hide">Aún no hay playlists. Crea la primera ✨</div>
+        <div id="plEmpty" class="empty muted hide">A\u00fan no hay playlists. Crea la primera \u2728</div>
     </section>
 
     <section id="view-player" class="view now-playing">
       <div class="player-header-sticky">
         <div class="np-header-content">
-            <div id="npTitle" class="np-title">Elegí una canción</div>
-            <button id="btnSaveAlbum" class="pill pill-small hide" title="Guardar Álbum">
+            <div id="npTitle" class="np-title">Eleg\u00ed una canci\u00f3n</div>
+            <button id="btnSaveAlbum" class="pill pill-small hide" title="Guardar \u00c1lbum">
                 <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
                 Guardar
             </button>
@@ -199,7 +171,7 @@
         </button>
         <div id="broadcastWrapper" class="broadcast-wrapper">
             <span class="broadcast-label">Transmitiendo...</span>
-            <button id="broadcastBtn" class="stream-btn stream-btn-broadcast" title="Iniciar transmisión">
+            <button id="broadcastBtn" class="stream-btn stream-btn-broadcast" title="Iniciar transmisi\u00f3n">
                 <div class="mic-icon"></div>
             </button>
         </div>
@@ -256,21 +228,21 @@
       <div class="sheet-content">
           <div class="sheet-title">Transmisiones Activas</div>
           <div id="sessionsList" class="sessions-list"></div>
-          <button id="leaveStreamBtn" class="sheet-item ghost hide" style="margin-top: 16px;">Salir de la transmisión</button>
+          <button id="leaveStreamBtn" class="sheet-item ghost hide" style="margin-top: 16px;">Salir de la transmisi\u00f3n</button>
           <button id="closeSessions" class="sheet-item ghost">Cerrar</button>
       </div>
   </div>
 
   <div id="startStreamSheet" class="sheet">
       <div class="sheet-content">
-          <div class="sheet-title">Iniciar Transmisión</div>
+          <div class="sheet-title">Iniciar Transmisi\u00f3n</div>
           <div class="sheet-form">
-              <input id="streamNameInput" placeholder="Nombre de la transmisión (ej: Sebas)" autocomplete="off" />
+              <input id="streamNameInput" placeholder="Nombre de la transmisi\u00f3n (ej: Sebas)" autocomplete="off" />
               <select id="streamGenreSelect">
                   <option>Variado</option>
                   <option>Cumbia</option>
                   <option>Rock</option>
-                  <option>Reggaetón</option>
+                  <option>Reggaet\u00f3n</option>
                   <option>Pop</option>
                   <option>80s & 90s</option>
               </select>
@@ -311,133 +283,15 @@
   </div>
 
   <div id="yt-holder"><div id="player"></div></div>
-
-  <script src="firebase.js" type="module"></script>
+  
+  <script src="utils.js" defer></script>
+  <script src="firebase.js" defer></script>
   <script src="reproductor.js" defer></script>
   <script src="buscador.js" defer></script>
   <script src="playlists.js" defer></script>
   <script src="favoritos.js" defer></script>
   <script src="main.js" defer></script>
 
-  <script>
-    function $(s) { return document.querySelector(s); }
-    function $$(s) { return Array.from(document.querySelectorAll(s)); }
-
-    // Función de alerta minimalista
-    function showAlert(msg) {
-        let alert = document.getElementById('sy-alert');
-        if (!alert) {
-            alert = document.createElement('div');
-            alert.id = 'sy-alert';
-            alert.className = 'sy-alert';
-            document.body.appendChild(alert);
-        }
-        alert.textContent = msg;
-        alert.style.display = 'block';
-        setTimeout(() => { alert.style.display = 'none'; }, 3000);
-    }
-
-    // Lógica para el minimodal
-    document.addEventListener('DOMContentLoaded', () => {
-        const userMenuBtn = $('#userMenuBtn');
-        const userMenu = $('#userMenu');
-        const loginForm = $('#loginForm');
-        const registerForm = $('#registerForm');
-        const logoutBtn = $('#logoutBtn');
-        const userMenuGuest = $('#userMenuGuest');
-        const userMenuLogged = $('#userMenuLogged');
-        const userEmailSpan = $('#userEmail');
-        const menuTabs = $$('.tab-btn');
-        const tabContents = $$('.menu-tab-content');
-
-        userMenuBtn.addEventListener('click', () => {
-            userMenu.classList.toggle('show');
-        });
-
-        userMenu.addEventListener('click', (e) => {
-            if (e.target === userMenu) {
-                userMenu.classList.remove('show');
-            }
-        });
-
-        // Manejar tabs de login/registro
-        menuTabs.forEach(btn => {
-            btn.addEventListener('click', () => {
-                menuTabs.forEach(b => b.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                $(`[data-content="${btn.dataset.tab}"]`).classList.add('active');
-            });
-        });
-
-        // Sincronizar UI con el estado de la sesión
-        const updateUIForSession = (session) => {
-            if (session.status === 'logged') {
-                userMenuGuest.classList.add('hide');
-                userMenuLogged.classList.remove('hide');
-                userEmailSpan.textContent = session.email;
-            } else {
-                userMenuGuest.classList.remove('hide');
-                userMenuLogged.classList.add('hide');
-            }
-        };
-
-        // Escuchar cambios de autenticación
-        window.firebase.onAuthChange((session) => {
-            updateUIForSession(session);
-        });
-
-        // Manejar formularios
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = $('#loginEmail').value;
-            const pass = $('#loginPass').value;
-            const result = await window.firebase.signIn(email, pass);
-            if (result.success) {
-                userMenu.classList.remove('show');
-            } else {
-                showAlert(result.error);
-            }
-        });
-
-        registerForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = $('#regEmail').value;
-            const pass = $('#regPass').value;
-            const username = $('#regUsername').value;
-            const result = await window.firebase.signUp(email, pass, username);
-            if (result.success) {
-                userMenu.classList.remove('show');
-            } else {
-                showAlert(result.error);
-            }
-        });
-
-        logoutBtn.addEventListener('click', async () => {
-            const result = await window.firebase.signOutAll();
-            if (result.success) {
-                userMenu.classList.remove('show');
-                showAlert("Sesión cerrada.");
-            } else {
-                showAlert(result.error);
-            }
-        });
-
-        // Lógica para canActivate
-        window.canActivate = (feature) => {
-            if (window.Session.status === "guest") {
-                showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
-                return false;
-            }
-            return true;
-        };
-
-        // Lógica de carga inicial de sesión
-        window.firebase.loadSession();
-        updateUIForSession(window.Session);
-
-    });
-  </script>
 </body>
 </html>
 
