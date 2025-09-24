@@ -1,11 +1,17 @@
-import { isFav, listenToFavorites, addFavorite, removeFavorite, Session } from './firebase.js';
+// favoritos.js
+import { listenToFavorites, addFavorite, removeFavorite, Session } from './firebase.js';
 
 let favs = [];
+
+// --- Verificar si un track está en favoritos ---
+function isFav(trackId) {
+    return favs.some(f => f.trackId === trackId);
+}
 
 function loadFavs() {
     if (Session.status === "logged") {
         listenToFavorites(newFavs => {
-            favs = newFavs.map(f => ({ ...f, id: f.trackId }));
+            favs = newFavs; // ya trae {id, trackId, ...}
             renderFavs();
             refreshIndicators();
         });
@@ -17,6 +23,11 @@ function loadFavs() {
 }
 
 function toggleFav(track) {
+    if (Session.status !== "logged") {
+        showAlert("Función disponible para usuarios registrados. Abrí el botón de la esquina y registrate o iniciá sesión.");
+        return;
+    }
+
     if (isFav(track.id)) {
         const favToRemove = favs.find(f => f.trackId === track.id);
         if (favToRemove) {
@@ -49,7 +60,7 @@ function renderFavs() {
     favs.forEach(it => {
         const li = document.createElement("li");
         li.className = "fav-item";
-        li.dataset.trackId = it.id;
+        li.dataset.trackId = it.trackId;
         li.innerHTML = `
       <div class="thumb-wrap">
         <img class="thumb" src="${it.coverUrl}" alt="">
@@ -67,7 +78,7 @@ function renderFavs() {
       </div>
       <div class="actions">
         <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito" aria-label="Agregar/Quitar Favorito">
-            ${favIconSvg(isFav(it.id))}
+            ${favIconSvg(isFav(it.trackId))}
         </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
@@ -81,22 +92,42 @@ function renderFavs() {
         if (cardPlayBtn) {
             cardPlayBtn.onclick = (e) => {
                 e.stopPropagation();
-                if (currentTrack?.id === it.id) {
+                if (currentTrack?.id === it.trackId) {
                     togglePlay();
                 } else {
                     playFromFav(it, true);
                 }
             };
         }
+
+        const favBtn = li.querySelector(".fav-btn");
+        if (favBtn) {
+            favBtn.onclick = (e) => {
+                e.stopPropagation();
+                toggleFav(it);
+            };
+        }
+
         ul.appendChild(li);
     });
+
     updateHero(currentTrack);
     refreshIndicators();
 }
 
 function playFromFav(track, autoplay = false) {
-    const i = favs.findIndex(f => f.trackId === track.id);
-    setQueue(favs.map(f => ({...f, id: f.trackId, author: f.artist, thumb: f.coverUrl, source: f.source})), "favs", Math.max(i, 0));
+    const i = favs.findIndex(f => f.trackId === track.trackId);
+    setQueue(
+        favs.map(f => ({
+            id: f.trackId,
+            title: f.title,
+            author: f.artist,
+            thumb: f.coverUrl,
+            source: f.source
+        })),
+        "favs",
+        Math.max(i, 0)
+    );
     viewingPlaylistId = null;
     playCurrent(autoplay);
 }
