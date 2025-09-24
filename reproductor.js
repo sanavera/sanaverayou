@@ -1,5 +1,5 @@
 // Contiene la l\u00f3gica del reproductor de YouTube, la cola de reproducci\u00f3n y los controles.
-import { canActivate, showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateMediaSession, updateAndroidNotification, startListening, stopListening, startBroadcasting, stopBroadcasting, handleNativeControl, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle, queue, queueType, setQueue, playCurrent, playFromSearch, togglePlay, next, prev } from './main.js';
+import { showToast, updateHero, updateMiniNow, refreshIndicators, updateControlStates, updateMediaSession, updateAndroidNotification, startListening, stopListening, startBroadcasting, stopBroadcasting, handleNativeControl, liveState, isShuffle, repeatMode, viewingPlaylistId, communityPlaylists, currentQueueTitle } from './main.js';
 import { $, $$, fmt, cleanAuthor } from './utils.js';
 import { checkForActiveImportJob, startResolverJob } from './firebase.js';
 import { saveCurrentArchiveAlbumAsPlaylist, renderQueue } from './playlists.js';
@@ -10,6 +10,12 @@ let archivePlayer = null; // Reproductor de audio para Archive.org
 let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
+
+// Estado de la cola y reproducci\u00f3n
+let queue = null;
+let queueType = null;
+let qIdx = -1;
+let currentTrack = null;
 
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 
