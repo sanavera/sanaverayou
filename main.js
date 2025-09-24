@@ -1,4 +1,4 @@
-import { onAuthChange, Session, communityPlaylists, getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, addSongToPlaylist, getSystemPlaylists, getPublicPlaylists, isUserAuthenticated, signOutAll, signIn, signUp } from './firebase.js';
+import { onAuthChange, Session, communityPlaylists, getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, addSongToPlaylist, getSystemPlaylists, getPublicPlaylists, onAuthChange(cb), signOutAll, signIn, signUp } from './firebase.js';
 import { loadFavs, isFav, toggleFav } from './favoritos.js';
 
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
