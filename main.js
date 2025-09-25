@@ -1,18 +1,27 @@
-import { Session, getSession, initFirebase, onAuthChange, signOutAll, signIn, signUp, getSystemPlaylists, getPublicPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addFavorite, removeFavorite, listFavorites, communityPlaylists, checkForActiveImportJob, startResolverJob, sy_fs, isMyPlaylist } from './firebase.js';
-import { $, $$, fmt, cleanTitle, cleanAuthor, dotsSvg, favIconSvg, youtubeLogoSvg, spotifyLogoSvg, youtubeMusicLogoSvg, archiveLogoSvg } from './utils.js';
-import { getPlaybackState, playCurrent, updateMediaSession, updateAndroidNotification, currentTrack, queue, queueType, isShuffle, repeatMode, liveState, setQueue, togglePlay, next, prev, initPlayer, loadYTApi, toggleShuffle, cycleRepeat, seekToFrac } from './reproductor.js';
-import { startBroadcasting, stopBroadcasting, startListening, stopListening, listenForLiveSessions, canActivate, showAlert, openActionSheet, savePlaylistCopy, addSongToPlaylist, createNewPlaylistFromSong } from './live-stream.js';
-import { renderPlaylists, showPlaylistInPlayer } from './playlists.js';
-import { loadFavs, toggleFav, isFav, renderFavs } from './favoritos.js';
-import { fetchVideoDetailsByIds, startSearch, items, currentSearchType } from './buscador.js';
-
-var currentSearchType = 'youtube'; 
+// Archivo principal: inicialización, manejo de vistas y conexión de módulos.
+var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
 let activeSessions = []; 
 
-// --- Listas de reproducci\u00f3n recomendadas (datos est\u00e1ticos) ---
+// --- Listas de reproducción recomendadas (datos estáticos) ---
 const recommendedPlaylists = {};
 
-// --- Navegaci\u00f3n y Vistas ---
+// --- Utils ---
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = s => { s = Math.max(0, Math.floor(s||0)); const m = Math.floor(s/60), ss = s%60; return `${m}:${String(ss).padStart(2,'0')}`; };
+const cleanTitle = t => (t||"").replace(/\[(official\s*)?(music\s*)?video.*?\]/ig,"").replace(/\((official\s*)?(music\s*)?video.*?\)/ig,"").replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig,"").replace(/\s{2,}/g," ").trim();
+const cleanAuthor = a => (a||"").replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, "").replace(/VEVO/gi, "").replace(/\s{2,}/g, " ").replace(/\s*-\s*$/, "").trim();
+const dotsSvg = () => `<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>`;
+const favIconSvg = (isFav) => isFav
+    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>`;
+const youtubeLogoSvg = () => `<span class="source-logo youtube-logo" title="YouTube"><svg viewBox="0 0 28 20"><path d="M27.5 3.1s-.3-2.2-1.3-3.2C25.2-.1 24-.1 24-.1h-20s-1.2 0-2.2 1C.8 2 .5 3.1.5 3.1S.2 5.6.2 8v4c0 2.4.3 4.9.3 4.9s.3 2.2 1.3 3.2c1 .9 2.2 1 2.2 1h20s1.2 0 2.2-1c.9-1 1.3-3.2 1.3-3.2s.3-2.5.3-4.9v-4c0-2.4-.3-4.9-.3-4.9zM11.2 14V6l7.5 4-7.5 4z"/></svg></span>`;
+const spotifyLogoSvg = () => `<span class="source-logo spotify-logo" title="Spotify"><svg viewBox="0 0 167.5 167.5"><path d="M83.7 0C37.5 0 0 37.5 0 83.7c0 46.3 37.5 83.7 83.7 83.7 46.3 0 83.7-37.5 83.7-83.7S130 0 83.7 0zM122 120.8c-1.4 2.5-4.4 3.2-6.8 1.8-19.3-11-43.4-14-71.4-7.8-2.8.6-5.5-1.2-6-4-.6-2.8 1.2-5.5 4-6 31-6.8 57.4-3.2 79.2 9.2 2.5 1.4 3.2 4.4 1.8 6.8zm7-23c-1.8 3-5.5 4-8.5 2.2-22-12.8-56-16-83.7-8.8-3.5 1-7-1-8-4.4-1-3.5 1-7 4.4-8 30.6-8 67.4-4.5 92.2 10.2 3 1.8 4 5.5 2.2 8.5zm8.5-23.8c-26.5-15-70-16.5-97.4-9-4-.8-8.2-3.5-9-7.5s3.5-8.2 7.5-9c31.3-8.2 79.2-6.2 109.2 10.2 4 2.2 5.2 7 3 11-2.2 4-7 5.2-11 3z"/></svg></span>`;
+const youtubeMusicLogoSvg = () => `<span class="source-logo ytmusic-logo" title="YouTube Music"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/></svg></span>`;
+const archiveLogoSvg = () => `<span class="source-logo archive-logo" title="Archive.org"><svg viewBox="0 0 14 20"><path fill="currentColor" d="M7,0.21L0,4.91V6.28H14V4.91L7,0.21M1,7.22V18.59L7,15.25L13,18.59V7.22H1Z" /></svg></span>`;
+
+
+// --- Navegación y Vistas ---
 function switchView(id){
   $$(".view").forEach(v => v.classList.remove("active"));
   const view = $("#" + id);
@@ -22,7 +31,7 @@ function switchView(id){
   heroScrollInvalidate();
 }
 
-// --- L\u00f3gica del Switch de B\u00fasqueda ---
+// --- Lógica del Switch de Búsqueda ---
 function initSearchTypeSwitch() {
     const switchContainer = $("#searchTypeSwitch");
     if (!switchContainer) return;
@@ -39,7 +48,7 @@ function initSearchTypeSwitch() {
 }
 
 /**
- * Funci\u00f3n centralizada para cambiar el tipo de b\u00fasqueda (estado y UI).
+ * Función centralizada para cambiar el tipo de búsqueda (estado y UI).
  * @param {string} searchType - 'youtube' o 'archive'.
  */
 function setSearchType(searchType) {
@@ -48,7 +57,7 @@ function setSearchType(searchType) {
 
     const switchContainer = $("#searchTypeSwitch");
     if (switchContainer) {
-        // L\u00f3gica robusta: Quita 'active' de todos y lo pone solo en el correcto.
+        // Lógica robusta: Quita 'active' de todos y lo pone solo en el correcto.
         switchContainer.querySelectorAll('.switch-btn').forEach(btn => {
             btn.classList.remove('active');
         });
@@ -58,7 +67,7 @@ function setSearchType(searchType) {
         }
     }
 
-    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar \u00e1lbumes...';
+    const placeholder = searchType === 'youtube' ? 'Buscar canciones...' : 'Buscar álbumes...';
     const searchInput = $("#overlaySearchInput");
     if (searchInput) {
         searchInput.placeholder = placeholder;
@@ -67,7 +76,7 @@ function setSearchType(searchType) {
 }
 
 
-// --- L\u00f3gica de la Interfaz de Usuario (UI) ---
+// --- Lógica de la Interfaz de Usuario (UI) ---
 function updateUIOnTrackChange() {
   updateHero(currentTrack);
   updateMiniNow();
@@ -82,7 +91,7 @@ function updateUIOnTrackChange() {
   }
   const broadcastBtn = $("#broadcastBtn");
   if(broadcastBtn){
-      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisi\u00f3n" : "Iniciar transmisi\u00f3n";
+      broadcastBtn.title = liveState.mode === 'broadcasting' ? "Finalizar transmisión" : "Iniciar transmisión";
   }
 }
 
@@ -101,7 +110,7 @@ function updateHero(track) {
   }
 
   const npTitle = $("#npTitle");
-  if (npTitle) npTitle.textContent = t ? t.title : "Eleg\u00ed una canci\u00f3n";
+  if (npTitle) npTitle.textContent = t ? t.title : "Elegí una canción";
 
   let plName = "";
   if (queueType === 'playlist' && viewingPlaylistId) {
@@ -110,7 +119,7 @@ function updateHero(track) {
   } else if (['recommended', 'youtube_playlist', 'archive_album'].includes(queueType)) {
     plName = currentQueueTitle;
   }
-  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` \u2022 ${plName}` : ""}` : (plName || "—");
+  let subText = t ? `${cleanAuthor(t.author)}${plName ? ` • ${plName}` : ""}` : (plName || "—");
   if (liveState.mode === 'listening' && liveState.sessionData) {
       subText = `Escuchando a: ${liveState.sessionData.name}`;
   } else if (liveState.mode === 'broadcasting') {
@@ -178,7 +187,7 @@ function renderPlaylistCard(playlist) {
     if (playlist.isRecommended) trackCount = playlist.data.length;
     if (trackCount === 0) return;
     let covers = (playlist.tracks || playlist.data || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
-    if (covers.length === 0 && playlist.cover) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+    if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
     while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
     
     let logo;
@@ -227,7 +236,7 @@ function updateHomeGridVisibility(){
   home.classList.toggle("hide", !shouldShow);
 }
 
-// --- Sheets, Toasts & Men\u00fas ---
+// --- Sheets, Toasts & Menús ---
 function showToast(message, isError = false) {
     let toast = document.getElementById('sy-toast');
     if (!toast) {
@@ -257,7 +266,6 @@ function openActionSheet({title="Opciones", actions=[], onAction=()=>{}}){
 }
 
 async function openPlaylistSheet(track){
-  if (!canActivate('createPlaylist')) return;
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
@@ -277,7 +285,8 @@ async function openPlaylistSheet(track){
   $("#plCreateFromSong").onclick = async () => {
     const name = $("#plNewNameFromSong").value.trim();
     if (!name) return;
-    const creator = getSession().username || getSession().email.split('@')[0];
+    const creator = prompt("Tu nombre (creador):")?.trim();
+    if (!creator) return;
     if (await createNewPlaylistFromSong(name, creator, track)) {
         $("#plNewNameFromSong").value = "";
         sheet.classList.remove("show");
@@ -328,7 +337,7 @@ function heroScrollInvalidate(){
     if (!rafPending) { rafPending = true; requestAnimationFrame(heroScrollTickRaf); }
 }
 
-// --- L\u00f3gica de UI para Transmisiones ---
+// --- Lógica de UI para Transmisiones ---
 function renderLiveSessions(sessions) {
     activeSessions = sessions; 
     const listEl = $("#sessionsList");
@@ -364,7 +373,6 @@ function initLiveStreamsUI() {
     const sessionsSheet = $("#sessionsSheet");
 
     $("#broadcastBtn")?.addEventListener("click", () => {
-        if (!canActivate('cast')) return;
         if (liveState.mode === 'broadcasting') {
             stopBroadcasting();
         } else {
@@ -377,23 +385,23 @@ function initLiveStreamsUI() {
         const name = $("#streamNameInput").value.trim();
         const genre = $("#streamGenreSelect").value;
         if (!name) {
-            showAlert("Por favor, ingresa un nombre para la transmisi\u00f3n.");
+            showToast("Por favor, ingresa un nombre para la transmisión.", true);
             return;
         }
         startStreamSheet.classList.remove("show");
         const success = await startBroadcasting(name, genre);
         if (!success) {
-             showAlert("No se pudo iniciar la transmisi\u00f3n.");
+             showToast("No se pudo iniciar la transmisión.", true);
         }
     });
 
     $("#btnShowStreams")?.addEventListener("click", async () => {
         if (liveState.mode === 'broadcasting') {
-            showToast("No puedes ver transmisiones mientras est\u00e1s transmitiendo.");
+            showToast("No puedes ver transmisiones mientras estás transmitiendo.");
             return;
         }
         sessionsSheet.classList.add("show");
-        listenForLiveSessions(renderLiveSessions);
+        renderLiveSessions(activeSessions);
         $("#leaveStreamBtn").classList.toggle("hide", liveState.mode !== 'listening');
     });
 
@@ -409,24 +417,25 @@ async function boot(){
   initTheme();
   await initFirebase();
   
-  initLiveStreamsUI();
+  listenForLiveSessions(renderLiveSessions);
   initSearchTypeSwitch();
 
   const playlistKeys = Object.keys(recommendedPlaylists);
-  const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlayations[key].ids));
+  const fetchPromises = playlistKeys.map(key => fetchVideoDetailsByIds(recommendedPlaylists[key].ids));
   const results = await Promise.all(fetchPromises);
   playlistKeys.forEach((key, index) => { recommendedPlaylists[key].data = results[index] || []; });
 
   renderAllHomePlaylists();
   updateHomeGridVisibility();
 
-  await loadFavs();
+  loadFavs();
   renderFavs();
   initPlayer();
   loadYTApi();
   initSearch();
   initPlaylistModals();
   initSpotifyImportUI();
+  initLiveStreamsUI();
 
   const savedState = loadPlayerState();
   if (savedState) restorePlayerState(savedState);
@@ -467,7 +476,7 @@ async function boot(){
         const actions = [{ id: "pl", label: "Agregar a playlist" }];
 
         if (track.source !== 'archive') { 
-            actions.push({ id: "artist_albums", label: "Ver \u00c1lbumes de este Artista" });
+            actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
         }
         
         const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
@@ -475,7 +484,7 @@ async function boot(){
 
         if (itemEl.classList.contains("queue-item") && isOwner) {
             if (isFromYoutube) {
-                actions.push({ id: "rename", label: "Renombrar canci\u00f3n" });
+                actions.push({ id: "rename", label: "Renombrar canción" });
                 actions.push({ id: "reassign", label: "Reasignar fuente" });
             }
             actions.push({ id: "delete", label: "Eliminar de la playlist", danger: true });
@@ -507,135 +516,3 @@ async function boot(){
 }
 
 document.addEventListener('DOMContentLoaded', boot);
-
-// L\u00f3gica del minimodal
-function initUserMenu() {
-    const userMenuBtn = $('#userMenuBtn');
-    const userMenu = $('#userMenu');
-    const minimodalContent = $('#minimodalContent');
-
-    const renderMinimodal = (session) => {
-        minimodalContent.innerHTML = '';
-        if (session.status === 'guest') {
-            minimodalContent.innerHTML = `
-                <div class="user-menu-guest">
-                    <div class="tabs">
-                        <button class="tab-btn active" data-form="login">Iniciar sesi\u00f3n</button>
-                        <button class="tab-btn" data-form="register">Registrarse</button>
-                    </div>
-                    <form id="loginForm" class="form-section active">
-                        <h3>Iniciar sesi\u00f3n</h3>
-                        <input id="loginEmail" type="email" placeholder="Email" required />
-                        <input id="loginPass" type="password" placeholder="Contrase\u00f1a" required />
-                        <button id="loginSubmit" type="submit" class="pill">Entrar</button>
-                    </form>
-                    <form id="registerForm" class="form-section">
-                        <h3>Registrarse</h3>
-                        <input id="regEmail" type="email" placeholder="Email" required />
-                        <input id="regPass" type="password" placeholder="Contrase\u00f1a" required />
-                        <input id="regUsername" type="text" placeholder="Nombre de usuario" required />
-                        <button id="regSubmit" type="submit" class="pill">Registrarse</button>
-                    </form>
-                    <button id="themeToggle" class="pill pill-small theme-toggle-btn">
-                      <span class="ico sun" aria-hidden="true"></span>
-                      <span class="ico moon" aria-hidden="true"></span>
-                      <span class="label"></span>
-                    </button>
-                </div>
-            `;
-            $('#loginForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = $('#loginEmail').value;
-                const pass = $('#loginPass').value;
-                const success = await signIn(email, pass);
-                if (success) {
-                    showToast('Sesi\u00f3n iniciada correctamente.');
-                    userMenu.classList.remove('show');
-                } else {
-                    showAlert('Error al iniciar sesi\u00f3n. Verific\u00e1 tus credenciales.');
-                }
-            });
-            $('#registerForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = $('#regEmail').value;
-                const pass = $('#regPass').value;
-                const username = $('#regUsername').value;
-                const success = await signUp(email, pass, username);
-                if (success) {
-                    showToast('Registro exitoso. ¡Bienvenido/a!');
-                    userMenu.classList.remove('show');
-                } else {
-                    showAlert('Error al registrar. El usuario puede ya existir.');
-                }
-            });
-            $$('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    $$('.tab-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    $$('.form-section').forEach(f => f.classList.remove('active'));
-                    $(`#${btn.dataset.form}Form`).classList.add('active');
-                });
-            });
-        } else {
-            minimodalContent.innerHTML = `
-                <div class="user-menu-logged">
-                    <p class="user-info">Conectado como:</p>
-                    <p class="user-name">${session.username || session.email}</p>
-                    <button id="logoutBtn" class="pill pill-small">Cerrar sesi\u00f3n</button>
-                    <button id="themeToggle" class="pill pill-small theme-toggle-btn">
-                      <span class="ico sun" aria-hidden="true"></span>
-                      <span class="ico moon" aria-hidden="true"></span>
-                      <span class="label"></span>
-                    </button>
-                </div>
-            `;
-            $('#logoutBtn').addEventListener('click', async () => {
-                await signOutAll();
-                showToast('Sesi\u00f3n cerrada.');
-                userMenu.classList.remove('show');
-            });
-        }
-
-        const themeToggleBtn = $('#themeToggle');
-        if (themeToggleBtn) {
-            const currentTheme = localStorage.getItem('sy_theme_v1') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            themeToggleBtn.classList.toggle('is-light', currentTheme === 'light');
-            themeToggleBtn.querySelector('.label').textContent = `Tema ${currentTheme === 'dark' ? 'Oscuro' : 'Claro'}`;
-            themeToggleBtn.onclick = () => {
-                const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-                applyTheme(newTheme);
-                themeToggleBtn.classList.toggle('is-light', newTheme === 'light');
-                themeToggleBtn.querySelector('.label').textContent = `Tema ${newTheme === 'dark' ? 'Oscuro' : 'Claro'}`;
-            };
-        }
-    };
-    
-    userMenuBtn.addEventListener('click', () => {
-        const isShown = userMenu.classList.toggle('show');
-        if (isShown) {
-            renderMinimodal(getSession());
-        }
-    });
-
-    userMenu.addEventListener('click', (e) => {
-        if (e.target.id === 'userMenu') {
-            userMenu.classList.remove('show');
-        }
-    });
-
-    onAuthChange(renderMinimodal);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    initUserMenu();
-    // Leer localStorage al cargar la p\u00e1gina
-    const savedSession = localStorage.getItem('app_session');
-    if (savedSession) {
-        const sessionData = JSON.parse(savedSession);
-        // La inicializaci\u00f3n de Firebase manejar\u00e1 la transici\u00f3n de estado
-        // si el usuario no est\u00e1 realmente autenticado.
-        if (sessionData.status === 'logged') {
-            Session.status = 'guest'; // Forzar guest para que onAuthStateChanged tome el control
-        }
-    }
-});
