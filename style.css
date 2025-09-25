@@ -58,111 +58,11 @@ body{
 .up{ text-transform:uppercase; letter-spacing:.08em; font-weight:700; font-size:.7rem; }
 .hide{display:none !important}
 
-/* --- NUEVO: Botón de usuario --- */
-.user-menu-btn {
-  position:fixed; right:12px; top:12px; z-index:1200;
-  width:36px; height:36px; border-radius:18px; border:1px solid rgba(255,255,255,.1);
-  display:grid; place-items:center; cursor:pointer; background:rgba(255,255,255,.06);
-  color:#e5e7eb; transition:var(--fast); padding:0;
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
-}
-.user-menu-btn:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
-.user-menu-btn svg { width: 22px; height: 22px; }
-
-/* --- NUEVO: Minimodal de usuario --- */
-.user-menu-modal {
-  position: fixed; inset: 0; display: none; z-index: 1500;
-  background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);
-  padding: 16px;
-  animation: fadeIn .3s ease-out;
-}
-.user-menu-modal.show {
-  display: flex;
-  justify-content: flex-end;
-}
-.user-menu-content {
-  background: var(--surface-elevated);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 20px;
-  width: 100%;
-  max-width: 320px;
-  height: min-content;
-  margin-top: 60px;
-  animation: slideIn .3s cubic-bezier(.4,0,.2,1);
-}
-@keyframes slideIn {
-  from { transform: translateX(20px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-@keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
-html[data-theme="light"] .user-menu-content { background: var(--surface); }
-
-.menu-tabs {
-  display: flex;
-  background: var(--surface-hover);
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 20px;
-}
-.tab-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 13px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: var(--fast);
-}
-.tab-btn.active {
-  background: var(--surface);
-  color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-html[data-theme="light"] .tab-btn.active { background: var(--bg-secondary); }
-
-.menu-tab-content { display: none; }
-.menu-tab-content.active { display: block; }
-
-.menu-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.menu-form input {
-  padding: 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 15px;
-  outline: none;
-}
-.menu-form input:focus { border-color: var(--accent); }
-.menu-form .pill {
-  width: 100%;
-  padding: 12px;
-  font-size: 16px;
-  margin-top: 8px;
-}
-
-.menu-user-info {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 16px;
-  text-align: center;
-}
-.menu-theme-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 20px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
+/* ——— Flotantes arriba ——— */
+.logo-float{
+  position:fixed; left:12px; top:12px; z-index:1200;
+  width:36px; height:36px; border-radius:10px; object-fit:cover;
+  border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06);
 }
 
 /* Lupa */
@@ -173,10 +73,11 @@ html[data-theme="light"] .tab-btn.active { background: var(--bg-secondary); }
 }
 .search-fab svg,.search-fab path{ fill:currentColor; }
 .search-fab:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
-.search-fab-global{ position:fixed; right:56px; top:12px; z-index:1200; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+.search-fab-global{ position:fixed; right:12px; top:12px; z-index:1200; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
 
 /* Toggle de tema (CSS puro) */
 .theme-toggle{
+  position:fixed; right:56px; top:12px; z-index:1200;
   width:36px; height:36px; border-radius:18px;
   border:1px solid rgba(255,255,255,.1);
   background:rgba(255,255,255,.06);
@@ -185,6 +86,7 @@ html[data-theme="light"] .tab-btn.active { background: var(--bg-secondary); }
 }
 .theme-toggle:hover{background:rgba(255,255,255,.12); transform:translateY(-1px);}
 .theme-toggle .ico{ width:18px; height:18px; position:relative; display:block; }
+.theme-toggle .moon{ display:none; }
 
 /* Sol y luna */
 .theme-toggle .sun{
@@ -198,7 +100,7 @@ html[data-theme="light"] .tab-btn.active { background: var(--bg-secondary); }
           mask: radial-gradient(circle 9px, transparent 8px, #000 8px);
   opacity:.9;
 }
-.theme-toggle .moon{ border-radius:50%; background:#94a3b8; display:none; }
+.theme-toggle .moon{ border-radius:50%; background:#94a3b8; }
 .theme-toggle .moon::after{
   content:""; position:absolute; left:6px; top:2px; width:14px; height:14px; border-radius:50%;
   background: var(--bg);
@@ -745,20 +647,6 @@ html[data-theme="light"] .pill{ border-color:#e5e7eb; background:#f8fafc; color:
 }
 #sy-toast.show { opacity: 1; bottom: 100px; }
 #sy-toast.error { background: #b91c1c; }
-.sy-alert {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--accent);
-  color: white;
-  padding: 12px 20px;
-  border-radius: 8px;
-  z-index: 9999;
-  display: none;
-  font-size: 14px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
 
 /* ========== Spotify Import & Resolver ========== */
 #resolver-modal {
@@ -911,7 +799,7 @@ html[data-theme="light"] .pill-large { color: #fff; }
 .mic-icon::after {
   content: ''; position: absolute; width: 10px; height: 8px;
   border: 1.5px solid white; border-top: none;
-  border-radius: 0 0 5px 5px; bottom: 2px; background: transparent;
+  border-radius: 0 0 5px 5px; bottom: 3px; background: transparent;
 }
 .mic-icon { background: linear-gradient(to bottom, transparent 13px, white 13px, white 14px, transparent 14px); }
 .broadcast-wrapper.broadcasting .stream-btn-broadcast { animation: blink-red 1.5s infinite; }
