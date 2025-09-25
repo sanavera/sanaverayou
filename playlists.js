@@ -1,11 +1,4 @@
-import { showToast, canActivate, openActionSheet } from './live-stream.js';
-import { isMyPlaylist, communityPlaylists, updatePlaylist, createPlaylist, deletePlaylist, startResolverJob } from './firebase.js';
-import { $, cleanAuthor, dotsSvg, favIconSvg, spotifyLogoSvg } from './utils.js';
-import { setQueue, playCurrent, queue, queueType, currentTrack } from './reproductor.js';
-import { refreshIndicators, switchView, renderQueue } from './main.js';
-import { isFav } from './favoritos.js';
-import { fetchWithTimeout, scraperYTM, scraperYT, extractId, items } from './buscador.js';
-
+// Manejo de playlists locales e importadas (Spotify/Archive), y la cola de reproducción.
 
 let viewingPlaylistId = null;
 
@@ -14,20 +7,21 @@ const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
 const SPOTIFY_CLIENT_SECRET = "2cd0ccd3a63441068061c2b574090655";
 let spotifyToken = { value: null, expires: 0 };
 
-
 /**
- * Resuelve una canci\u00f3n de Spotify a un video, usando exclusivamente YouTube Music
+ * --- LÓGICA DE RESOLUCIÓN MEJORADA ---
+ * Resuelve una canción de Spotify a un video, usando exclusivamente YouTube Music
  * para obtener resultados de alta calidad.
- * @param {object} track - El objeto de la canci\u00f3n de Spotify ({ title, author }).
+ * @param {object} track - El objeto de la canción de Spotify ({ title, author }).
  * @returns {Promise<{videoId: string|null, backups: string[], error: string|null}>}
  */
 async function resolveTrack(track) {
     const query = `${track.author} ${track.title}`;
-    const ALLOW_YT_FALLBACK = false; 
+    const ALLOW_YT_FALLBACK = false; // Desactivado por defecto como se solicitó.
 
     try {
+        // 1. Intenta resolver usando YouTube Music
         const ytmUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYTM(query))}`;
-        const ytmResponse = await fetchWithTimeout(ytmUrl, { cache: 'no-store', credentials: 'omit' });
+        const ytmResponse = await fetch(ytmUrl, { cache: 'no-store', credentials: 'omit' });
         
         if (ytmResponse.ok) {
             let text = '';
@@ -48,9 +42,10 @@ async function resolveTrack(track) {
             }
         }
 
+        // 2. (Opcional) Fallback a YouTube estándar.
         if (ALLOW_YT_FALLBACK) {
             const ytUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYT(query))}`;
-            const ytResponse = await fetchWithTimeout(ytUrl, { cache: 'no-store', credentials: 'omit' });
+            const ytResponse = await fetch(ytUrl, { cache: 'no-store', credentials: 'omit' });
 
             if (ytResponse.ok) {
                 let text = '';
@@ -71,52 +66,55 @@ async function resolveTrack(track) {
             }
         }
         
-        return { videoId: null, backups: [], error: "No se encontr\u00f3 video en las fuentes disponibles." };
+        return { videoId: null, backups: [], error: "No se encontró video en las fuentes disponibles." };
 
     } catch (e) {
-        console.error(`Error resolviendo la canci\u00f3n "${query}":`, e);
+        console.error(`Error resolviendo la canción "${query}":`, e);
         return { videoId: null, backups: [], error: e.message };
     }
 }
 
 
 /**
- * Guarda el \u00e1lbum de Archive.org que se est\u00e1 reproduciendo como una nueva playlist del usuario.
+ * Guarda el álbum de Archive.org que se está reproduciendo como una nueva playlist del usuario.
  */
 async function saveCurrentArchiveAlbumAsPlaylist() {
-    if (!canActivate('createPlaylist')) return;
-
     if (queueType !== 'archive_album' || !queue || queue.length === 0) {
-        showToast("No hay un \u00e1lbum de Archive.org para guardar.", true);
+        showToast("No hay un álbum de Archive.org para guardar.", true);
         return;
     }
 
-    let creator = window.Session.username;
+    let creator = localStorage.getItem('sy_creator_name');
+    if (!creator) {
+        creator = prompt("Para guardar el álbum, por favor ingresa tu nombre de creador:")?.trim();
+        if (!creator) return; 
+        localStorage.setItem('sy_creator_name', creator);
+    }
     
     const albumData = {
-        title: currentQueueTitle,
-        description: "",
-        public: false,
+        name: currentQueueTitle,
+        creator: creator,
+        cover: queue[0].thumb,
         tracks: queue,
         trackCount: queue.length,
         source: 'archive',
+        isPublic: false,
+        ownerUserId: 'current_user_id_placeholder',
+        updatedAt: sy_fs().serverTimestamp()
     };
 
     try {
-        showToast(`Guardando \"${albumData.title}\"...`);
-        const result = await createPlaylist(albumData);
-        if (result.success) {
-            addMyPlaylistId(result.id);
-            showToast("\u00c1lbum guardado en 'Mis Playlists'.");
-            const btnSave = $("#btnSaveAlbum");
-            if(btnSave) btnSave.classList.add('hide');
-        } else {
-            showToast(result.error, true);
-        }
+        showToast(`Guardando "${albumData.name}"...`);
+        const { collection, addDoc } = sy_fs();
+        const docRef = await addDoc(collection(db, "playlists"), albumData);
+        addMyPlaylistId(docRef.id);
+        showToast("Álbum guardado en 'Mis Playlists'.");
+        const btnSave = $("#btnSaveAlbum");
+        if(btnSave) btnSave.classList.add('hide');
 
     } catch (e) {
-        console.error("Error al guardar el \u00e1lbum de Archive.org:", e);
-        showToast("No se pudo guardar el \u00e1lbum.", true);
+        console.error("Error al guardar el álbum de Archive.org:", e);
+        showToast("No se pudo guardar el álbum.", true);
     }
 }
 
@@ -128,7 +126,7 @@ function renderPlaylists() {
     if (!grid) return;
     grid.innerHTML = "";
 
-    const myPlaylists = communityPlaylists.filter(p => p.owner === window.Session.uid);
+    const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
 
     if (myPlaylists.length === 0) {
         empty?.classList.remove("hide");
@@ -155,29 +153,22 @@ function renderPlaylists() {
             <img class="pl-thumb-bg" src="${cover}" alt="">
             <div class="pl-overlay">
                 <div class="pl-meta">
-                    <div class="pl-title">${pl.title}</div>
-                    <div class="pl-creator">por ${pl.owner === window.Session.uid ? window.Session.username : 'An\u00f3nimo'}</div>
+                    <div class="pl-title">${pl.name}</div>
+                    <div class="pl-creator">por ${pl.creator || 'Anónimo'}</div>
                     <div class="pl-subtitle">${statusText}</div>
                 </div>
                 <div class="pl-privacy-toggle">
                     <label class="switch">
-                        <input type="checkbox" ${pl.public ? 'checked' : ''}>
+                        <input type="checkbox" ${pl.isPublic ? 'checked' : ''}>
                         <span class="slider"></span>
                     </label>
-                    <span>P\u00fablica</span>
+                    <span>Pública</span>
                 </div>
             </div>
             <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
 
         card.querySelector(".more").addEventListener("click", (e) => { e.stopPropagation(); openPlaylistOptionsMenu(pl); });
-        card.querySelector('.pl-privacy-toggle input').addEventListener('change', async (e) => {
-            e.stopPropagation();
-            const result = await updatePlaylist(pl.id, { public: e.target.checked });
-            if (!result.success) {
-                showToast(result.error, true);
-                e.target.checked = !e.target.checked;
-            }
-        });
+        card.querySelector('.pl-privacy-toggle input').addEventListener('change', (e) => { e.stopPropagation(); handlePrivacyToggle(pl.id, e.target.checked); });
         card.addEventListener("click", async (e) => {
             if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return;
             await showPlaylistInPlayer(pl.id);
@@ -189,38 +180,36 @@ function renderPlaylists() {
 }
 
 async function openPlaylistOptionsMenu(pl) {
-  const isOwner = pl.owner === window.Session.uid;
+  const isOwner = isMyPlaylist(pl.id);
   let actions = [];
   if (isOwner) {
       actions.push({ id: "rename", label: "Renombrar" });
       actions.push({ id: "delete", label: "Eliminar playlist", danger: true });
   }
-  if (!isOwner && pl.public) {
+  if (!isOwner && pl.isPublic) {
       actions.push({ id: "save_copy", label: "Guardar una copia" });
   }
   actions.push({ id: "cancel", label: "Cancelar", ghost: true });
   
   openActionSheet({
-    title: pl.title,
+    title: pl.name,
     actions: actions,
     onAction: async (act) => {
+      const { doc, updateDoc, deleteDoc, serverTimestamp } = sy_fs();
       if (act === "rename" && isOwner) {
-        const newTitle = prompt("Nuevo nombre para la playlist:", pl.title);
-        if (newTitle && newTitle.trim() !== "") {
-            const result = await updatePlaylist(pl.id, { title: newTitle.trim() });
-            if (!result.success) showToast(result.error, true);
+        const newName = prompt("Nuevo nombre para la playlist:", pl.name);
+        if (newName && newName.trim() !== "") {
+            const newCreator = prompt("Nuevo nombre de creador:", pl.creator);
+            if(newCreator && newCreator.trim() !== ""){
+                await updateDoc(doc(db, "playlists", pl.id), { name: newName.trim(), creator: newCreator.trim(), updatedAt: serverTimestamp() });
+            }
         }
       }
       if (act === "delete" && isOwner) {
         openActionSheet({
-            title: `\u00bfEliminar \"${pl.title}\"?`,
-            actions: [{id: "confirm_delete", label: "S\u00ed, eliminar", danger: true}, {id: "cancel", label: "Cancelar", ghost: true}],
-            onAction: async (confirmAct) => { 
-                if(confirmAct === 'confirm_delete') { 
-                    const result = await deletePlaylist(pl.id);
-                    if (!result.success) showToast(result.error, true);
-                }
-            }
+            title: `¿Eliminar "${pl.name}"?`,
+            actions: [{id: "confirm_delete", label: "Sí, eliminar", danger: true}, {id: "cancel", label: "Cancelar", ghost: true}],
+            onAction: async (confirmAct) => { if(confirmAct === 'confirm_delete') { await deleteDoc(doc(db, "playlists", pl.id)); removeMyPlaylistId(pl.id); } }
         });
       }
       if (act === "save_copy" && !isOwner) { savePlaylistCopy(pl); }
@@ -229,61 +218,52 @@ async function openPlaylistOptionsMenu(pl) {
 }
 
 async function removeFromPlaylist(plId, trackId) {
-    if (!canActivate('editPlaylist')) return;
     const pl = communityPlaylists.find(p => p.id === plId);
     if (!pl) return;
+    const { doc, updateDoc, serverTimestamp } = sy_fs();
     const updatedTracks = (pl.tracks || []).filter(t => t && t.id !== trackId);
     try {
-        const result = await updatePlaylist(plId, { tracks: updatedTracks, trackCount: updatedTracks.length, resolvedCount: updatedTracks.filter(Boolean).length });
-        if (result.success) {
-            showToast('Canci\u00f3n eliminada.');
-        } else {
-            showToast(result.error, true);
-        }
-    } catch (e) { console.error('Error removing song:', e); showToast('No se pudo quitar la canci\u00f3n.', true); }
+        await updateDoc(doc(db, 'playlists', plId), { tracks: updatedTracks, trackCount: updatedTracks.length, resolvedCount: updatedTracks.filter(Boolean).length, updatedAt: serverTimestamp() });
+        showToast('Canción eliminada.');
+    } catch (e) { console.error('Error removing song:', e); showToast('No se pudo quitar la canción.', true); }
 }
 
 async function renameTrackInPlaylist(playlistId, trackId) {
-    if (!canActivate('editPlaylist')) return;
     const pl = communityPlaylists.find(p => p.id === playlistId);
     if (!pl || !pl.tracks) return;
     const trackIndex = pl.tracks.findIndex(t => t && t.id === trackId);
     if (trackIndex === -1) return;
     const track = pl.tracks[trackIndex];
     if (track.source === 'archive') {
-        showToast("Las canciones de \u00e1lbumes de Archive.org no se pueden renombrar.", true);
+        showToast("Las canciones de álbumes de Archive.org no se pueden renombrar.", true);
         return;
     }
-    const newTitle = prompt("Nuevo nombre para la canci\u00f3n:", track.title);
+    const newTitle = prompt("Nuevo nombre para la canción:", track.title);
     if (!newTitle || newTitle.trim() === "") return;
-    const newAuthor = prompt("Nuevo autor para la canci\u00f3n:", track.author);
+    const newAuthor = prompt("Nuevo autor para la canción:", track.author);
     if (!newAuthor || newAuthor.trim() === "") return;
     const updatedTrack = { ...track, title: newTitle.trim(), author: newAuthor.trim() };
     const updatedTracks = [...pl.tracks];
     updatedTracks[trackIndex] = updatedTrack;
     try {
-        const result = await updatePlaylist(playlistId, { tracks: updatedTracks });
-        if (result.success) {
-            if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
-                const queueIndex = queue.findIndex(t => t.id === trackId);
-                if (queueIndex !== -1) {
-                    queue[queueIndex] = updatedTrack;
-                    renderQueue(queue, currentQueueTitle);
-                    if (currentTrack && currentTrack.id === trackId) {
-                        currentTrack = updatedTrack;
-                        playCurrent(true);
-                    }
+        const { doc, updateDoc, serverTimestamp } = sy_fs();
+        await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
+        if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
+            const queueIndex = queue.findIndex(t => t.id === trackId);
+            if (queueIndex !== -1) {
+                queue[queueIndex] = updatedTrack;
+                renderQueue(queue, currentQueueTitle);
+                if (currentTrack && currentTrack.id === trackId) {
+                    currentTrack = updatedTrack;
+                    updateUIOnTrackChange();
                 }
             }
-            showToast("Canci\u00f3n renombrada.");
-        } else {
-            showToast(result.error, true);
         }
-    } catch (e) { console.error('Error renaming track:', e); showToast('No se pudo renombrar la canci\u00f3n.', true); }
+        showToast("Canción renombrada.");
+    } catch (e) { console.error('Error renaming track:', e); showToast('No se pudo renombrar la canción.', true); }
 }
 
 async function reassignTrackSource(playlistId, oldTrackId) {
-    if (!canActivate('editPlaylist')) return;
     const pl = communityPlaylists.find(p => p.id === playlistId);
     if (!pl || !pl.tracks) return;
     const trackIndex = pl.tracks.findIndex(t => t && t.id === oldTrackId);
@@ -305,12 +285,12 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         if (newResults.length > backups.length + 1) {
             newVideoId = newResults[backups.length + 1].id;
         } else {
-            showToast("No se encontraron m\u00e1s versiones.", true);
+            showToast("No se encontraron más versiones.", true);
             const updatedTrack = { ...track, reassignIndex: 0 };
             const updatedTracks = [...pl.tracks];
             updatedTracks[trackIndex] = updatedTrack;
-            const result = await updatePlaylist(playlistId, { tracks: updatedTracks });
-            if (!result.success) showToast(result.error, true);
+            const { doc, updateDoc, serverTimestamp } = window.firebase;
+            await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
             return;
         }
     }
@@ -318,23 +298,20 @@ async function reassignTrackSource(playlistId, oldTrackId) {
         const updatedTrack = { ...track, id: newVideoId, reassignIndex: currentReassignIndex + 1 };
         const updatedTracks = [...pl.tracks];
         updatedTracks[trackIndex] = updatedTrack;
-        const result = await updatePlaylist(playlistId, { tracks: updatedTracks });
-        if (result.success) {
-            if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
-                const queueIndex = queue.findIndex(t => t.id === oldTrackId);
-                if (queueIndex !== -1) {
-                    queue[queueIndex] = updatedTrack;
-                    renderQueue(queue, currentQueueTitle); 
-                    if (currentTrack && currentTrack.id === oldTrackId) {
-                        currentTrack = updatedTrack;
-                        playCurrent(true);
-                    }
+        const { doc, updateDoc, serverTimestamp } = window.firebase;
+        await updateDoc(doc(db, "playlists", playlistId), { tracks: updatedTracks, updatedAt: serverTimestamp() });
+        if (queueType === 'playlist' && viewingPlaylistId === playlistId) {
+            const queueIndex = queue.findIndex(t => t.id === oldTrackId);
+            if (queueIndex !== -1) {
+                queue[queueIndex] = updatedTrack;
+                renderQueue(queue, currentQueueTitle); 
+                if (currentTrack && currentTrack.id === oldTrackId) {
+                    currentTrack = updatedTrack;
+                    playCurrent(true);
                 }
             }
-            showToast("Fuente reasignada.");
-        } else {
-            showToast(result.error, true);
         }
+        showToast("Fuente reasignada.");
     }
 }
 
@@ -397,7 +374,7 @@ function renderQueue(queueItems, title) {
             if (e.target.closest(".more") || e.target.closest(".fav-btn") || e.target.closest(".card-play") || !isResolved) return;
             const currentPl = communityPlaylists.find(p=>p.id === viewingPlaylistId);
             const sourceQueue = currentPl ? (currentPl.tracks || []) : (queueItems || []);
-            const resolvedQueue = sourceQueue.filter(item => item && item.id);
+            const resolvedQueue = sourceQueue.filter(item => item && (item.id || item.urls));
             const resolvedIndex = resolvedQueue.findIndex(item => item.id === t.id);
             if (resolvedIndex === -1) return;
             setQueue(resolvedQueue, queueType, resolvedIndex);
@@ -434,43 +411,22 @@ function hideQueuePanel(){
 }
 
 function initPlaylistModals() {
-    $("#btnNewPlaylist")?.addEventListener("click", () => {
-        if (!canActivate('createPlaylist')) return;
-        $("#createPlaylistSheet").classList.add("show");
-    });
+    $("#btnNewPlaylist")?.addEventListener("click", () => { $("#createPlaylistSheet").classList.add("show"); });
     $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
     $("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
     $("#createPlConfirm").onclick = async () => {
         const name = $("#newPlName").value.trim();
         const creator = $("#newPlCreator").value.trim();
-        if (!name || !creator) {
-            showToast("Por favor, completa nombre de playlist y creador.", true);
-            return;
-        }
-        const result = await createPlaylist({
-            title: name,
-            description: "",
-            public: false,
-            tracks: [],
-            trackCount: 0
-        });
-        if (result.success) {
-            addMyPlaylistId(result.id);
+        if (await createNewPlaylist(name, creator)) {
             $("#newPlName").value = ""; 
             $("#newPlCreator").value = ""; 
             $("#createPlaylistSheet").classList.remove("show");
-            showToast(`Playlist \"${name}\" creada.`);
-        } else {
-            showToast(result.error, true);
         }
     };
 }
 
 function initSpotifyImportUI() {
-    $("#syBtnImportSpotify")?.addEventListener('click', () => {
-        if (!canActivate('importSpotify')) return;
-        $("#sySpotifyModal").classList.add('show');
-    });
+    $("#syBtnImportSpotify")?.addEventListener('click', () => $("#sySpotifyModal").classList.add('show'));
     $("#sySmFetch")?.addEventListener('click', handleSpotifyImport);
     $("#spotifyImportBackBtn")?.addEventListener('click', () => {
         $("#sySmInputUrl").value = "";
@@ -485,8 +441,6 @@ function initSpotifyImportUI() {
             showToast("Selecciona al menos una playlist para importar.", true);
             return;
         }
-        if (!canActivate('importSpotify')) return;
-
         switchView('view-playlists');
         showToast(`Importando ${selectedPlaylists.length} playlist(s)...`);
         for (const pl of selectedPlaylists) {
@@ -496,7 +450,6 @@ function initSpotifyImportUI() {
 }
 
 async function handleSpotifyImport() {
-    if (!canActivate('importSpotify')) return;
     const input = $("#sySmInputUrl").value.trim();
     if (!input) return;
     const modal = $("#sySpotifyModal");
@@ -508,24 +461,24 @@ async function handleSpotifyImport() {
         let playlists = [];
         if (type === 'playlist') {
             const token = await getSpotifyToken();
-            const response = await fetchWithTimeout(`https://api.spotify.com/v1/playlists/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener la playlist.');
             playlists = [await response.json()];
         } else if (type === 'user') {
             playlists = await fetchUserPlaylists(id);
         } else {
-            showToast("URL o ID de usuario no v\u00e1lido.", true);
+            showToast("URL o ID de usuario no válido.", true);
             return;
         }
         if (playlists.length > 0) {
             showUserPlaylistsSelectionView(playlists);
             modal.classList.remove('show');
         } else {
-            showToast("No se encontraron playlists p\u00fablicas.", true);
+            showToast("No se encontraron playlists públicas.", true);
         }
     } catch (e) {
-        console.error("Error en importaci\u00f3n de Spotify:", e);
-        showToast("Ocurri\u00f3 un error. Verifica el enlace o ID.", true);
+        console.error("Error en importación de Spotify:", e);
+        showToast("Ocurrió un error. Verifica el enlace o ID.", true);
     } finally {
         fetchBtn.disabled = false;
         fetchBtn.textContent = 'Buscar';
@@ -551,7 +504,7 @@ async function fetchUserPlaylists(userId) {
     let url = `https://api.spotify.com/v1/users/${userId}/playlists?limit=50`;
     while(url) {
         try {
-            const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener las playlists del usuario.');
             const data = await response.json();
             allPlaylists = allPlaylists.concat(data.items);
@@ -585,7 +538,7 @@ async function fetchAndImportSinglePlaylist(plData) {
     try {
         const spotifyTracks = await fetchAllSpotifyPlaylistTracks(plData.id);
         if (spotifyTracks.length === 0) {
-            showToast(`La playlist \"${plData.name}\" est\u00e1 vac\u00eda.`, true);
+            showToast(`La playlist "${plData.name}" está vacía.`, true);
             return;
         }
         await processAndSavePlaylist({
@@ -602,54 +555,32 @@ async function fetchAndImportSinglePlaylist(plData) {
 }
 
 async function processAndSavePlaylist(pl) {
-    const { collection, query, where, getDocs, addDoc, updateDoc, doc } = window.firebase;
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = window.firebase;
     const col = collection(db, 'playlists');
-    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("owner", "==", window.Session.uid));
+    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", "current_user_id_placeholder"));
     const snapshot = await getDocs(q);
     const playlistData = {
-        title: pl.name,
-        description: "",
-        public: false,
-        source: 'spotify',
-        spotifyId: pl.spotifyId,
+        name: pl.name,
+        creator: pl.creator,
+        cover: pl.cover || null,
         spotifyTracks: pl.spotifyTracks,
         trackCount: pl.spotifyTracks.length,
         tracks: Array(pl.spotifyTracks.length).fill(null),
         status: 'unresolved',
-        resolvedCount: 0
+        resolvedCount: 0,
+        updatedAt: serverTimestamp(),
     };
     if (snapshot.empty) {
-        const result = await createPlaylist(playlistData);
-        if (result.success) {
-            addMyPlaylistId(result.id);
-            startResolverJob(result.id);
-        } else {
-            showToast(result.error, true);
-        }
+        const docRef = await addDoc(col, { ...playlistData, isPublic: false, source: 'spotify', spotifyId: pl.spotifyId, ownerUserId: "current_user_id_placeholder" });
+        addMyPlaylistId(docRef.id);
+        startResolverJob(docRef.id);
     } else {
         const docId = snapshot.docs[0].id;
-        const result = await updatePlaylist(docId, playlistData);
-        if (result.success) {
-            showToast(`Playlist \"${pl.name}\" actualizada.`);
-            startResolverJob(docId);
-        } else {
-            showToast(result.error, true);
-        }
+        const existingDocRef = doc(db, 'playlists', docId);
+        await updateDoc(existingDocRef, playlistData);
+        showToast(`Playlist "${pl.name}" actualizada.`);
+        startResolverJob(docId);
     }
 }
-
-async function getSpotifyToken() { if (spotifyToken.value && Date.now() < spotifyToken.expires) { return spotifyToken.value; } try { const response = await fetchWithTimeout("https://accounts.spotify.com/api/token", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' }); if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`); const data = await response.json(); spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 }; return spotifyToken.value; } catch (e) { console.error("Error getting Spotify token:", e); return null; } }
-async function fetchAllSpotifyPlaylistTracks(playlistId) { const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`; while (url) { try { const response = await fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('Could not get songs from playlist'); const data = await response.json(); const tracks = data.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean); allTracks = allTracks.concat(tracks); url = data.next; } catch (e) { console.error("Error fetching Spotify playlist tracks:", e); url = null; } } return allTracks; }
-
-export {
-    renderPlaylists,
-    showPlaylistInPlayer,
-    removeFromPlaylist,
-    renameTrackInPlaylist,
-    reassignTrackSource,
-    playFromPlaylist,
-    initPlaylistModals,
-    initSpotifyImportUI,
-    resolveTrack,
-    saveCurrentArchiveAlbumAsPlaylist
-}
+async function getSpotifyToken() { if (spotifyToken.value && Date.now() < spotifyToken.expires) { return spotifyToken.value; } try { const response = await fetch("https://accounts.spotify.com/api/token", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' }); if (!response.ok) throw new Error(`Spotify auth failed: ${response.statusText}`); const data = await response.json(); spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 }; return spotifyToken.value; } catch (e) { console.error("Error getting Spotify token:", e); return null; } }
+async function fetchAllSpotifyPlaylistTracks(playlistId) { const token = await getSpotifyToken(); if (!token) return []; let allTracks = []; let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`; while (url) { try { const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } }); if (!response.ok) throw new Error('Could not get songs from playlist'); const data = await response.json(); const tracks = data.items.map(({ track }) => track ? { spotifyId: track.id, title: track.name, author: track.artists.map(a => a.name).join(', '), thumb: track.album.images?.[0]?.url || '' } : null).filter(Boolean); allTracks = allTracks.concat(tracks); url = data.next; } catch (e) { console.error("Error fetching Spotify playlist tracks:", e); url = null; } } return allTracks; }
