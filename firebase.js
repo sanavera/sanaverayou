@@ -271,6 +271,10 @@ window.syAuth = {
     }
 };
 
+
+
+
+
 window.syAuth.onAuthChange((session) => {
     // Aquí puedes manejar la lógica de la sesión una vez que cambie.
     // Esto se gestionará principalmente en main.js.
