@@ -1,69 +1,57 @@
 // Contiene toda la lógica para gestionar las canciones favoritas.
+
 let favs = [];
 const LS_FAVS = "sanayera_favs_v1";
 
 /**
- * Carga las canciones favoritas desde Firestore si el usuario está logueado.
- * De lo contrario, carga desde localStorage.
+ * Carga las canciones favoritas desde el Local Storage.
  */
-async function loadFavs() {
-    if (window.Session.status === 'logged') {
-        try {
-            const { listFavorites } = window.firebase;
-            favs = await listFavorites();
-        } catch (e) {
-            console.error("Error al cargar favoritos de Firestore:", e);
-            favs = [];
-        }
-    } else {
-        try {
-            favs = JSON.parse(localStorage.getItem(LS_FAVS) || "[]");
-        } catch {
-            favs = [];
-        }
+function loadFavs() {
+    try {
+        favs = JSON.parse(localStorage.getItem(LS_FAVS) || "[]");
+    } catch {
+        favs = [];
     }
 }
 
 /**
+ * Guarda la lista actual de favoritos en el Local Storage.
+ */
+function saveFavs() {
+    localStorage.setItem(LS_FAVS, JSON.stringify(favs));
+}
+
+/**
+ * Comprueba si una canción ya está en favoritos, usando su ID único.
+ * @param {string} id - El ID de la canción (de YouTube o Archive.org).
+ * @returns {boolean} - True si es favorita, false si no.
+ */
+function isFav(id) {
+    if (!id) return false;
+    return favs.some(f => f.id === id);
+}
+
+/**
  * Agrega o quita una canción de la lista de favoritos.
+ * Funciona tanto para canciones de YouTube como de Archive.org.
  * @param {object} track - El objeto de la canción a agregar/quitar.
  */
-async function toggleFav(track) {
-    if (!canActivate('favorites')) return;
-
+function toggleFav(track) {
     if (!track || !track.id) {
         showToast("No se puede agregar a favoritos esta canción.", true);
         return;
     }
     
     if (isFav(track.id)) {
-        try {
-            const { removeFavorite } = window.firebase;
-            await removeFavorite(favs.find(f => f.id === track.id)?.favId);
-            showToast("Quitado de Favoritos");
-        } catch(e) {
-            showToast(e.message, true);
-        }
+        favs = favs.filter(f => f.id !== track.id);
+        showToast("Quitado de Favoritos");
     } else {
-        try {
-            const { addFavorite } = window.firebase;
-            await addFavorite(track);
-            showToast("Agregado a Favoritos");
-        } catch (e) {
-            showToast(e.message, true);
-        }
+        favs.unshift(track);
+        showToast("Agregado a Favoritos");
     }
-    // La renderización se actualizará con onSnapshot desde Firestore en firebase.js
-}
-
-/**
- * Comprueba si una canción ya está en favoritos.
- * @param {string} id - El ID de la canción.
- * @returns {boolean} - True si es favorita, false si no.
- */
-function isFav(id) {
-    if (!id) return false;
-    return favs.some(f => f.id === id);
+    saveFavs();
+    renderFavs();
+    refreshIndicators();
 }
 
 /**
@@ -73,11 +61,6 @@ function renderFavs() {
     const ul = $("#favList");
     if (!ul) return;
     ul.innerHTML = "";
-    
-    if (window.Session.status === 'guest') {
-        ul.innerHTML = `<div class="empty muted">Regístrate o inicia sesión para guardar tus favoritos.</div>`;
-        return;
-    }
 
     if (favs.length === 0) {
         ul.innerHTML = `<div class="empty muted">Aún no tienes favoritos. Agrega canciones con el ícono de corazón.</div>`;
@@ -144,5 +127,3 @@ function playFromFav(track, autoplay = false) {
     viewingPlaylistId = null;
     playCurrent(autoplay);
 }
-
-export { loadFavs, toggleFav, isFav, renderFavs, playFromFav };
