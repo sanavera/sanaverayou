@@ -1,24 +1,18 @@
 // Contiene toda la lógica para gestionar las canciones favoritas.
 
 let favs = [];
-const LS_FAVS = "sanayera_favs_v1";
 
 /**
- * Carga las canciones favoritas desde el Local Storage.
+ * Carga las canciones favoritas desde Firestore a través de un listener.
+ * Esta función es llamada una sola vez para inicializar el listener.
+ * Los datos se actualizarán automáticamente.
  */
-function loadFavs() {
-    try {
-        favs = JSON.parse(localStorage.getItem(LS_FAVS) || "[]");
-    } catch {
-        favs = [];
-    }
-}
-
-/**
- * Guarda la lista actual de favoritos en el Local Storage.
- */
-function saveFavs() {
-    localStorage.setItem(LS_FAVS, JSON.stringify(favs));
+function initFavorites() {
+    window.syAuth.onFavoritesChange(newFavs => {
+        favs = newFavs;
+        renderFavs();
+        updateUIOnTrackChange(); // Asegura que los indicadores de favorito se actualicen
+    });
 }
 
 /**
@@ -36,55 +30,50 @@ function isFav(id) {
  * Funciona tanto para canciones de YouTube como de Archive.org.
  * @param {object} track - El objeto de la canción a agregar/quitar.
  */
-function toggleFav(track) {
+async function toggleFav(track) {
     if (!track || !track.id) {
         showToast("No se puede agregar a favoritos esta canción.", true);
         return;
     }
     
     if (isFav(track.id)) {
-        favs = favs.filter(f => f.id !== track.id);
+        await window.syAuth.removeFavorite(track);
         showToast("Quitado de Favoritos");
     } else {
-        favs.unshift(track);
+        await window.syAuth.addFavorite(track);
         showToast("Agregado a Favoritos");
     }
-    saveFavs();
-    renderFavs();
-    refreshIndicators();
 }
 
 /**
- * Renderiza la lista de canciones favoritas en la vista "Favoritos".
+ * Renderiza la lista de canciones favoritas en la vista de favoritos.
  */
 function renderFavs() {
-    const ul = $("#favList");
+    const ul = $("#favsList");
     if (!ul) return;
     ul.innerHTML = "";
 
     if (favs.length === 0) {
-        ul.innerHTML = `<div class="empty muted">Aún no tienes favoritos. Agrega canciones con el ícono de corazón.</div>`;
-        updateHero(null);
+        ul.innerHTML = `<div class="empty muted" style="margin-top: 24px;">
+            Aún no tienes canciones favoritas.<br/>
+            Puedes agregarlas desde los resultados de búsqueda o playlists.
+        </div>`;
         return;
     }
 
     favs.forEach(it => {
         const li = document.createElement("li");
-        li.className = "fav-item";
+        li.className = "result-item fav-item";
         li.dataset.trackId = it.id;
         li.innerHTML = `
-      <div class="thumb-wrap">
-        <img class="thumb" src="${it.thumb}" alt="">
-        <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
-      </div>
+      <button class="card-play" aria-label="Reproducir">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <path d="M8 5v14l11-7z" fill="currentColor" />
+        </svg>
+      </button>
+      <img src="${it.thumb}" alt="Cover art">
       <div class="meta">
-        <div class="title-line">
-          <span class="title-text">${it.title}</span>
-          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
+        <div class="title">${it.title}</div>
         <div class="subtitle">${cleanAuthor(it.author) || ""}</div>
       </div>
       <div class="actions">
@@ -123,7 +112,7 @@ function renderFavs() {
  */
 function playFromFav(track, autoplay = false) {
     const i = favs.findIndex(f => f.id === track.id);
-    setQueue(favs, "favs", Math.max(i, 0));
-    viewingPlaylistId = null;
-    playCurrent(autoplay);
+    setQueue(favs, "favorites", i);
+    switchView("view-player");
+    if (autoplay) playCurrent(true);
 }
