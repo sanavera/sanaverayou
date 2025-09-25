@@ -198,7 +198,7 @@ function playCurrent(autoplay = false) {
         archivePlayer.pause();
         archivePlayer.src = "";
         if (!YT_READY || !currentTrack.id) {
-            console.warn("Canción de YT inválida o YT no está listo, saltando...", currentTrack);
+            console.warn("Canción de YT inválida o YT no está lista, saltando...", currentTrack);
             next();
             return;
         }
