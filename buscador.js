@@ -13,14 +13,20 @@ const extractId = (url) => {
 };
 // --- Fin Constantes del Scraper ---
 
+import { $, $$, cleanTitle, cleanAuthor, dotsSvg, favIconSvg, youtubeLogoSvg, spotifyLogoSvg, youtubeMusicLogoSvg, archiveLogoSvg } from './utils.js';
+import { updateHomeGridVisibility, switchView, refreshIndicators } from './main.js';
+import { isFav } from './favoritos.js';
+import { playFromSearch, setQueue, playCurrent, togglePlay, currentTrack, currentSearchType } from './reproductor.js';
+import { openArchiveAlbum } from './playlists.js';
+import { showToast } from './live-stream.js';
+
 
 /**
- * --- NUEVA UTILIDAD ---
- * Realiza un fetch con un timeout. Si la petición tarda más de lo especificado,
- * se cancela automáticamente para evitar cuelgues.
- * @param {string} url La URL a la que hacer la petición.
+ * Realiza un fetch con un timeout. Si la petición tarda m\u00e1s de lo especificado,
+ * se cancela autom\u00e1ticamente para evitar cuelgues.
+ * @param {string} url La URL a la que hacer la petici\u00f3n.
  * @param {object} options Opciones para fetch.
- * @param {number} timeout Duración del timeout en milisegundos.
+ * @param {number} timeout Duraci\u00f3n del timeout en milisegundos.
  * @returns {Promise<Response>}
  */
 async function fetchWithTimeout(url, options = {}, timeout = 15000) {
@@ -44,7 +50,7 @@ let paging = { query: "", loading: false, page: 1 };
 const ARCHIVE_PAGE_SIZE = 50;
 const archiveSearchCache = new Map();
 
-// --- Punto de Entrada Principal de Búsqueda ---
+// --- Punto de Entrada Principal de B\u00fasqueda ---
 
 async function startSearch(query) {
   if (searchAbort) searchAbort.abort();
@@ -55,7 +61,7 @@ async function startSearch(query) {
   archiveSearchCache.clear(); 
 
   const resultsEl = $("#results");
-  resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando…</h3></div>`;
+  resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando\u2026</h3></div>`;
   updateHomeGridVisibility();
 
   if (currentSearchType === 'archive') {
@@ -66,7 +72,7 @@ async function startSearch(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE CANCIONES (YOUTUBE) - REFACTORIZADA
+// L\u00d3GICA DE B\u00daSQUEDA DE CANCIONES (YOUTUBE) - REFACTORIZADA
 // =======================================================
 
 async function parseScraperResponse(response) {
@@ -90,12 +96,12 @@ async function parseScraperResponse(response) {
 
 async function searchYoutubeParallel(query) {
     const resultsEl = $("#results");
-    resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube…</h3></div>`;
+    resultsEl.innerHTML = `<div class="loading-indicator"><h3>Buscando en YouTube Music y YouTube\u2026</h3></div>`;
 
     const proxiedYtmUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYTM(query))}`;
     const proxiedYtUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYT(query))}`;
 
-    // Se utiliza la nueva función con timeout y opciones anti-cache
+    // Se utiliza la nueva funci\u00f3n con timeout y opciones anti-cache
     const ytmPromise = fetchWithTimeout(proxiedYtmUrl, { signal: searchAbort.signal, cache: 'no-store', credentials: 'omit' }).then(parseScraperResponse);
     const ytPromise = fetchWithTimeout(proxiedYtUrl, { signal: searchAbort.signal, cache: 'no-store', credentials: 'omit' }).then(parseScraperResponse);
 
@@ -109,7 +115,7 @@ async function searchYoutubeParallel(query) {
         const combinedIds = [...ytmIds, ...uniqueYtIds];
 
         if (combinedIds.length === 0) {
-            resultsEl.innerHTML = `<div class="empty muted">No se encontraron resultados para "${query}".</div>`;
+            resultsEl.innerHTML = `<div class="empty muted">No se encontraron resultados para \"${query}\".</div>`;
             return;
         }
 
@@ -125,8 +131,8 @@ async function searchYoutubeParallel(query) {
 
     } catch (e) {
         if (e.name !== 'AbortError') {
-            console.error('Falló la búsqueda paralela:', e);
-            resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la búsqueda. Reintentá por favor.</p></div>`;
+            console.error('Fall\u00f3 la b\u00fasqueda paralela:', e);
+            resultsEl.innerHTML = `<div class="loading-indicator"><p>Error en la b\u00fasqueda. Reintent\u00e1 por favor.</p></div>`;
         }
     } finally {
         paging.loading = false;
@@ -134,7 +140,7 @@ async function searchYoutubeParallel(query) {
 }
 
 // =======================================================
-// LÓGICA DE BÚSQUEDA DE ÁLBUMES (ARCHIVE.ORG) - SIN CAMBIOS
+// L\u00d3GICA DE B\u00daSQUEDA DE \u00c1LBUMES (ARCHIVE.ORG) - SIN CAMBIOS
 // =======================================================
 
 function getArchiveSortScore(title, query) {
@@ -157,19 +163,19 @@ async function archiveSearchAlbums(query) {
         return;
     }
 
-    const archiveQuery = `(creator:"${query}" OR title:"${query}") AND mediatype:audio`;
+    const archiveQuery = `(creator:\"${query}\" OR title:\"${query}\") AND mediatype:audio`;
     const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(archiveQuery)}&fl[]=identifier&fl[]=title&fl[]=creator&sort[]=downloads+desc&rows=${ARCHIVE_PAGE_SIZE}&page=${page}&output=json`;
 
     try {
         const response = await fetchWithTimeout(url, { signal: searchAbort?.signal });
-        if (!response.ok) throw new Error(`La API de Archive.org respondió con el estado ${response.status}`);
+        if (!response.ok) throw new Error(`La API de Archive.org respondi\u00f3 con el estado ${response.status}`);
         const data = await response.json();
         if (searchAbort.signal.aborted) return;
 
         const docs = data.response?.docs || [];
         let newAlbums = docs.map(doc => ({
             id: doc.identifier,
-            title: doc.title || 'Sin título',
+            title: doc.title || 'Sin t\u00edtulo',
             author: Array.isArray(doc.creator) ? doc.creator.join(', ') : (doc.creator || 'Desconocido'),
             thumb: `https://archive.org/services/img/${doc.identifier}`,
             source: 'archive',
@@ -186,8 +192,8 @@ async function archiveSearchAlbums(query) {
         renderArchiveResults(items);
     } catch (e) {
         if (e.name !== 'AbortError') {
-            console.error('Falló la búsqueda de álbumes:', e);
-            if (page === 1) $("#results").innerHTML = `<div class="loading-indicator"><p>Error al buscar álbumes. Intenta de nuevo.</p></div>`;
+            console.error('Fall\u00f3 la b\u00fasqueda de \u00e1lbumes:', e);
+            if (page === 1) $("#results").innerHTML = `<div class="loading-indicator"><p>Error al buscar \u00e1lbumes. Intenta de nuevo.</p></div>`;
         }
     } finally {
         paging.loading = false;
@@ -201,7 +207,7 @@ function renderArchiveResults(albums) {
         resultsEl.className = "results results-grid";
     }
     if (albums.length === 0 && paging.page === 1) {
-        resultsEl.innerHTML = `<div class="empty muted">No se encontraron álbumes.</div>`;
+        resultsEl.innerHTML = `<div class="empty muted">No se encontraron \u00e1lbumes.</div>`;
         return;
     }
     const displayedCount = resultsEl.children.length;
@@ -226,7 +232,7 @@ function renderArchiveResults(albums) {
 }
 
 function cleanArchiveTrackTitle(rawTitle) {
-    if (!rawTitle) return "Canción sin título";
+    if (!rawTitle) return "Canci\u00f3n sin t\u00edtulo";
     let title = rawTitle;
     title = title.replace(/\.(mp3|flac|wav|ogg|m4a)$/i, '');
     if (title.includes('/')) title = title.substring(title.lastIndexOf('/') + 1);
@@ -237,16 +243,16 @@ function cleanArchiveTrackTitle(rawTitle) {
 }
 
 async function openArchiveAlbum(album) {
-    showToast(`Cargando álbum: ${album.title}...`);
+    showToast(`Cargando \u00e1lbum: ${album.title}\u2026`);
     try {
         const url = `https://archive.org/metadata/${album.id}`;
         const response = await fetchWithTimeout(url);
-        if (!response.ok) throw new Error("No se pudo obtener la metadata del álbum.");
+        if (!response.ok) throw new Error("No se pudo obtener la metadata del \u00e1lbum.");
         const data = await response.json();
         const AUDIO_FORMATS = ['mp3', 'flac', 'wav', 'ogg', 'm4a'];
         const audioFiles = (data.files || []).filter(f => AUDIO_FORMATS.some(ext => new RegExp(`\\.${ext}$`, 'i').test(f.name || '')));
         if (audioFiles.length === 0) {
-            showToast("Este álbum no contiene canciones de audio válidas.", true);
+            showToast("Este \u00e1lbum no contiene canciones de audio v\u00e1lidas.", true);
             return;
         }
         const tracks = audioFiles.map(file => {
@@ -274,8 +280,8 @@ async function openArchiveAlbum(album) {
         renderQueue(tracks, album.title);
         playCurrent(true);
     } catch (e) {
-        showToast("No se pudo cargar el álbum.", true);
-        console.error("Error al abrir álbum de Archive:", e);
+        showToast("No se pudo cargar el \u00e1lbum.", true);
+        console.error("Error al abrir \u00e1lbum de Archive:", e);
     }
 }
 
@@ -390,4 +396,12 @@ async function fetchVideoDetailsByIds(ids) {
             }))
     );
     return (await Promise.all(metadataPromises)).filter(Boolean);
+}
+
+export {
+    items,
+    currentSearchType,
+    startSearch,
+    initSearch,
+    fetchVideoDetailsByIds
 }
