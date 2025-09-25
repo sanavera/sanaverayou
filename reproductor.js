@@ -1,4 +1,4 @@
-// Contiene la l\u00f3gica del reproductor de YouTube, la cola de reproducci\u00f3n y los controles.
+// Contiene la lógica del reproductor de YouTube, la cola de reproducción y los controles.
 
 let ytPlayer = null;
 let archivePlayer = null; // Reproductor de audio para Archive.org
@@ -6,7 +6,7 @@ let YT_READY = false;
 let timer = null;
 let mediaSessionHandlersSet = false;
 
-// Estado de la cola y reproducci\u00f3n
+// Estado de la cola y reproducción
 let queue = null;
 let queueType = null;
 let qIdx = -1;
@@ -19,7 +19,14 @@ let repeatMode = 'none'; // 'none', 'one', 'all'
 
 const PLAYER_STATE_KEY = "sy_player_state_v2";
 
-// --- Funciones para la interacci\u00f3n con el reproductor ---
+// Estado de Transmisión en Vivo
+let liveState = {
+    mode: 'none',
+    sessionId: null,
+    sessionData: null,
+};
+let sessionUnsubscribe = null;
+let heartbeatInterval = null;
 
 /**
  * Carga la API de IFrame de YouTube y crea el reproductor de audio nativo.
@@ -164,7 +171,7 @@ function playCurrent(autoplay = false) {
             currentTrack: currentTrack,
             isPlaying: autoplay,
             currentTime: 0,
-            stateChangeTimestamp: window.firebase.serverTimestamp()
+            stateChangeTimestamp: sy_fs().serverTimestamp()
         });
     }
 
@@ -181,7 +188,7 @@ function playCurrent(autoplay = false) {
     if (currentTrack.source === 'archive') {
         if (YT_READY) ytPlayer.stopVideo();
         if (!currentTrack.urls?.mp3) {
-            console.warn("Canci\u00f3n de Archive no tiene URL mp3, saltando...", currentTrack);
+            console.warn("Canción de Archive no tiene URL mp3, saltando...", currentTrack);
             next();
             return;
         }
@@ -191,7 +198,7 @@ function playCurrent(autoplay = false) {
         archivePlayer.pause();
         archivePlayer.src = "";
         if (!YT_READY || !currentTrack.id) {
-            console.warn("Canci\u00f3n de YT inv\u00e1lida o YT no est\u00e1 listo, saltando...", currentTrack);
+            console.warn("Canción de YT inválida o YT no está listo, saltando...", currentTrack);
             next();
             return;
         }
@@ -228,7 +235,7 @@ function togglePlay(){
       updateLiveSession(liveState.sessionId, {
           isPlaying: !isCurrentlyPlaying,
           currentTime: currentTime || 0,
-          stateChangeTimestamp: window.firebase.serverTimestamp()
+          stateChangeTimestamp: sy_fs().serverTimestamp()
       });
   }
 }
@@ -269,7 +276,7 @@ function prev(){
       if (currentTrack.source === 'archive') archivePlayer.currentTime = 0;
       else ytPlayer.seekTo(0, true);
        if (liveState.mode === 'broadcasting') {
-          updateLiveSession(liveState.sessionId, { currentTime: 0, stateChangeTimestamp: window.firebase.serverTimestamp() });
+          updateLiveSession(liveState.sessionId, { currentTime: 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
       }
   } else if (qIdx - 1 >= 0) {
     qIdx--;
@@ -341,10 +348,6 @@ function stopTimer(){
   timer = null;
 }
 
-/**
- * Actualiza la sesi\u00f3n de medios del navegador para los controles nativos.
- * @param {object} track - El objeto de la canci\u00f3n.
- */
 function updateMediaSession(track){
   if(!('mediaSession' in navigator) || !track) return;
   try {
@@ -369,16 +372,16 @@ function updateMediaSession(track){
   }
 }
 
-/**
- * Envia informaci\u00f3n de reproducci\u00f3n a la notificaci\u00f3n de Android (si est\u00e1 disponible).
- */
+function canUseAndroidBridge(){
+    try { return !!(window.AndroidBridge && AndroidBridge.updateNotification && AndroidBridge.stopNotification); } catch(e){ return false; }
+}
+
 function updateAndroidNotification(){
     if (!canUseAndroidBridge()) return;
     const isPlaying = getPlaybackState() === 'playing';
     if (!currentTrack) { AndroidBridge.stopNotification(); return; }
     AndroidBridge.updateNotification( currentTrack.title || '', cleanAuthor(currentTrack.author || ''), currentTrack.thumb || '', !!isPlaying );
 }
-
 
 window.handleNativeControl = function(control){
     const action = String(control || '').toLowerCase();
@@ -399,7 +402,7 @@ function initPlayer() {
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     
-    // --- L\u00f3gica agregada: Evento para el bot\u00f3n de guardar \u00e1lbum ---
+    // --- LÓGICA AGREGADA: Evento para el botón de guardar álbum ---
     $("#btnSaveAlbum")?.addEventListener('click', () => {
         if (queueType === 'archive_album' && queue && queue.length > 0) {
             saveCurrentArchiveAlbumAsPlaylist(); 
@@ -414,7 +417,7 @@ function initPlayer() {
                 ytPlayer.playVideo();
             }
         } catch (e) {
-            console.error("Error al intentar mantener la reproducci\u00f3n en segundo plano:", e);
+            console.error("Error al intentar mantener la reproducción en segundo plano:", e);
         }
     });
 
@@ -422,10 +425,133 @@ function initPlayer() {
     window.addEventListener('beforeunload', function(){ if (canUseAndroidBridge()) AndroidBridge.stopNotification(); });
 }
 
+// --- LÓGICA DE TRANSMISIONES ---
 
-export {
-  loadYTApi, initPlayer, getPlaybackState, savePlayerState, loadPlayerState, restorePlayerState,
-  setQueue, playCurrent, togglePlay, next, prev, toggleShuffle, cycleRepeat, seekToFrac, startTimer,
-  stopTimer, updateMediaSession, updateAndroidNotification, updateUIOnTrackChange,
-  getPlaybackState, currentTrack, queue, queueType, isShuffle, repeatMode, liveState
-};
+function setPlayerControlsDisabled(disabled) {
+    const controls = ['#npPlay', '#miniPlay', '#btnNext', '#btnPrev', '#btnShuffle', '#btnRepeat', '#seek', '#miniSeek'];
+    controls.forEach(sel => {
+        const el = $(sel); if (el) el.disabled = disabled;
+    });
+    document.body.classList.toggle('is-listening', disabled);
+}
+
+async function startBroadcasting(name, genre) {
+    try {
+        const sessionId = await createLiveSession(name, genre);
+        liveState.mode = 'broadcasting';
+        liveState.sessionId = sessionId;
+        showToast(`Iniciaste la transmisión: ${name}`);
+        heartbeatInterval = setInterval(() => {
+            if(liveState.sessionId) updateLiveSession(liveState.sessionId, { lastSeen: sy_fs().serverTimestamp() });
+        }, 15000);
+        window.addEventListener('beforeunload', stopBroadcasting);
+        if (currentTrack) {
+            const currentTime = currentTrack.source === 'archive' ? archivePlayer.currentTime : ytPlayer.getCurrentTime();
+            updateLiveSession(sessionId, { currentTrack, isPlaying: getPlaybackState() === 'playing', currentTime: currentTime || 0, stateChangeTimestamp: sy_fs().serverTimestamp() });
+        }
+        return true;
+    } catch (e) { console.error("Error starting broadcast:", e); return false; }
+}
+
+async function stopBroadcasting() {
+    if (liveState.mode !== 'broadcasting' || !liveState.sessionId) return;
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+    window.removeEventListener('beforeunload', stopBroadcasting);
+    showToast("Transmisión finalizada.");
+    await updateLiveSession(liveState.sessionId, { status: 'ended' });
+    setTimeout(() => deleteLiveSession(liveState.sessionId), 2000);
+    liveState.mode = 'none';
+    liveState.sessionId = null;
+    liveState.sessionData = null;
+    updateUIOnTrackChange();
+}
+
+function startListening(sessionId, sessionName) {
+    if (sessionUnsubscribe) sessionUnsubscribe();
+    liveState.mode = 'listening';
+    liveState.sessionId = sessionId;
+    setPlayerControlsDisabled(true);
+    showToast(`Conectado a la transmisión de ${sessionName}`);
+    window.addEventListener('beforeunload', stopListening);
+    sessionUnsubscribe = listenToSessionChanges(sessionId, handleSessionUpdate);
+}
+
+function stopListening() {
+    if (liveState.mode !== 'listening') return;
+    if (sessionUnsubscribe) {
+        sessionUnsubscribe();
+        sessionUnsubscribe = null;
+    }
+    window.removeEventListener('beforeunload', stopListening);
+    liveState.mode = 'none';
+    liveState.sessionId = null;
+    liveState.sessionData = null;
+    setPlayerControlsDisabled(false);
+    if(YT_READY) ytPlayer.pauseVideo();
+    if(archivePlayer) archivePlayer.pause();
+    showToast("Te desconectaste de la transmisión.");
+    updateUIOnTrackChange();
+}
+
+function handleSessionUpdate(sessionData) {
+    if (liveState.mode !== 'listening') return;
+
+    if (!sessionData || sessionData.status === 'ended') {
+        showToast("La transmisión finalizó.", true);
+        stopListening();
+        currentTrack = null;
+        updateUIOnTrackChange();
+        return;
+    }
+
+    liveState.sessionData = sessionData;
+    const remoteTrack = sessionData.currentTrack;
+
+    if (!remoteTrack) {
+        if(YT_READY) ytPlayer.pauseVideo();
+        if(archivePlayer) archivePlayer.pause();
+        currentTrack = null;
+        updateUIOnTrackChange();
+        return;
+    }
+
+    const isNewTrack = remoteTrack.id !== currentTrack?.id;
+
+    if (isNewTrack) {
+        currentTrack = remoteTrack;
+        updateUIOnTrackChange();
+
+        let startSeconds = sessionData.currentTime || 0;
+        if (sessionData.stateChangeTimestamp && sessionData.isPlaying) {
+            const elapsed = (Date.now() - sessionData.stateChangeTimestamp.toDate().getTime()) / 1000;
+            startSeconds += elapsed;
+        }
+        
+        if(currentTrack.source === 'archive') {
+            if(YT_READY) ytPlayer.stopVideo();
+            archivePlayer.src = currentTrack.urls.mp3;
+            archivePlayer.currentTime = Math.max(0, startSeconds);
+            if(sessionData.isPlaying) archivePlayer.play();
+
+        } else { // Es YouTube
+            if(archivePlayer) archivePlayer.pause();
+            ytPlayer.loadVideoById({ videoId: currentTrack.id, startSeconds: Math.max(0, startSeconds) });
+            if (sessionData.isPlaying) {
+                 setTimeout(() => ytPlayer.playVideo(), 500);
+            }
+        }
+
+    } else {
+        const isPlayingRemotely = sessionData.isPlaying;
+        const isPlayingLocally = getPlaybackState() === 'playing';
+
+        if (isPlayingRemotely !== isPlayingLocally) {
+             if (currentTrack.source === 'archive') {
+                isPlayingRemotely ? archivePlayer.play() : archivePlayer.pause();
+             } else {
+                isPlayingRemotely ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+             }
+        }
+    }
+}
