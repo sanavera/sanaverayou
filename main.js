@@ -1,6 +1,7 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 var currentSearchType = 'youtube'; // 'youtube' o 'archive' - Declarado como var para ser global
 let activeSessions = []; 
+let currentSession = null;
 
 // --- Listas de reproducción recomendadas (datos estáticos) ---
 const recommendedPlaylists = {};
@@ -220,14 +221,21 @@ function renderPlaylistCard(playlist) {
     container.appendChild(card);
 }
 
-function renderAllHomePlaylists() {
+async function renderAllHomePlaylists() {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     container.innerHTML = "";
-    const publicCommunityPlaylists = communityPlaylists.filter(p => p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0)));
-    const allPlaylists = [ ...Object.values(recommendedPlaylists).filter(p => p.data.length > 0), ...publicCommunityPlaylists ];
+    
+    const [systemPlaylists, publicPlaylists] = await Promise.all([
+        window.syAuth.getSystemPlaylists(),
+        window.syAuth.getPublicPlaylists()
+    ]);
+    
+    const allPlaylists = [ ...systemPlaylists, ...publicPlaylists ];
     allPlaylists.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
     allPlaylists.forEach(p => renderPlaylistCard(p));
+    
+    updateHomeGridVisibility();
 }
 
 function updateHomeGridVisibility(){
@@ -269,7 +277,9 @@ async function openPlaylistSheet(track){
   const sheet = $("#playlistSheet"); if(!sheet) return;
   sheet.classList.add("show");
   const list = $("#plChoices"); list.innerHTML="";
-  const myPlaylists = communityPlaylists.filter(p => isMyPlaylist(p.id));
+  
+  const myPlaylists = currentSession.status === "logged" ? communityPlaylists.filter(p => p.ownerUserId === currentSession.uid) : getMyPlaylistIds().map(id => communityPlaylists.find(pl => pl.id === id)).filter(Boolean);
+
   myPlaylists.forEach(pl=>{
     const btn = document.createElement("button");
     btn.className="sheet-item";
@@ -282,17 +292,18 @@ async function openPlaylistSheet(track){
     };
     list.appendChild(btn);
   });
+  
   $("#plCreateFromSong").onclick = async () => {
     const name = $("#plNewNameFromSong").value.trim();
     if (!name) return;
-    const creator = prompt("Tu nombre (creador):")?.trim();
-    if (!creator) return;
+    const creator = currentSession.username;
     if (await createNewPlaylistFromSong(name, creator, track)) {
         $("#plNewNameFromSong").value = "";
         sheet.classList.remove("show");
         showToast(`Agregado a la nueva playlist "${name}"`);
     }
   };
+  
   $("#plCancel").onclick = ()=> sheet.classList.remove("show");
   sheet.addEventListener("click", e=>{ if(e.target.id==="playlistSheet") sheet.classList.remove("show"); }, {once:true});
 }
@@ -412,11 +423,124 @@ function initLiveStreamsUI() {
     });
 }
 
+// --- Lógica del mini-modal de usuario ---
+function renderUserMenu(session) {
+    const userFab = $("#userFab");
+    if (!userFab) return;
+
+    if (session.status === "guest") {
+        userFab.innerHTML = `
+            <div class="user-pill">
+                <svg viewBox="0 0 24 24"><path d="M12 2A10 10 0 002 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2zm0 3c1.93 0 3.5 1.57 3.5 3.5S13.93 12 12 12s-3.5-1.57-3.5-3.5S10.07 5 12 5zm0 14.2c-2.7 0-5.83-1.63-7.5-3.72.68-2.12 4.14-3.5 7.5-3.5s6.82 1.38 7.5 3.5c-1.67 2.09-4.8 3.72-7.5 3.72z"></path></svg>
+            </div>`;
+    } else {
+        userFab.innerHTML = `
+            <div class="user-pill logged-in">
+                <span>${session.username.charAt(0).toUpperCase()}</span>
+            </div>`;
+    }
+
+    userFab.onclick = () => {
+        openActionSheet({
+            title: `Hola, ${session.username}`,
+            actions: [
+                ...(session.status === 'guest' ? [
+                    { id: "login", label: "Iniciar Sesión" },
+                    { id: "register", label: "Registrarse" }
+                ] : []),
+                ...(session.status === 'logged' ? [
+                    { id: "logout", label: "Cerrar Sesión", danger: true }
+                ] : []),
+                { id: "theme", label: "Cambiar Tema" }
+            ],
+            onAction: (action) => {
+                if (action === "login") openLoginSheet();
+                if (action === "register") openRegisterSheet();
+                if (action === "logout") window.syAuth.signOutAll();
+                if (action === "theme") applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+            }
+        });
+    };
+}
+
+// --- Mini-modals de Login y Registro ---
+function openLoginSheet() {
+    const sheet = $("#authSheet");
+    sheet.classList.add("show");
+    sheet.innerHTML = `
+        <div class="sheet-content">
+            <div class="sheet-title">Iniciar Sesión</div>
+            <div class="sheet-form">
+                <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" />
+                <input id="loginPassword" type="password" placeholder="Contraseña" autocomplete="current-password" />
+            </div>
+            <div class="sheet-actions">
+                <button class="sheet-item ghost" onclick="$('#authSheet').classList.remove('show')">Cancelar</button>
+                <button id="loginConfirm" class="sheet-item pill">Entrar</button>
+            </div>
+        </div>`;
+    $("#loginConfirm").onclick = async () => {
+        const email = $("#loginEmail").value;
+        const password = $("#loginPassword").value;
+        try {
+            await window.syAuth.signIn(email, password);
+            sheet.classList.remove('show');
+        } catch (error) {
+            showToast("Error al iniciar sesión: " + error.message, true);
+        }
+    };
+    sheet.addEventListener("click", e => { if (e.target.id === "authSheet") sheet.classList.remove('show'); });
+}
+
+function openRegisterSheet() {
+    const sheet = $("#authSheet");
+    sheet.classList.add("show");
+    sheet.innerHTML = `
+        <div class="sheet-content">
+            <div class="sheet-title">Registrarse</div>
+            <div class="sheet-form">
+                <input id="registerUsername" type="text" placeholder="Tu nombre de usuario" />
+                <input id="registerEmail" type="email" placeholder="Email" autocomplete="username" />
+                <input id="registerPassword" type="password" placeholder="Contraseña" autocomplete="new-password" />
+            </div>
+            <div class="sheet-actions">
+                <button class="sheet-item ghost" onclick="$('#authSheet').classList.remove('show')">Cancelar</button>
+                <button id="registerConfirm" class="sheet-item pill">Registrar</button>
+            </div>
+        </div>`;
+    $("#registerConfirm").onclick = async () => {
+        const username = $("#registerUsername").value;
+        const email = $("#registerEmail").value;
+        const password = $("#registerPassword").value;
+        try {
+            await window.syAuth.signUp(email, password, username);
+            sheet.classList.remove('show');
+        } catch (error) {
+            showToast("Error al registrarse: " + error.message, true);
+        }
+    };
+    sheet.addEventListener("click", e => { if (e.target.id === "authSheet") sheet.classList.remove('show'); });
+}
+
+
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
-  await initFirebase();
   
+  window.syAuth.onAuthChange(async (session) => {
+    currentSession = session;
+    renderUserMenu(session);
+    renderAllHomePlaylists();
+    if (session.status === "logged") {
+        const myPlaylists = await window.syAuth.listMyPlaylists(session.uid);
+        localStorage.setItem("sy_user_playlist_ids_v1", JSON.stringify(myPlaylists.map(p => p.id)));
+        loadFavs(); // Vuelve a cargar favoritos, ahora desde Firestore si se implementa allí.
+    } else {
+        localStorage.removeItem("sy_user_playlist_ids_v1");
+        loadFavs(); // Vuelve a cargar favoritos desde localStorage para invitados.
+    }
+  });
+
   listenForLiveSessions(renderLiveSessions);
   initSearchTypeSwitch();
 
@@ -479,7 +603,7 @@ async function boot(){
             actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
         }
         
-        const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
+        const isOwner = viewingPlaylistId && communityPlaylists.find(p => p.id === viewingPlaylistId)?.ownerUserId === currentSession.uid;
         const isFromYoutube = track.source !== 'archive';
 
         if (itemEl.classList.contains("queue-item") && isOwner) {
