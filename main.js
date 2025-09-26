@@ -1,7 +1,7 @@
 // Archivo principal: inicialización, manejo de vistas y conexión de módulos.
 var currentSearchType = 'youtube'; // 'youtube' o 'archive'
 let activeSessions = []; 
-let communityPlaylists = []; // Playlists públicas de otros usuarios
+// let communityPlaylists = []; // <--- LÍNEA ELIMINADA PARA EVITAR REDECLARACIÓN
 let userPlaylists = []; // Playlists del usuario actual (Firestore o LocalStorage)
 
 // --- Utils (sin cambios) ---
@@ -245,6 +245,37 @@ function applyTheme(theme){
 function initTheme(){
   const saved = localStorage.getItem(THEME_KEY) || "dark";
   applyTheme(saved);
+  // El event listener ahora está en initUserMenu
+}
+
+// --- Menú de Usuario ---
+function initUserMenu() {
+    const menu = $('#userMenu');
+    const modal = $('#userMenuModal');
+    menu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modal.classList.toggle('show');
+    });
+    document.addEventListener('click', () => modal.classList.remove('show'));
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    $('#userMenuTheme').addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+    });
+
+    $('#userMenuRegister').addEventListener('click', () => {
+        modal.classList.remove('show');
+        showAuthModal(true);
+    });
+    $('#userMenuLogin').addEventListener('click', () => {
+        modal.classList.remove('show');
+        showAuthModal(false);
+    });
+    $('#userMenuLogout').addEventListener('click', () => {
+        modal.classList.remove('show');
+        logOut();
+    });
 }
 
 // --- Efecto Hero Scroll ---
@@ -298,6 +329,11 @@ function initLiveStreamsUI() {
     const startStreamSheet = $("#startStreamSheet");
     const sessionsSheet = $("#sessionsSheet");
     $("#broadcastBtn")?.addEventListener("click", () => {
+        const { currentUser } = sy_fs();
+        if (!currentUser) {
+            showToast("Debes iniciar sesión para transmitir.", true);
+            return;
+        }
         if (liveState.mode === 'broadcasting') stopBroadcasting();
         else startStreamSheet.classList.add("show");
     });
@@ -325,6 +361,7 @@ function initLiveStreamsUI() {
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
+  initUserMenu();
   initFirebaseAuth();
   listenForLiveSessions(renderLiveSessions);
   initSearchTypeSwitch();
@@ -335,7 +372,7 @@ async function boot(){
   loadYTApi();
   initSearch();
   initPlaylistModals();
-  initSpotifyImportUI();
+  // initSpotifyImportUI(); // Se inicializará cuando el usuario inicie sesión
   initLiveStreamsUI();
 
   const savedState = loadPlayerState();
@@ -377,6 +414,7 @@ async function boot(){
         
         const currentPl = userPlaylists.find(p => p.id === viewingPlaylistId);
         if (itemEl.classList.contains("queue-item") && currentPl && isMyPlaylist(currentPl)) {
+            // Solo el dueño puede editar
             if (track.source !== 'archive') {
                 actions.push({ id: "rename", label: "Renombrar canción" });
                 actions.push({ id: "reassign", label: "Reasignar fuente" });
@@ -395,6 +433,7 @@ async function boot(){
                     $("#overlaySearchInput").value = track.author;
                     startSearch(track.author);
                 }
+                // Las acciones de edición/eliminación ahora están en playlists.js
                 if (act === "rename") renameTrackInPlaylist(viewingPlaylistId, track.id);
                 if (act === "delete") removeFromPlaylist(viewingPlaylistId, track.id);
                 if (act === "reassign") reassignTrackSource(viewingPlaylistId, track.id);
