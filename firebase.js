@@ -5,6 +5,8 @@ let auth;
 let session = { status: "guest" };
 let communityPlaylists = [];
 let resolverJobUnsubscribe = null;
+let favsUnsubscribe = null;
+let playlistUnsubscribe = null;
 
 // --- Helpers para IDs de playlists del usuario en Local Storage ---
 const LS_USER_PLAYLIST_IDS = "sy_user_playlist_ids_v1";
@@ -33,6 +35,7 @@ function sy_fs() {
         getDocs: f.getDocs,
         serverTimestamp: f.serverTimestamp,
         getDoc: f.getDoc,
+        orderBy: f.orderBy,
     };
 }
 
@@ -99,9 +102,6 @@ async function saveLocalFavsToFirestore(uid) {
     }
 }
 
-let favsUnsubscribe = null;
-let playlistUnsubscribe = null;
-
 async function onAuthChange(callback) {
     const { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } = window.firebase.auth;
     auth = getAuth(window.firebase.app);
@@ -137,6 +137,27 @@ async function onAuthChange(callback) {
             callback(session);
         }
     });
+}
+
+function syncFavorites() {
+    const { collection, onSnapshot, query } = sy_fs();
+    if (favsUnsubscribe) {
+        favsUnsubscribe();
+    }
+    if (session.status === "logged") {
+        saveLocalFavsToFirestore(session.uid);
+        favsUnsubscribe = onSnapshot(collection(db, "users", session.uid, FAVS_COLLECTION), (snapshot) => {
+            favs = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            if (typeof renderFavs === 'function') {
+                renderFavs();
+            }
+        });
+    } else {
+        loadFavs();
+        if (typeof renderFavs === 'function') {
+            renderFavs();
+        }
+    }
 }
 
 function syncPlaylists() {
@@ -352,26 +373,31 @@ window.syAuth = {
 /**
  * Inicializa la aplicación de Firebase y establece el listener principal para las playlists.
  */
-async function initFirebase() {
+window.syAuth.initFirebase = async function() {
     const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
     
-    // Espera a que las librerías se carguen y se asignen a `window.firebase`
-    if (!window.firebase.app) {
-        window.firebase = {
-            app: window.firebase.app,
-            auth: window.firebase.auth,
-            firestore: window.firebase.firestore
-        };
-    }
-    
-    const { initializeApp } = window.firebase.app;
-    const { getFirestore, collection, onSnapshot, query, orderBy, getDocs, where } = window.firebase.firestore;
-    const { getAuth, onAuthStateChanged, signInAnonymously } = window.firebase.auth;
-    
-    window.firebase.app = initializeApp(firebaseConfig);
-    db = getFirestore(window.firebase.app);
+    // Importación de librerías
+    const appModule = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
+    const firestoreModule = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
+    const authModule = await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js");
 
-    onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
+    // Asignación de módulos a la variable global
+    window.firebase = {
+        app: appModule,
+        auth: authModule,
+        firestore: firestoreModule,
+    };
+    
+    // Inicialización de Firebase
+    const { initializeApp } = window.firebase.app;
+    const { getFirestore } = window.firebase.firestore;
+
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp);
+    auth = window.firebase.auth.getAuth(firebaseApp);
+
+    // listeners para playlists y favoritos
+    onSnapshot(sy_fs().query(sy_fs().collection(db, "playlists"), sy_fs().orderBy("updatedAt", "desc")), (snapshot) => {
         const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
         communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
