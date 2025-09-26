@@ -1,14 +1,23 @@
 // Contiene la inicialización de Firebase, autenticación y toda la lógica de Firestore.
 
+// Se importan funciones de otros módulos para hacer las dependencias explícitas.
+// Estos archivos también serán corregidos para exportar estas funciones.
+import { renderPlaylists } from './playlists.js';
+import { renderFavs } from './favoritos.js';
+import { renderAllHomePlaylists, showToast, showResolverModal, hideResolverModal, updateResolverModal, updateUIAfterAuthStateChange } from './main.js';
+import { refreshIndicators } from './reproductor.js';
+import { resolveTrack } from './buscador.js';
+
+
 // --- Instancias de Firebase (se inicializarán en initFirebase) ---
 let app;
 let auth;
 let db;
 
 // --- Estado de la aplicación ---
-let currentUser = null;
-let communityPlaylists = []; // Todas las playlists (públicas y del usuario)
-let userPlaylists = []; // Playlists del usuario logueado
+export let currentUser = null;
+export let communityPlaylists = []; // Todas las playlists (públicas y del usuario)
+export let userPlaylists = []; // Playlists del usuario logueado
 export let userFavorites = []; // Favoritos del usuario logueado
 let unsubscribePlaylists = null; // Para detener la escucha de playlists
 let unsubscribeFavorites = null; // Para detener la escucha de favoritos
@@ -18,26 +27,30 @@ let resolverJobUnsubscribe = null;
 const PLAYLISTS_COLLECTION = "playlists";
 const USERS_COLLECTION = "users";
 const FAVORITES_SUBCOLLECTION = "favorites";
-const SESSIONS_COLLECTION = "sessions"; // Para transmisiones en vivo
+const SESSIONS_COLLECTION = "sessions";
+const RESOLVER_JOBS_COLLECTION = "resolverJobs";
+
 
 /**
  * Proporciona acceso unificado a las funciones de Firebase.
  * @returns {object} - Objeto con instancias de funciones de Firebase.
  */
-function sy_services() {
+export function sy_services() {
     return {
-        // App and Auth
+        // App y Auth
         initializeApp: window.initializeApp,
         getAuth: window.firebaseAuth.getAuth,
         createUserWithEmailAndPassword: window.firebaseAuth.createUserWithEmailAndPassword,
         signInWithEmailAndPassword: window.firebaseAuth.signInWithEmailAndPassword,
         signOut: window.firebaseAuth.signOut,
         onAuthStateChanged: window.firebaseAuth.onAuthStateChanged,
+        updateProfile: window.firebaseAuth.updateProfile,
         // Firestore
         getFirestore: window.firebaseFirestore.getFirestore,
         doc: window.firebaseFirestore.doc,
         setDoc: window.firebaseFirestore.setDoc,
         getDoc: window.firebaseFirestore.getDoc,
+        getDocs: window.firebaseFirestore.getDocs,
         addDoc: window.firebaseFirestore.addDoc,
         updateDoc: window.firebaseFirestore.updateDoc,
         deleteDoc: window.firebaseFirestore.deleteDoc,
@@ -51,10 +64,8 @@ function sy_services() {
     };
 }
 
-
 /**
  * Inicializa la aplicación de Firebase y establece el listener de autenticación.
- * Esta es la función principal que arranca la conexión con Firebase.
  */
 export async function initFirebase() {
     const firebaseConfig = {
@@ -74,7 +85,7 @@ export async function initFirebase() {
 
     onAuthStateChanged(auth, user => {
         if (user) {
-            currentUser = { uid: user.uid, email: user.email };
+            currentUser = { uid: user.uid, email: user.email, displayName: user.displayName };
             console.log("Usuario logueado:", currentUser.uid);
             loadUserData(user.uid);
             updateUIAfterAuthStateChange(true);
@@ -89,6 +100,28 @@ export async function initFirebase() {
     checkForActiveImportJob();
 }
 
+// =======================================================
+// LÓGICA DE AUTENTICACIÓN
+// =======================================================
+export async function registerUser(name, email, password) {
+    const { createUserWithEmailAndPassword, updateProfile } = sy_services();
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(userCredential.user, { displayName: name });
+    return userCredential.user;
+}
+
+export async function loginUser(email, password) {
+    const { signInWithEmailAndPassword } = sy_services();
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+}
+
+export async function logoutUser() {
+    const { signOut } = sy_services();
+    await signOut(auth);
+}
+
+
 /**
  * Carga los datos para un usuario logueado (playlists y favoritos desde Firestore).
  * @param {string} userId - El ID del usuario.
@@ -97,7 +130,7 @@ function loadUserData(userId) {
     if (unsubscribePlaylists) unsubscribePlaylists();
     if (unsubscribeFavorites) unsubscribeFavorites();
 
-    const { collection, query, where, onSnapshot, doc, orderBy } = sy_services();
+    const { collection, query, onSnapshot, doc, orderBy } = sy_services();
 
     const allPlaylistsQuery = query(collection(db, PLAYLISTS_COLLECTION), orderBy("updatedAt", "desc"));
     
@@ -134,9 +167,8 @@ function loadGuestData() {
     userFavorites = [];
     userPlaylists = [];
     
-    loadFavsFromLocalStorage(); // Carga favoritos de LS a userFavorites
+    loadFavsFromLocalStorage();
     renderFavs();
-
     renderPlaylists();
 
     const { collection, query, where, onSnapshot, orderBy } = sy_services();
@@ -161,7 +193,7 @@ export async function toggleFav(track) {
     const isCurrentlyFav = isFav(track.id);
 
     if (currentUser) {
-        const { collection, addDoc, deleteDoc, query, where, getDocs, doc } = sy_services();
+        const { collection, addDoc, deleteDoc, query, where, getDocs } = sy_services();
         const favsRef = collection(db, USERS_COLLECTION, currentUser.uid, FAVORITES_SUBCOLLECTION);
 
         if (isCurrentlyFav) {
@@ -178,7 +210,7 @@ export async function toggleFav(track) {
             }
         } else {
             try {
-                const { firestoreId, ...trackToSave } = track;
+                const { firestoreId, ...trackToSave } = track; // Evita guardar el ID de firestore en el documento
                 await addDoc(favsRef, trackToSave);
                 showToast("Agregado a Favoritos");
             } catch (e) {
@@ -196,7 +228,7 @@ export async function toggleFav(track) {
             showToast("Agregado a Favoritos");
         }
         saveFavsToLocalStorage(localFavs);
-        userFavorites = localFavs;
+        userFavorites = localFavs; // Actualiza el estado local
         renderFavs();
         refreshIndicators();
     }
@@ -230,13 +262,12 @@ export function isMyPlaylist(playlistId) {
 }
 
 export async function createNewPlaylist(name, creator) {
-    if (!name || !creator) {
-        showToast("Por favor, completa nombre de playlist y creador.", true);
-        return false;
-    }
-
     if (!currentUser) {
         showToast("Registrate para crear y guardar playlists en la nube.", true);
+        return false;
+    }
+    if (!name || !creator) {
+        showToast("Por favor, completa nombre de playlist y creador.", true);
         return false;
     }
 
@@ -290,60 +321,6 @@ export async function addSongToPlaylist(playlistId, track) {
     }
 }
 
-// =======================================================
-// IMPORTADOR SPOTIFY Y OTRAS FUNCIONES DE PLAYLIST
-// =======================================================
-// (Se mantienen las funciones de Spotify, resolver, etc., pero se adaptan
-//  para usar currentUser.uid cuando corresponda)
-
-export async function processAndSavePlaylist(pl) {
-    if (!currentUser) {
-        showToast("Debes iniciar sesión para importar playlists de Spotify.", true);
-        return;
-    }
-    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = sy_services();
-    const col = collection(db, 'playlists');
-    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", currentUser.uid));
-    const snapshot = await getDocs(q);
-    const playlistData = {
-        name: pl.name, creator: pl.creator, cover: pl.cover || null,
-        spotifyTracks: pl.spotifyTracks, trackCount: pl.spotifyTracks.length,
-        tracks: Array(pl.spotifyTracks.length).fill(null), status: 'unresolved',
-        resolvedCount: 0, updatedAt: serverTimestamp(),
-    };
-    if (snapshot.empty) {
-        const docRef = await addDoc(col, { ...playlistData, isPublic: false, source: 'spotify', spotifyId: pl.spotifyId, ownerUserId: currentUser.uid });
-        startResolverJob(docRef.id);
-    } else {
-        const docId = snapshot.docs[0].id;
-        await updateDoc(doc(db, 'playlists', docId), playlistData);
-        showToast(`Playlist "${pl.name}" actualizada.`);
-        startResolverJob(docId);
-    }
-}
-
-// (El resto de funciones como handlePrivacyToggle, savePlaylistCopy, resolver, etc., se incluyen aquí
-//  y se adaptan para usar `currentUser.uid` en las validaciones de permisos y al guardar datos).
-
-
-// =======================================================
-// TRANSMISIONES EN VIVO
-// =======================================================
-
-// Las funciones de transmisiones en vivo se mantienen igual pero usan el `db` ya inicializado
-// y las funciones de sy_services().
-
-// =======================================================
-// EXPORTACIONES
-// =======================================================
-export {
-    app, auth, db, currentUser, communityPlaylists, userPlaylists,
-    sy_services
-};
-
-// Se mantienen las demás funciones que no fueron modificadas pero que son necesarias.
-// (ej: createNewPlaylistFromSong, savePlaylistCopy, etc. adaptadas a la nueva lógica de auth)
-
 export async function createNewPlaylistFromSong(name, creator, track) {
     if (!currentUser) {
         showToast("Inicia sesión para crear playlists.", true);
@@ -351,7 +328,7 @@ export async function createNewPlaylistFromSong(name, creator, track) {
     }
     try {
         const { collection, addDoc, serverTimestamp } = sy_services();
-        await addDoc(collection(db, "playlists"), {
+        await addDoc(collection(db, PLAYLISTS_COLLECTION), {
             name, creator, tracks: [track], trackCount: 1, 
             updatedAt: serverTimestamp(), isPublic: false, ownerUserId: currentUser.uid
         });
@@ -361,9 +338,43 @@ export async function createNewPlaylistFromSong(name, creator, track) {
         return false;
     }
 }
+
+
+// =======================================================
+// IMPORTADOR SPOTIFY Y RESOLVER
+// =======================================================
+export async function processAndSavePlaylist(pl) {
+    if (!currentUser) {
+        showToast("Debes iniciar sesión para importar playlists de Spotify.", true);
+        return;
+    }
+    const { collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, doc } = sy_services();
+    const col = collection(db, PLAYLISTS_COLLECTION);
+    const q = query(col, where("spotifyId", "==", pl.spotifyId), where("ownerUserId", "==", currentUser.uid));
+    const snapshot = await getDocs(q);
+    
+    const playlistData = {
+        name: pl.name, creator: pl.creator, cover: pl.cover || null,
+        spotifyTracks: pl.spotifyTracks, trackCount: pl.spotifyTracks.length,
+        tracks: Array(pl.spotifyTracks.length).fill(null), status: 'unresolved',
+        resolvedCount: 0, updatedAt: serverTimestamp(), source: 'spotify', 
+        spotifyId: pl.spotifyId, ownerUserId: currentUser.uid, isPublic: false
+    };
+
+    if (snapshot.empty) {
+        const docRef = await addDoc(col, playlistData);
+        startResolverJob(docRef.id);
+    } else {
+        const docId = snapshot.docs[0].id;
+        await updateDoc(doc(db, PLAYLISTS_COLLECTION, docId), playlistData);
+        showToast(`Playlist "${pl.name}" actualizada.`);
+        startResolverJob(docId);
+    }
+}
+
 async function startResolverJob(playlistId) {
     const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = sy_services();
-    const plRef = doc(db, "playlists", playlistId);
+    const plRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
     
     const plDoc = await getDoc(plRef);
     if (!plDoc.exists()) { console.error("Playlist not found for resolver job:", playlistId); return; }
@@ -372,14 +383,13 @@ async function startResolverJob(playlistId) {
     showResolverModal({ done: 0, total: playlist.spotifyTracks.length }, playlist.name, playlist.cover);
 
     let jobId = playlist.resolverJobId;
-    const jobDoc = jobId ? await getDoc(doc(db, "resolverJobs", jobId)) : null;
+    const jobRef = doc(db, RESOLVER_JOBS_COLLECTION, jobId || `job_${playlistId}`);
     
-    if (!jobDoc || !jobDoc.exists() || jobDoc.data().status !== 'running') {
-        jobId = `job_${playlistId}_${Date.now()}`;
+    if(!jobId) {
+        jobId = jobRef.id;
         await updateDoc(plRef, { resolverJobId: jobId });
     }
     
-    const jobRef = doc(db, "resolverJobs", jobId);
     await setDoc(jobRef, {
         playlistRef: plRef.path, status: 'queued', total: playlist.spotifyTracks.length,
         done: 0, errors: [], lastUpdated: serverTimestamp()
@@ -394,19 +404,22 @@ async function startResolverJob(playlistId) {
     resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
         if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
             hideResolverModal();
+            if(resolverJobUnsubscribe) resolverJobUnsubscribe();
+            localStorage.removeItem('sy_active_import_job');
             return;
         }
         const job = { id: docSnap.id, ...docSnap.data() };
         updateResolverModal(job);
     });
 
-    $('#resolver-cancel')?.addEventListener('click', cancelResolverJob);
+    document.getElementById('resolver-cancel')?.addEventListener('click', cancelResolverJob);
 
     runJobBatch(playlistId, jobRef);
 }
+
 async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = sy_services();
-    const plRef = doc(db, "playlists", playlistId);
+    const plRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
     
     const jobDoc = await getDoc(jobRef);
     if (!jobDoc.exists() || jobDoc.data().status !== 'running') {
@@ -423,15 +436,16 @@ async function runJobBatch(playlistId, jobRef) {
     
     const tracksArray = playlist.tracks || Array(playlist.spotifyTracks.length).fill(null);
     const unresolvedIndices = [];
-    for (let i = 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) {
+    for (let i = job.done || 0; i < tracksArray.length && unresolvedIndices.length < BATCH_SIZE; i++) {
         if (tracksArray[i] === null) unresolvedIndices.push(i);
     }
     
     if (unresolvedIndices.length === 0) {
-        const finalStatus = (playlist.resolvedCount === playlist.spotifyTracks.length) ? 'resolved' : 'partial';
-        await updateDoc(plRef, { status: finalStatus });
-        await updateDoc(jobRef, { status: 'done', done: playlist.resolvedCount, lastUpdated: serverTimestamp() });
-        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${playlist.resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
+        const resolvedCount = tracksArray.filter(t => t !== null).length;
+        const finalStatus = (resolvedCount === playlist.spotifyTracks.length) ? 'resolved' : 'partial';
+        await updateDoc(plRef, { status: finalStatus, resolvedCount });
+        await updateDoc(jobRef, { status: 'done', done: resolvedCount, lastUpdated: serverTimestamp() });
+        showToast(finalStatus === 'resolved' ? `Importación completa: ${playlist.name}` : `Importación incompleta: ${resolvedCount} de ${playlist.spotifyTracks.length} resueltos.`, finalStatus === 'partial');
         return;
     }
 
@@ -441,7 +455,7 @@ async function runJobBatch(playlistId, jobRef) {
     const currentPlDoc = await getDoc(plRef);
     const currentPlaylist = currentPlDoc.data();
     let updatedTracks = [...(currentPlaylist.tracks || Array(currentPlaylist.spotifyTracks.length).fill(null))];
-    let errorsInBatch = [];
+    let errorsInBatch = job.errors || [];
 
     results.forEach((result, i) => {
         const originalIndex = unresolvedIndices[i];
@@ -450,19 +464,18 @@ async function runJobBatch(playlistId, jobRef) {
             updatedTracks[originalIndex] = {
                 id: result.videoId, title: spotifyTrack.title, author: spotifyTrack.author,
                 thumb: spotifyTrack.thumb || `https://i.ytimg.com/vi/${result.videoId}/hqdefault.jpg`,
-                source: 'youtube', originalId: spotifyTrack.spotifyId,
-                backupUrls: result.backups, reassignIndex: 0
+                source: 'youtube', originalId: spotifyTrack.spotifyId
             };
         } else if (result.error) {
             errorsInBatch.push(`Track ${originalIndex}: ${result.error}`);
         }
     });
     
-    const newResolvedCount = updatedTracks.filter(t => t && t.id).length;
+    const newResolvedCount = updatedTracks.filter(t => t !== null).length;
     await updateDoc(plRef, { tracks: updatedTracks, resolvedCount: newResolvedCount });
     await updateDoc(jobRef, { 
         done: newResolvedCount, lastUpdated: serverTimestamp(),
-        errors: [...(job.errors || []), ...errorsInBatch]
+        errors: errorsInBatch
     });
 
     setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
@@ -475,8 +488,8 @@ async function cancelResolverJob() {
     try {
         const { playlistId, jobId } = JSON.parse(activeJobInfo);
         const { doc, updateDoc, serverTimestamp } = sy_services();
-        const jobRef = doc(db, "resolverJobs", jobId);
-        const plRef = doc(db, "playlists", playlistId);
+        const jobRef = doc(db, RESOLVER_JOBS_COLLECTION, jobId);
+        const plRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
         
         await updateDoc(jobRef, { status: 'canceled', lastUpdated: serverTimestamp() });
         await updateDoc(plRef, { status: 'partial' });
@@ -496,19 +509,21 @@ async function checkForActiveImportJob() {
         const { jobId, playlistId } = JSON.parse(activeJobInfo);
         const { doc, onSnapshot, getDoc } = sy_services();
 
-        const plDoc = await getDoc(doc(db, "playlists", playlistId));
+        const plDoc = await getDoc(doc(db, PLAYLISTS_COLLECTION, playlistId));
         if (!plDoc.exists()) {
             hideResolverModal();
             return;
         }
         const pl = plDoc.data();
 
-        const jobRef = doc(db, "resolverJobs", jobId);
+        const jobRef = doc(db, RESOLVER_JOBS_COLLECTION, jobId);
         if (resolverJobUnsubscribe) resolverJobUnsubscribe();
 
         resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
             if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
                 hideResolverModal();
+                if(resolverJobUnsubscribe) resolverJobUnsubscribe();
+                localStorage.removeItem('sy_active_import_job');
                 return;
             }
             const job = { id: docSnap.id, ...docSnap.data() };
@@ -518,4 +533,50 @@ async function checkForActiveImportJob() {
         console.error("Failed to parse or resume active job:", e);
         localStorage.removeItem('sy_active_import_job');
     }
+}
+
+
+// =======================================================
+// TRANSMISIONES EN VIVO
+// =======================================================
+
+export async function createLiveSession(name, genre) {
+    const { addDoc, collection, serverTimestamp } = sy_services();
+    const sessionRef = await addDoc(collection(db, SESSIONS_COLLECTION), {
+        name, genre,
+        ownerId: currentUser.uid,
+        ownerName: currentUser.displayName || currentUser.email,
+        createdAt: serverTimestamp(),
+        lastSeen: serverTimestamp(),
+        status: 'active',
+        currentTrack: null,
+        isPlaying: false
+    });
+    return sessionRef.id;
+}
+
+export async function updateLiveSession(sessionId, data) {
+    const { doc, updateDoc } = sy_services();
+    await updateDoc(doc(db, SESSIONS_COLLECTION, sessionId), data);
+}
+
+export async function deleteLiveSession(sessionId) {
+    const { doc, deleteDoc } = sy_services();
+    await deleteDoc(doc(db, SESSIONS_COLLECTION, sessionId));
+}
+
+export function listenToSessionChanges(sessionId, callback) {
+    const { doc, onSnapshot } = sy_services();
+    return onSnapshot(doc(db, SESSIONS_COLLECTION, sessionId), (doc) => {
+        callback(doc.data());
+    });
+}
+
+export function listenForLiveSessions(callback) {
+    const { collection, query, where, onSnapshot } = sy_services();
+    const q = query(collection(db, SESSIONS_COLLECTION), where("status", "==", "active"));
+    return onSnapshot(q, (snapshot) => {
+        const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        callback(sessions);
+    });
 }
