@@ -1,77 +1,9 @@
-// Contiene toda la lógica para gestionar las canciones favoritas,
-// adaptándose si el usuario está registrado (Firestore) o es invitado (LocalStorage).
-
-let favs = [];
-const LS_GUEST_FAVS = "sy_favorites_v2"; // Nueva clave para evitar conflictos
-
-// --- Funciones para Invitados (LocalStorage) ---
+// Contiene toda la lógica para gestionar las canciones favoritas, adaptada para usuarios.
 
 /**
- * Carga las canciones favoritas del invitado desde el Local Storage.
- * Esta función es llamada por firebase.js cuando se detecta que no hay usuario.
- */
-function loadGuestFavorites() {
-    try {
-        favs = JSON.parse(localStorage.getItem(LS_GUEST_FAVS) || "[]");
-    } catch {
-        favs = [];
-    }
-    renderFavs();
-}
-
-/**
- * Guarda la lista actual de favoritos del invitado en el Local Storage.
- */
-function saveGuestFavorites() {
-    localStorage.setItem(LS_GUEST_FAVS, JSON.stringify(favs));
-}
-
-// --- Funciones para Usuarios Registrados (Firestore) ---
-
-let favsUnsubscribe = null; // Para detener el listener al cerrar sesión
-
-/**
- * Escucha en tiempo real los favoritos del usuario desde Firestore.
- * Esta función es llamada por firebase.js cuando un usuario inicia sesión.
- */
-function loadUserFavorites() {
-    const { currentUser, db, collection, query, onSnapshot, orderBy } = sy_fs();
-    if (!currentUser) return;
-
-    // Si hay un listener activo de un usuario anterior, lo detenemos
-    if (favsUnsubscribe) favsUnsubscribe();
-
-    const q = query(collection(db, "users", currentUser.uid, "favorites"), orderBy("addedAt", "desc"));
-
-    favsUnsubscribe = onSnapshot(q, (snapshot) => {
-        favs = snapshot.docs.map(doc => doc.data());
-        renderFavs();
-        refreshIndicators();
-    });
-}
-
-/**
- * Guarda todos los favoritos en Firestore (usado al sincronizar).
- * @param {Array} favoritesArray - El array de favoritos a guardar.
- */
-async function saveFavorites(favoritesArray) {
-    const { currentUser, db, doc, setDoc, serverTimestamp } = sy_fs();
-    if (!currentUser || !favoritesArray || favoritesArray.length === 0) return;
-
-    const favCollectionRef = collection(db, "users", currentUser.uid, "favorites");
-    for (const track of favoritesArray) {
-        const trackWithTimestamp = { ...track, addedAt: serverTimestamp() };
-        await setDoc(doc(favCollectionRef, track.id), trackWithTimestamp);
-    }
-}
-
-
-// --- Lógica Unificada (Común para ambos tipos de usuario) ---
-
-/**
- * Comprueba si una canción ya está en la lista de favoritos en memoria.
+ * Comprueba si una canción ya está en favoritos.
  * @param {string} id - El ID de la canción.
- * @returns {boolean}
+ * @returns {boolean} - True si es favorita.
  */
 function isFav(id) {
     if (!id) return false;
@@ -80,7 +12,7 @@ function isFav(id) {
 
 /**
  * Agrega o quita una canción de la lista de favoritos.
- * Automáticamente decide si usar Firestore o LocalStorage.
+ * Guarda en Firestore para usuarios registrados y en LocalStorage para invitados.
  * @param {object} track - El objeto de la canción a agregar/quitar.
  */
 async function toggleFav(track) {
@@ -88,20 +20,19 @@ async function toggleFav(track) {
         showToast("No se puede agregar esta canción a favoritos.", true);
         return;
     }
-    
-    const { currentUser, db, doc, setDoc, deleteDoc, serverTimestamp } = sy_fs();
+
+    const { currentUser, db, collection, doc, setDoc, deleteDoc, serverTimestamp } = sy_fs();
     const isCurrentlyFav = isFav(track.id);
 
     if (currentUser) {
-        // Lógica para usuario registrado (Firestore)
-        const favDocRef = doc(db, "users", currentUser.uid, "favorites", track.id);
+        // --- USUARIO REGISTRADO (Firestore) ---
+        const trackDocRef = doc(db, `users/${currentUser.uid}/favs`, track.id);
         try {
             if (isCurrentlyFav) {
-                await deleteDoc(favDocRef);
+                await deleteDoc(trackDocRef);
                 showToast("Quitado de Favoritos");
             } else {
-                const trackWithTimestamp = { ...track, addedAt: serverTimestamp() };
-                await setDoc(favDocRef, trackWithTimestamp);
+                await setDoc(trackDocRef, { ...track, addedAt: serverTimestamp() });
                 showToast("Agregado a Favoritos");
             }
         } catch (e) {
@@ -109,22 +40,26 @@ async function toggleFav(track) {
             showToast("No se pudo actualizar favoritos.", true);
         }
     } else {
-        // Lógica para invitado (LocalStorage)
+        // --- USUARIO INVITADO (LocalStorage) ---
         if (isCurrentlyFav) {
             favs = favs.filter(f => f.id !== track.id);
             showToast("Quitado de Favoritos");
         } else {
-            favs.unshift(track);
+            favs.unshift(track); // Agrega al principio
             showToast("Agregado a Favoritos");
         }
-        saveGuestFavorites();
+        saveGuestFavs(); // Esta función está en firebase.js para guardar en LS
+        // Para invitados, el renderizado debe ser manual
         renderFavs();
         refreshIndicators();
     }
+    // Para usuarios registrados, el listener onSnapshot se encargará de re-renderizar.
 }
+
 
 /**
  * Renderiza la lista de canciones favoritas en la vista "Favoritos".
+ * Lee directamente de la variable global `favs`.
  */
 function renderFavs() {
     const ul = $("#favList");
