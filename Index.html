@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="es" data-theme="dark">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf--8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SanaveraYou Pro</title>
 
@@ -17,7 +17,7 @@
     <img id="logoFloat" class="logo-float" src="logo78.png" alt="Logo" />
     
     <div class="top-right-controls">
-      <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
+      <button id="searchFab" class="search-fab" aria-label="Buscar">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
       </button>
 
@@ -26,15 +26,11 @@
           <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
         </button>
         <div id="userModal" class="user-modal">
-          <!-- IDs agregados para coincidir con main.js -->
-          <a href="#" id="userMenuLogin" class="user-modal-item" data-action="login">Iniciar sesión</a>
-          <a href="#" id="userMenuRegister" class="user-modal-item" data-action="register">Registrarse</a>
-          <a href="#" id="userMenuLogout" class="user-modal-item" data-action="logout" style="display: none;">Cerrar sesión</a>
-          <div id="userInfo" style="display: none; padding: 10px 12px; font-size: 13px; color: var(--text-secondary);">
-            Logueado como:<br><strong id="userName" style="color: var(--text-primary);"></strong>
-          </div>
+          <a href="#" class="user-modal-item" data-action="login">Iniciar sesión</a>
+          <a href="#" class="user-modal-item" data-action="register">Registrarse</a>
+          <a href="#" class="user-modal-item" data-action="logout" style="display: none;">Cerrar sesión</a>
           <div class="user-modal-separator"></div>
-          <a href="#" id="userMenuTheme" class="user-modal-item" data-action="theme">Cambiar tema</a>
+          <a href="#" class="user-modal-item" data-action="theme">Cambiar tema</a>
         </div>
       </div>
     </div>
@@ -53,9 +49,9 @@
   <!-- VISTAS PRINCIPALES -->
   <main id="views">
     <section id="view-search" class="view active">
-      <section id="homeSection" class="home-section">
+      <section id="homeSection">
         <header class="home-head">
-          <h3 class="home-title">Actividad Reciente</h3>
+          <h3 class="home-title">Playlists Públicas</h3>
            <button id="btnShowStreams" class="stream-btn stream-btn-listen" title="Ver transmisiones">
                 <div class="headphone-icon"></div>
             </button>
@@ -65,8 +61,10 @@
         </div>
       </section>
 
-      <div id="results" class="results"></div>
-      <div id="sentinel" aria-hidden="true" style="height: 1px;"></div>
+      <div id="resultsWrapper">
+        <section id="results" class="results"></section>
+        <div id="sentinel" aria-hidden="true" style="height: 1px;"></div>
+      </div>
     </section>
 
     <section id="view-favs" class="view">
@@ -82,21 +80,21 @@
     </section>
 
     <section id="view-playlists" class="view">
-        <header class="section-head sticky-head">
+        <header class="section-head sticky-head" style="top:0; background:var(--bg); margin:0 calc(-1 * var(--side-pad)); padding: 12px var(--side-pad); border-bottom:1px solid var(--border-subtle);">
             <h3>Mis Playlists</h3>
-            <div class="pl-actions" style="display: flex; gap: 8px;">
+            <div class="pl-actions" style="display:flex; gap: 8px;">
               <button id="syBtnImportSpotify" class="pill pill-small">Importar de Spotify</button>
               <button id="btnNewPlaylist" class="pill pill-small">Nueva</button>
             </div>
         </header>
         <div id="plList" class="pl-grid" style="margin-top: 16px;"></div>
-        <div id="plEmpty" class="empty muted hide">Aún no hay playlists. Crea la primera ✨</div>
+        <div id="plEmpty" class="empty muted hide" style="padding-top: 40px;">Aún no hay playlists. Crea la primera ✨</div>
     </section>
 
     <section id="view-player" class="view now-playing">
       <div class="player-header-sticky">
         <div class="np-header-content">
-            <div id="npTitle" class="np-title">Elegí una canción</div>
+            <div id="npTitle" class="np-title">Elige una canción</div>
             <button id="btnSaveAlbum" class="pill pill-small hide" title="Guardar Álbum">
                 <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
                 Guardar
@@ -124,7 +122,12 @@
           </div>
         </div>
       </div>
-      <section id="queuePanel" class="queue-panel hide"></section>
+      <section id="queuePanel" class="queue-panel hide">
+        <header class="section-head">
+          <h3 id="queueTitle">Playlist</h3>
+        </header>
+        <ul id="queueList" class="fav-list"></ul>
+      </section>
     </section>
     
     <section id="view-spotify-import-selection" class="view spotify-import-view">
@@ -132,10 +135,10 @@
             <button id="spotifyImportBackBtn" class="icon-btn">
                 <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
             </button>
-            <h3 style="flex: 1; text-align: center;">Playlists del Usuario</h3>
-            <div style="width: 40px;"></div>
+            <h3 style="flex:1; text-align:center;">Playlists de Spotify</h3>
         </header>
-        <div id="spotifyUserPlaylistsGrid"></div>
+        <div id="spotifyUserPlaylistsGrid" style="padding-top:16px;">
+        </div>
         <div class="sticky-footer">
             <button id="spotifyImportConfirmBtn" class="pill pill-large">Importar Seleccionadas</button>
         </div>
@@ -159,11 +162,11 @@
             </div>
         </div>
         <button id="miniPlay" class="mini-btn" title="Play/Pause" aria-label="Play/Pause">
-            <svg class="i-play" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-            <svg class="i-pause" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+            <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
         </button>
         <div id="broadcastWrapper" class="broadcast-wrapper">
-            <span class="broadcast-label"></span>
+            <span class="broadcast-label">Transmitiendo...</span>
             <button id="broadcastBtn" class="stream-btn stream-btn-broadcast" title="Iniciar transmisión">
                 <div class="mic-icon"></div>
             </button>
@@ -173,19 +176,19 @@
 
   <nav id="bottomNav" class="bottom-nav">
     <button data-view="view-search" class="nav-btn active">
-      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
+      <svg viewBox="0 0 24 24" width="24" height="24"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
       <span>Inicio</span>
     </button>
     <button data-view="view-favs" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
       <span>Favoritos</span>
     </button>
     <button data-view="view-playlists" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M4 14h4v-4H4v4zm0 5h4v-4H4v4zM4 9h4V5H4v4zm5 5h12v-4H9v4zm0 5h12v-4H9v4zM9 5v4h12V5H9z"/></svg>
+      <svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 6h14v2H3V6zm0 4h14v2H3v-2zm0 4h10v2H3v-2zm16-8h2v10h-2V6zm0 12h2v2h-2v-2z"/></svg>
       <span>Playlists</span>
     </button>
     <button data-view="view-player" class="nav-btn">
-      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
+      <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 3a9 9 0 100 18A9 9 0 0012 3zm-2 13V8l6 4-6 4z"/></svg>
       <span>Reproductor</span>
     </button>
   </nav>
@@ -223,19 +226,15 @@
       <div id="authTitle" class="sheet-title">Iniciar Sesión</div>
       <div id="authError" class="auth-error"></div>
       <form id="authForm" class="sheet-form">
-        <!-- Input para nombre, visible solo en registro -->
-        <div id="authNameWrapper" style="display: none;">
-            <input id="authNameInput" type="text" placeholder="Tu nombre" autocomplete="name">
-        </div>
         <input id="authEmail" type="email" placeholder="Correo electrónico" autocomplete="email" required>
         <input id="authPassword" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+        <div class="sheet-actions" style="margin-top: 16px;">
+            <button id="authCancel" type="button" class="sheet-item ghost">Cancelar</button>
+            <button id="authConfirm" type="submit" class="sheet-item pill">Confirmar</button>
+        </div>
       </form>
-      <div class="sheet-actions">
-        <button id="authCancel" class="sheet-item ghost">Cancelar</button>
-        <button id="authSubmit" class="sheet-item pill">Confirmar</button>
-      </div>
-       <div class="auth-toggle">
-        <a href="#" id="authSwitch">¿No tienes cuenta? Regístrate</a>
+       <div id="authToggle" class="auth-toggle">
+        ¿No tienes cuenta? <a href="#" data-action="register">Regístrate</a>
       </div>
     </div>
   </div>
@@ -254,7 +253,7 @@
           <div class="sheet-title">Iniciar Transmisión</div>
           <div class="sheet-form">
               <input id="streamNameInput" placeholder="Nombre de la transmisión (ej: Sebas)" autocomplete="off" />
-              <select id="streamGenreSelect" class="sheet-form-input">
+              <select id="streamGenreSelect" class="sheet-item" style="margin: 0; border: 1px solid var(--border-subtle);">
                   <option>Variado</option>
                   <option>Cumbia</option>
                   <option>Rock</option>
@@ -297,30 +296,31 @@
     </div>
     <button id="resolver-cancel" class="resolver-cancel">Cancelar</button>
   </div>
-  
+
   <div id="sy-toast"></div>
 
   <!-- Contenedor del reproductor de YouTube (oculto) -->
   <div id="yt-holder"><div id="player"></div></div>
 
   <!-- SCRIPTS -->
-  <!-- Firebase SDKs - Versión unificada a 9.22.1 -->
+  <!-- Firebase SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
     window.initializeApp = initializeApp;
   </script>
   <script type="module">
-    import * as fa from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
-    window.firebaseAuth = fa;
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+    window.firebaseAuth = { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
   </script>
   <script type="module">
-     import * as fs from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
-     window.firebaseFirestore = fs;
+     import { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+     window.firebaseFirestore = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc };
   </script>
   
-  <!-- App Scripts -->
+  <!-- App Main Script -->
   <script src="main.js" type="module"></script>
 
 </body>
 </html>
+
 
