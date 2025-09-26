@@ -1,7 +1,9 @@
 // Archivo principal: inicialización, manejo de vistas, autenticación y conexión de módulos.
+
+// --- IMPORTACIÓN DE MÓDULOS ---
+// Se importa la lógica de Firebase.
 import {
     initFirebase,
-    auth,
     currentUser,
     communityPlaylists,
     userPlaylists,
@@ -9,32 +11,34 @@ import {
     isFav,
     isMyPlaylist,
     addSongToPlaylist,
-    createNewPlaylist,
-    listenForLiveSessions
+    createNewPlaylistFromSong,
+    listenForLiveSessions,
+    registerUser,
+    loginUser,
+    logoutUser
 } from './firebase.js';
-import {
-    initSearch,
-    startSearch,
-    setSearchType,
-    items as searchItems
-} from './buscador.js';
+
+// Se importa la lógica del reproductor.
 import {
     initPlayer,
     loadYTApi,
     currentTrack,
     queue,
     queueType,
-    viewingPlaylistId,
+    isShuffle,
+    repeatMode,
     liveState,
     startBroadcasting,
     stopBroadcasting,
     startListening,
     stopListening,
-    updateUIOnTrackChange,
-    refreshIndicators,
-    updateControlStates,
+    setQueue,
+    playCurrent,
+    togglePlay,
     getPlaybackState
 } from './reproductor.js';
+
+// Se importa la lógica de las playlists.
 import {
     renderPlaylists,
     initPlaylistModals,
@@ -45,17 +49,25 @@ import {
     reassignTrackSource,
     initSpotifyImportUI
 } from './playlists.js';
+
+// Se importa la lógica del buscador.
 import {
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signOut,
-    updateProfile
-} from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
+    initSearch,
+    startSearch,
+    setSearchType,
+    items as searchItems
+} from './buscador.js';
 
-// --- Variables Globales ---
+// Se importa para asegurar que el código se ejecute y se registren los listeners.
+import { userFavorites } from './firebase.js';
+import { playFromFav } from './favoritos.js';
+
+
+// --- VARIABLES GLOBALES ---
 export let activeSessions = [];
+let viewingPlaylistId = null; // Se mueve aquí para ser el estado central de la UI.
 
-// --- Utils (Definición centralizada) ---
+// --- UTILS (Exportadas para uso global) ---
 export const $ = s => document.querySelector(s);
 export const $$ = s => Array.from(document.querySelectorAll(s));
 export const fmt = s => {
@@ -66,44 +78,59 @@ export const fmt = s => {
 };
 export const cleanTitle = t => (t || "").replace(/\[(official\s*)?(music\s*)?video.*?\]/ig, "").replace(/\((official\s*)?(music\s*)?video.*?\)/ig, "").replace(/\b(videoclip|video oficial|lyric video|lyrics|mv|oficial)\b/ig, "").replace(/\s{2,}/g, " ").trim();
 export const cleanAuthor = a => (a || "").replace(/\s*[-–—]?\s*\(?Topic\)?\b/gi, "").replace(/VEVO/gi, "").replace(/\s{2,}/g, " ").replace(/\s*-\s*$/, "").trim();
-export const dotsSvg = () => `<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>`;
+export const dotsSvg = () => `<svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z"/></svg>`;
 export const favIconSvg = (isFav) => isFav ?
-    `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` :
+    `<svg viewBox="0 0 24 24" fill="var(--accent-light)"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` :
     `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>`;
 
-// --- Navegación y Vistas ---
+
+// --- NAVEGACIÓN Y VISTAS ---
 export function switchView(id) {
+    if (id === 'view-player') {
+        // No hacer nada si no hay canción
+        if (!currentTrack) {
+             showToast("No hay nada en reproducción.", true);
+             return;
+        }
+    }
+    
     $$(".view").forEach(v => v.classList.remove("active"));
     const view = $("#" + id);
     if (view) view.classList.add("active");
+    
     $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
+    
     updateHomeGridVisibility();
     heroScrollInvalidate();
 }
 
-// --- Home Grid ---
+// --- HOME GRID ---
 export function renderAllHomePlaylists() {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
     container.innerHTML = "";
     const publicPlaylists = communityPlaylists.filter(p => p.isPublic && ((p.tracks && p.tracks.length > 0) || (p.spotifyTracks && p.spotifyTracks.length > 0)));
     publicPlaylists.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
-    publicPlaylists.forEach(p => renderPlaylistCard(p));
+    publicPlaylists.slice(0, 20).forEach(p => renderPlaylistCard(p)); // Limitar a 20 para performance
 }
 
 function renderPlaylistCard(playlist) {
     const container = $("#allPlaylistsContainer");
     if (!container) return;
-    let trackCount = playlist.trackCount || playlist.tracks?.length || 0;
-    if (trackCount === 0) return;
-    let covers = (playlist.tracks || []).slice(0, 4).map(track => track && track.thumb).filter(Boolean);
-    if (covers.length === 0 && playlist.cover) covers.push(playlist.cover);
-    while (covers.length < 4) covers.push("data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=");
+
+    let cover = playlist.cover;
+    if (!cover && playlist.tracks && playlist.tracks.length > 0) {
+        cover = playlist.tracks[0].thumb;
+    } else if (!cover && playlist.spotifyTracks && playlist.spotifyTracks.length > 0) {
+        cover = playlist.spotifyTracks[0].thumb;
+    } else {
+        cover = "logo78.png"; // Placeholder
+    }
 
     const card = document.createElement("article");
     card.className = "playlist-card";
     card.dataset.id = playlist.id;
-    card.innerHTML = `<div class="collage-container">${covers.map(src => `<img src="${src}" alt="Album art collage">`).join('')}</div>
+    card.innerHTML = `<div class="album-cover"><img src="${cover}" alt="Portada de ${playlist.name}" loading="lazy"></div>
         <div class="playlist-meta">
             <h4 class="playlist-title">${playlist.name}</h4>
             <div class="creator-line"><span>Por: ${playlist.creator}</span></div>
@@ -115,18 +142,16 @@ function renderPlaylistCard(playlist) {
 export function updateHomeGridVisibility() {
     const home = $("#homeSection");
     if (!home) return;
-    const shouldShow = (searchItems.length === 0 && !$(".loading-indicator"));
+    const searchInput = $("#overlaySearchInput").value.trim();
+    const shouldShow = searchInput.length === 0 && searchItems.length === 0 && !$(".loading-indicator");
     home.classList.toggle("hide", !shouldShow);
 }
 
-// --- Sheets, Toasts & Menús ---
+
+// --- SHEETS, TOASTS & MENÚS ---
 export function showToast(message, isError = false) {
-    let toast = document.getElementById('sy-toast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'sy-toast';
-        document.body.appendChild(toast);
-    }
+    let toast = $('#sy-toast');
+    if (!toast) return;
     toast.textContent = message;
     toast.className = 'show';
     if (isError) toast.classList.add('error');
@@ -135,11 +160,7 @@ export function showToast(message, isError = false) {
     }, 3000);
 }
 
-export function openActionSheet({
-    title = "Opciones",
-    actions = [],
-    onAction = () => {}
-}) {
+export function openActionSheet({ title = "Opciones", actions = [], onAction = () => {} }) {
     const sheet = $("#menuSheet");
     if (!sheet) return;
     sheet.innerHTML = `<div class="sheet-content">
@@ -147,74 +168,67 @@ export function openActionSheet({
       ${actions.map(a=>`<button class="sheet-item ${a.ghost?'ghost':''} ${a.danger?'danger':''}" data-id="${a.id}">${a.label}</button>`).join("")}
     </div>`;
     sheet.classList.add("show");
-    sheet.onclick = (e) => {
-        if (e.target === sheet) {
-            sheet.classList.remove("show");
-            return;
+    
+    const closeSheet = (e) => {
+        if (e.target.closest(".sheet-item")) {
+            const btn = e.target.closest(".sheet-item");
+            onAction(btn.dataset.id);
         }
-        const btn = e.target.closest(".sheet-item");
-        if (!btn) return;
         sheet.classList.remove("show");
-        onAction(btn.dataset.id);
+        sheet.removeEventListener('click', closeSheet);
     };
+    sheet.addEventListener('click', closeSheet);
 }
 
-
-// --- Tema ---
-const THEME_KEY = "sy_theme_v1";
-
-function applyTheme(theme) {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_KEY, theme);
-}
-
+// --- TEMA ---
 function initTheme() {
+    const THEME_KEY = "sy_theme_v1";
+    const applyTheme = (theme) => {
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem(THEME_KEY, theme);
+    };
     const saved = localStorage.getItem(THEME_KEY) || "dark";
     applyTheme(saved);
-    $("#themeToggle")?.addEventListener("click", () => {
+    
+    $("#userMenuTheme")?.addEventListener("click", () => {
         const cur = document.documentElement.getAttribute("data-theme") || "dark";
         applyTheme(cur === "dark" ? "light" : "dark");
+        $("#userModal").classList.remove("show");
     });
 }
 
-// --- Efecto Hero Scroll ---
-let rafPending = false,
-    lastScrollY = 0,
-    targetT = 0,
-    currentT = 0;
-
+// --- EFECTO HERO SCROLL ---
+let rafPending = false, lastScrollY = 0, targetT = 0, currentT = 0;
 function heroScrollTickRaf() {
     rafPending = false;
     const activeView = $(".view.active");
     if (!activeView) return;
-    const viewTop = activeView.getBoundingClientRect().top + window.scrollY;
-    const y = Math.max(0, lastScrollY - viewTop);
+    const y = Math.max(0, activeView.scrollTop);
     targetT = Math.min(1, y / 200);
     currentT += (targetT - currentT) * 0.25;
     if (Math.abs(targetT - currentT) < 0.001) currentT = targetT;
-    const hero = activeView.querySelector(".hero, .fav-hero, .player-header-sticky");
+    const hero = activeView.querySelector(".fav-hero, .player-header-sticky");
     if (hero) hero.style.setProperty("--hero-t", currentT);
     if (Math.abs(targetT - currentT) >= 0.001) {
         requestAnimationFrame(heroScrollTickRaf);
         rafPending = true;
     }
 }
-
 export function heroScrollInvalidate() {
-    lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     if (!rafPending) {
         rafPending = true;
         requestAnimationFrame(heroScrollTickRaf);
     }
 }
 
-// --- UI de Autenticación y Usuario ---
+// --- UI DE AUTENTICACIÓN Y USUARIO ---
 function initAuthUI() {
     const userBtn = $('#userBtn');
     const userModal = $('#userModal');
     const authSheet = $('#authSheet');
 
-    userBtn.addEventListener('click', () => {
+    userBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         userModal.classList.toggle('show');
     });
 
@@ -227,91 +241,90 @@ function initAuthUI() {
     $('#userMenuRegister').addEventListener('click', () => showAuthModal('register'));
     $('#userMenuLogin').addEventListener('click', () => showAuthModal('login'));
     $('#userMenuLogout').addEventListener('click', handleLogout);
-    $('#userMenuTheme').addEventListener('click', () => {
-        const cur = document.documentElement.getAttribute("data-theme") || "dark";
-        applyTheme(cur === "dark" ? "light" : "dark");
-    });
-
-    $('#authSheet').addEventListener('click', e => {
+    
+    authSheet.addEventListener('click', e => {
         if (e.target.id === 'authSheet') authSheet.classList.remove('show');
     });
-    $('#authClose').addEventListener('click', () => authSheet.classList.remove('show'));
-    $('#authSwitch').addEventListener('click', () => {
+    $('#authCancel').addEventListener('click', () => authSheet.classList.remove('show'));
+    $('#authSwitch').addEventListener('click', (e) => {
+        e.preventDefault();
         const isLogin = authSheet.dataset.mode === 'login';
         showAuthModal(isLogin ? 'register' : 'login');
     });
 
-    $('#authForm').addEventListener('submit', handleAuth);
+    $('#authSubmit').addEventListener('click', handleAuth);
+    $('#authForm').addEventListener('submit', e => e.preventDefault());
 }
 
-function showAuthModal(mode) { // mode: 'login' o 'register'
+export function showAuthModal(mode) {
     const authSheet = $('#authSheet');
     authSheet.dataset.mode = mode;
     const isLogin = mode === 'login';
 
     $('#authTitle').textContent = isLogin ? 'Iniciar Sesión' : 'Registrarse';
-    $('#authName').style.display = isLogin ? 'none' : 'block';
+    $('#authNameWrapper').style.display = isLogin ? 'none' : 'block';
     $('#authSubmit').textContent = isLogin ? 'Iniciar Sesión' : 'Crear Cuenta';
     $('#authSwitch').textContent = isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia Sesión';
     $('#authError').textContent = '';
+    $('#authError').style.display = 'none';
     $('#authForm').reset();
     authSheet.classList.add('show');
     $('#userModal').classList.remove('show');
 }
 
-async function handleAuth(e) {
-    e.preventDefault();
-    const form = e.target;
-    const name = form.authNameInput.value.trim();
-    const email = form.authEmail.value;
-    const password = form.authPassword.value;
+async function handleAuth() {
+    const name = $('#authNameInput').value.trim();
+    const email = $('#authEmail').value;
+    const password = $('#authPassword').value;
     const errorEl = $('#authError');
     const mode = $('#authSheet').dataset.mode;
     errorEl.textContent = '';
+    errorEl.style.display = 'none';
 
     try {
         if (mode === 'register') {
+            if (!name) throw new Error("Por favor, ingresa tu nombre.");
             if (password.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await updateProfile(userCredential.user, {
-                displayName: name
-            });
+            await registerUser(name, email, password);
         } else {
-            await signInWithEmailAndPassword(auth, email, password);
+            await loginUser(email, password);
         }
         $('#authSheet').classList.remove('show');
+        showToast(mode === 'register' ? '¡Cuenta creada!' : '¡Bienvenido de vuelta!');
     } catch (error) {
-        errorEl.textContent = error.message.includes('auth/invalid-email') ? "Email inválido." : "Error. Verifica tus datos.";
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
     }
 }
 
 async function handleLogout() {
     try {
-        await signOut(auth);
+        await logoutUser();
         $('#userModal').classList.remove('show');
+        showToast("Sesión cerrada.");
     } catch (error) {
         showToast("Error al cerrar sesión.", true);
     }
 }
 
-export function updateUIAfterAuthStateChange(user) {
+export function updateUIAfterAuthStateChange(isLoggedIn) {
     const userModal = $('#userModal');
     if (!userModal) return;
 
-    $('#userMenuRegister').style.display = user ? 'none' : 'block';
-    $('#userMenuLogin').style.display = user ? 'none' : 'block';
-    $('#userMenuLogout').style.display = user ? 'block' : 'none';
+    $('#userMenuRegister').style.display = isLoggedIn ? 'none' : 'block';
+    $('#userMenuLogin').style.display = isLoggedIn ? 'none' : 'block';
+    $('#userMenuLogout').style.display = isLoggedIn ? 'block' : 'none';
 
-    if (user) {
-        $('#userName').textContent = user.displayName || user.email;
-        $('#userInfo').style.display = 'flex';
+    if (isLoggedIn && currentUser) {
+        $('#userName').textContent = currentUser.displayName || currentUser.email;
+        $('#userInfo').style.display = 'block';
     } else {
         $('#userInfo').style.display = 'none';
     }
+    document.body.classList.toggle('logged-in', isLoggedIn);
 }
 
-
-// --- Lógica de UI para Transmisiones ---
+// --- LÓGICA DE UI PARA TRANSMISIONES ---
 function renderLiveSessions(sessions) {
     activeSessions = sessions;
     const listEl = $("#sessionsList");
@@ -336,13 +349,21 @@ function renderLiveSessions(sessions) {
 function initLiveStreamsUI() {
     $("#broadcastBtn")?.addEventListener("click", () => {
         if (liveState.mode === 'broadcasting') {
-            stopBroadcasting();
+            openActionSheet({
+                title: '¿Finalizar transmisión?',
+                actions: [
+                    { id: 'stop', label: 'Sí, finalizar', danger: true },
+                    { id: 'cancel', label: 'Cancelar', ghost: true }
+                ],
+                onAction: (id) => { if(id === 'stop') stopBroadcasting(); }
+            });
         } else {
             if (!currentUser) {
                 showToast("Debes iniciar sesión para transmitir.", true);
                 showAuthModal('login');
                 return;
             }
+            $('#streamNameInput').value = currentUser.displayName || '';
             $("#startStreamSheet").classList.add("show");
         }
     });
@@ -351,16 +372,21 @@ function initLiveStreamsUI() {
     $("#startStreamConfirm")?.addEventListener("click", async () => {
         const name = $("#streamNameInput").value.trim() || (currentUser.displayName || "Usuario");
         const genre = $("#streamGenreSelect").value;
+        if (!name) {
+            showToast("El nombre de la transmisión no puede estar vacío.", true);
+            return;
+        }
         $("#startStreamSheet").classList.remove("show");
         await startBroadcasting(name, genre);
     });
 
     $("#btnShowStreams")?.addEventListener("click", () => {
         if (liveState.mode === 'broadcasting') {
-            showToast("No puedes ver transmisiones mientras estás transmitiendo.");
+            showToast("No puedes ver transmisiones mientras estás transmitiendo.", true);
             return;
         }
         $("#sessionsSheet").classList.add("show");
+        $("#leaveStreamBtn").classList.toggle('hide', liveState.mode !== 'listening');
         renderLiveSessions(activeSessions);
     });
 
@@ -372,10 +398,10 @@ function initLiveStreamsUI() {
 }
 
 
-// --- Arranque de la App ---
+// --- ARRANQUE DE LA APP ---
 async function boot() {
     initTheme();
-    initFirebase();
+    await initFirebase();
     initAuthUI();
     listenForLiveSessions(renderLiveSessions);
     initPlayer();
@@ -384,7 +410,7 @@ async function boot() {
     initPlaylistModals();
     initSpotifyImportUI();
     initLiveStreamsUI();
-    heroScrollInvalidate();
+    
     document.title = "SanaveraYou Pro";
 
     // Event Listeners globales
@@ -393,6 +419,8 @@ async function boot() {
         if (!btn || btn.classList.contains('active')) return;
         switchView(btn.dataset.view);
     });
+    
+    $$('.view').forEach(view => view.addEventListener("scroll", heroScrollInvalidate, { passive: true }));
 
     document.addEventListener("click", async (e) => {
         const itemEl = e.target.closest("[data-track-id]");
@@ -410,42 +438,23 @@ async function boot() {
         }
 
         if (e.target.closest(".icon-btn.more")) {
+            e.stopPropagation();
             if (liveState.mode === 'listening') return;
 
-            const actions = [{
-                id: "pl",
-                label: "Agregar a playlist"
-            }];
+            const actions = [{ id: "pl", label: "Agregar a playlist" }];
             if (track.source !== 'archive') {
-                actions.push({
-                    id: "artist_albums",
-                    label: "Ver Álbumes de este Artista"
-                });
+                actions.push({ id: "artist_albums", label: "Ver Álbumes de este Artista" });
             }
 
             const isOwner = viewingPlaylistId && isMyPlaylist(viewingPlaylistId);
             if (itemEl.classList.contains("queue-item") && isOwner) {
                 if (track.source !== 'archive') {
-                    actions.push({
-                        id: "rename",
-                        label: "Renombrar canción"
-                    });
-                    actions.push({
-                        id: "reassign",
-                        label: "Reasignar fuente"
-                    });
+                    actions.push({ id: "rename", label: "Renombrar canción" });
+                    actions.push({ id: "reassign", label: "Reasignar fuente" });
                 }
-                actions.push({
-                    id: "delete",
-                    label: "Eliminar de la playlist",
-                    danger: true
-                });
+                actions.push({ id: "delete", label: "Eliminar de la playlist", danger: true });
             }
-            actions.push({
-                id: "cancel",
-                label: "Cancelar",
-                ghost: true
-            });
+            actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
             openActionSheet({
                 title: track.title,
@@ -464,13 +473,6 @@ async function boot() {
                 }
             });
         }
-    });
-
-    window.addEventListener("scroll", heroScrollInvalidate, {
-        passive: true
-    });
-    window.addEventListener("resize", heroScrollInvalidate, {
-        passive: true
     });
 }
 
