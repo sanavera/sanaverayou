@@ -1,12 +1,49 @@
 // Contiene la lógica para renderizar y reproducir desde la vista de favoritos.
-import { userFavorites, isFav } from './firebase.js';
+import {
+    userFavorites,
+    isFav
+} from './firebase.js';
+import {
+    cleanAuthor,
+    favIconSvg,
+    dotsSvg,
+    $
+} from './main.js';
+import {
+    setQueue,
+    playCurrent,
+    togglePlay,
+    refreshIndicators,
+    currentTrack
+} from './reproductor.js';
+
+
+/**
+ * Actualiza el banner (hero) de la vista de favoritos.
+ * @param {object|null} track - La canción actual para mostrar, o null.
+ */
+function updateHero(track) {
+    const hero = $("#favHero");
+    const title = $("#favNowTitle");
+    if (!hero || !title) return;
+
+    if (track && userFavorites.some(f => f.id === track.id)) {
+        hero.style.backgroundImage = `url(${track.thumb})`;
+        title.textContent = track.title;
+    } else {
+        const firstFav = userFavorites[0];
+        hero.style.backgroundImage = firstFav ? `url(${firstFav.thumb})` : 'none';
+        title.textContent = firstFav ? firstFav.title : 'Tus Canciones Favoritas';
+    }
+}
+
 
 /**
  * Renderiza la lista de canciones favoritas en la vista "Favoritos".
  * Esta función es llamada por firebase.js cuando los datos de favoritos cambian.
  */
 export function renderFavs() {
-    const ul = document.getElementById("favList");
+    const ul = $("#favList");
     if (!ul) return;
     ul.innerHTML = "";
 
@@ -22,7 +59,7 @@ export function renderFavs() {
         li.dataset.trackId = it.id;
         li.innerHTML = `
       <div class="thumb-wrap">
-        <img class="thumb" src="${it.thumb}" alt="">
+        <img class="thumb" src="${it.thumb}" alt="Miniatura de ${it.title}" onerror="this.src='logo78.png'">
         <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
@@ -41,29 +78,26 @@ export function renderFavs() {
         </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
-        
+
         li.addEventListener("click", e => {
-            if (e.target.closest(".more") || e.target.closest(".fav-btn") || e.target.closest(".card-play")) return;
+            if (e.target.closest(".more, .fav-btn, .card-play")) return;
             playFromFav(it, true);
         });
 
         const cardPlayBtn = li.querySelector(".card-play");
-        if (cardPlayBtn) {
-            cardPlayBtn.onclick = (e) => {
-                e.stopPropagation();
-                if (window.currentTrack?.id === it.id) {
-                    togglePlay();
-                } else {
-                    playFromFav(it, true);
-                }
-            };
-        }
+        cardPlayBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (currentTrack?.id === it.id) {
+                togglePlay();
+            } else {
+                playFromFav(it, true);
+            }
+        };
         ul.appendChild(li);
     });
-    
-    // Asumimos que updateHero y refreshIndicators son funciones globales disponibles
-    if (typeof updateHero === 'function') updateHero(window.currentTrack);
-    if (typeof refreshIndicators === 'function') refreshIndicators();
+
+    updateHero(currentTrack);
+    refreshIndicators();
 }
 
 /**
@@ -74,11 +108,7 @@ export function renderFavs() {
 export function playFromFav(track, autoplay = false) {
     const i = userFavorites.findIndex(f => f.id === track.id);
     if (i === -1) return;
-    
-    // Asumimos que setQueue y playCurrent son funciones globales
-    if (typeof setQueue === 'function' && typeof playCurrent === 'function') {
-        setQueue(userFavorites, "favs", i);
-        window.viewingPlaylistId = null;
-        playCurrent(autoplay);
-    }
+
+    setQueue(userFavorites, "favs", i);
+    playCurrent(autoplay);
 }
