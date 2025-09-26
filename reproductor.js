@@ -4,7 +4,7 @@ import {
     sy_services,
     // createLiveSession,
     updateLiveSession,
-    deleteLiveSession,
+ //   deleteLiveSession,
     listenToSessionChanges,
     addSongToPlaylist,
     createNewPlaylist
