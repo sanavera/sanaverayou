@@ -2,7 +2,7 @@
 import {
     currentUser,
     sy_services,
-    createLiveSession,
+    // createLiveSession,
     updateLiveSession,
     deleteLiveSession,
     listenToSessionChanges,
