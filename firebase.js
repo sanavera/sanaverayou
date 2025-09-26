@@ -372,7 +372,7 @@ export async function processAndSavePlaylist(pl) {
     }
 }
 
-async function startResolverJob(playlistId) {
+export async function startResolverJob(playlistId) {
     const { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot } = sy_services();
     const plRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
     
@@ -417,7 +417,7 @@ async function startResolverJob(playlistId) {
     runJobBatch(playlistId, jobRef);
 }
 
-async function runJobBatch(playlistId, jobRef) {
+export async function runJobBatch(playlistId, jobRef) {
     const { doc, getDoc, updateDoc, serverTimestamp } = sy_services();
     const plRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
     
@@ -481,7 +481,7 @@ async function runJobBatch(playlistId, jobRef) {
     setTimeout(() => runJobBatch(playlistId, jobRef), 1000);
 }
 
-async function cancelResolverJob() {
+export async function cancelResolverJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
     
@@ -501,7 +501,7 @@ async function cancelResolverJob() {
         hideResolverModal();
     }
 }
-async function checkForActiveImportJob() {
+export async function checkForActiveImportJob() {
     const activeJobInfo = localStorage.getItem('sy_active_import_job');
     if (!activeJobInfo) return;
 
