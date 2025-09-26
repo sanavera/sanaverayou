@@ -6,10 +6,33 @@ import {
     isMyPlaylist,
     sy_services,
     processAndSavePlaylist,
-    createNewPlaylist
+    createNewPlaylist,
+    addSongToPlaylist,
+    createNewPlaylistFromSong,
+    startResolverJob
 } from './firebase.js';
 
-let viewingPlaylistId = null;
+import {
+    showToast,
+    openActionSheet,
+    switchView,
+    showAuthModal,
+    $,
+    $$
+} from './main.js';
+
+import {
+    setQueue,
+    playCurrent,
+    renderQueue
+} from './reproductor.js';
+
+import { resolveTrack } from './buscador.js';
+
+// --- Estado del Módulo ---
+let trackToAdd = null; // Track que se está por agregar a una playlist
+let viewingPlaylistId = null; // ID de la playlist que se está viendo en el reproductor
+
 
 // --- Credenciales y Estado de Spotify ---
 const SPOTIFY_CLIENT_ID = "459588d3183647799c670169de916988";
@@ -19,51 +42,16 @@ let spotifyToken = {
     expires: 0
 };
 
-/**
- * Resuelve una canción de Spotify a un video de YouTube.
- * @param {object} track - El objeto de la canción de Spotify.
- * @returns {Promise<object>}
- */
-async function resolveTrack(track) {
-    const query = `${track.author} ${track.title}`;
-    try {
-        const ytmUrl = `https://api.allorigins.win/get?disableCache=true&t=${Date.now()}&url=${encodeURIComponent(scraperYTM(query))}`;
-        const ytmResponse = await fetch(ytmUrl, {
-            cache: 'no-store',
-            credentials: 'omit'
-        });
-        if (ytmResponse.ok) {
-            const wrap = await ytmResponse.json();
-            const text = wrap.contents || '';
-            const ytmIds = [...new Set(text.split('\n').map(l => extractId(l.trim())).filter(Boolean))];
-            if (ytmIds.length > 0) {
-                return {
-                    videoId: ytmIds[0],
-                    backups: ytmIds.slice(1),
-                    error: null
-                };
-            }
-        }
-        return {
-            videoId: null,
-            backups: [],
-            error: "No se encontró video."
-        };
-    } catch (e) {
-        return {
-            videoId: null,
-            backups: [],
-            error: e.message
-        };
-    }
-}
+// =======================================================
+// RENDERIZADO Y VISUALIZACIÓN
+// =======================================================
 
 /**
  * Renderiza la lista de playlists del usuario en la vista "Mis Playlists".
  */
 export function renderPlaylists() {
-    const grid = document.getElementById("plList"),
-        empty = document.getElementById("plEmpty");
+    const grid = $("#plList"),
+        empty = $("#plEmpty");
     if (!grid) return;
     grid.innerHTML = "";
 
@@ -77,34 +65,24 @@ export function renderPlaylists() {
         const card = document.createElement("article");
         card.className = "pl-item";
         card.dataset.plId = pl.id;
-        const cover = pl.cover || pl.tracks?.[0]?.thumb || pl.spotifyTracks?.[0]?.thumb || "https://i.imgur.com/gCa3j5g.png";
+        const cover = pl.cover || pl.tracks?.[0]?.thumb || pl.spotifyTracks?.[0]?.thumb || "logo78.png";
 
         const total = pl.trackCount || 0;
         let statusText = `${total} temas`;
         if (pl.source === 'spotify') {
             const resolved = pl.resolvedCount || 0;
             if (pl.status === 'resolving') statusText = `Importando... (${resolved}/${total})`;
-            else if (pl.status === 'partial') statusText = `Parcial (${resolved}/${total})`;
+            else if (pl.status === 'partial' || (pl.status === 'resolved' && resolved < total)) statusText = `Parcial (${resolved}/${total})`;
         }
-
-        const privacyToggleHTML = currentUser && isMyPlaylist(pl.id) ? `
-            <div class="pl-privacy-toggle">
-                <label class="switch">
-                    <input type="checkbox" ${pl.isPublic ? 'checked' : ''}>
-                    <span class="slider"></span>
-                </label>
-                <span>Pública</span>
-            </div>` : '';
-
+        
         card.innerHTML = `
-            <img class="pl-thumb-bg" src="${cover}" alt="">
+            <img class="pl-thumb-bg" src="${cover}" alt="Portada de ${pl.name}" onerror="this.src='logo78.png'">
             <div class="pl-overlay">
                 <div class="pl-meta">
                     <div class="pl-title">${pl.name}</div>
                     <div class="pl-creator">por ${pl.creator || 'Anónimo'}</div>
                     <div class="pl-subtitle">${statusText}</div>
                 </div>
-                ${privacyToggleHTML}
             </div>
             <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>`;
 
@@ -112,110 +90,87 @@ export function renderPlaylists() {
             e.stopPropagation();
             openPlaylistOptionsMenu(pl);
         });
-        card.querySelector('.pl-privacy-toggle input')?.addEventListener('change', (e) => {
-            e.stopPropagation();
-            handlePrivacyToggle(pl.id, e.target.checked);
-        });
         card.addEventListener("click", async (e) => {
-            if (e.target.closest(".more") || e.target.closest('.pl-privacy-toggle')) return;
+            if (e.target.closest(".more")) return;
             await showPlaylistInPlayer(pl.id);
         });
-        card.classList.toggle("is-playing", viewingPlaylistId === pl.id && window.queueType === 'playlist');
         grid.appendChild(card);
     });
 }
 
-async function handlePrivacyToggle(playlistId, isPublic) {
-    if (!currentUser || !isMyPlaylist(playlistId)) return;
-    try {
-        const {
-            doc,
-            updateDoc,
-            getFirestore
-        } = sy_services();
-        await updateDoc(doc(getFirestore(), "playlists", playlistId), {
-            isPublic
-        });
-        showToast(isPublic ? "Playlist ahora es pública." : "Playlist ahora es privada.");
-    } catch (e) {
-        console.error("Error updating privacy:", e);
+/**
+ * Muestra el contenido de una playlist en la vista del reproductor.
+ * @param {string} plId - El ID de la playlist a mostrar.
+ */
+export async function showPlaylistInPlayer(plId) {
+    const pl = communityPlaylists.find(p => p.id === plId) || userPlaylists.find(p => p.id === plId);
+    if (!pl) {
+        showToast("No se pudo encontrar la playlist.", true);
+        return;
+    }
+    viewingPlaylistId = pl.id;
+    switchView('view-player');
+
+    let tracksToShow = [];
+    if (pl.source === 'spotify' && pl.spotifyTracks) {
+        tracksToShow = pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st, id: null, thumb: st.thumb || pl.cover });
+    } else {
+        tracksToShow = pl.tracks || [];
+    }
+    
+    renderQueue(tracksToShow, pl.name);
+
+    if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status) && isMyPlaylist(pl.id)) {
+        startResolverJob(plId);
     }
 }
+
+
+// =======================================================
+// ACCIONES DE PLAYLIST (MENÚS, MODIFICACIONES)
+// =======================================================
 
 async function openPlaylistOptionsMenu(pl) {
     const isOwner = isMyPlaylist(pl.id);
     let actions = [];
     if (isOwner) {
-        actions.push({
-            id: "rename",
-            label: "Renombrar"
-        });
-        actions.push({
-            id: "delete",
-            label: "Eliminar playlist",
-            danger: true
-        });
+        actions.push({ id: "rename", label: "Renombrar" });
+        actions.push({ id: "delete", label: "Eliminar playlist", danger: true });
+        actions.push({ id: "toggle_privacy", label: pl.isPublic ? "Hacer Privada" : "Hacer Pública" });
     } else if (currentUser && pl.isPublic) {
-        actions.push({
-            id: "save_copy",
-            label: "Guardar una copia"
-        });
+        actions.push({ id: "save_copy", label: "Guardar una copia" });
     }
-    actions.push({
-        id: "cancel",
-        label: "Cancelar",
-        ghost: true
-    });
+    actions.push({ id: "cancel", label: "Cancelar", ghost: true });
 
     openActionSheet({
         title: pl.name,
         actions: actions,
         onAction: async (act) => {
-            const {
-                getFirestore,
-                doc,
-                updateDoc,
-                deleteDoc,
-                serverTimestamp,
-                addDoc,
-                collection
-            } = sy_services();
+            const { getFirestore, doc, updateDoc, deleteDoc, serverTimestamp, addDoc, collection } = sy_services();
             const db = getFirestore();
             if (act === "rename" && isOwner) {
                 const newName = prompt("Nuevo nombre para la playlist:", pl.name);
                 if (newName && newName.trim()) {
-                    await updateDoc(doc(db, "playlists", pl.id), {
-                        name: newName.trim(),
-                        updatedAt: serverTimestamp()
-                    });
+                    await updateDoc(doc(db, "playlists", pl.id), { name: newName.trim(), updatedAt: serverTimestamp() });
                 }
             }
             if (act === "delete" && isOwner) {
                 openActionSheet({
                     title: `¿Eliminar "${pl.name}"?`,
-                    actions: [{
-                        id: "confirm_delete",
-                        label: "Sí, eliminar",
-                        danger: true
-                    }, {
-                        id: "cancel",
-                        label: "Cancelar",
-                        ghost: true
-                    }],
-                    onAction: async (confirmAct) => {
-                        if (confirmAct === 'confirm_delete') await deleteDoc(doc(db, "playlists", pl.id));
-                    }
+                    actions: [{ id: "confirm_delete", label: "Sí, eliminar", danger: true }, { id: "cancel", label: "Cancelar", ghost: true }],
+                    onAction: async (confirmAct) => { if (confirmAct === 'confirm_delete') await deleteDoc(doc(db, "playlists", pl.id)); }
                 });
             }
+            if (act === "toggle_privacy" && isOwner) {
+                 await updateDoc(doc(db, "playlists", pl.id), { isPublic: !pl.isPublic });
+                 showToast(pl.isPublic ? "Playlist ahora es privada." : "Playlist ahora es pública.");
+            }
             if (act === "save_copy" && !isOwner && currentUser) {
-                const newCreator = prompt("Tu nombre de creador para esta copia:", currentUser.email.split('@')[0]);
-                if (!newCreator) return;
+                const newCreator = currentUser.displayName || currentUser.email.split('@')[0];
                 const newPlaylistData = { ...pl,
                     name: `${pl.name} (Copia)`,
-                    creator: newCreator,
-                    isPublic: false,
-                    updatedAt: serverTimestamp(),
-                    ownerUserId: currentUser.uid,
+                    creator: newCreator, isPublic: false,
+                    updatedAt: serverTimestamp(), ownerUserId: currentUser.uid,
                     originalOwnerId: pl.ownerUserId || null
                 };
                 delete newPlaylistData.id;
@@ -226,127 +181,158 @@ async function openPlaylistOptionsMenu(pl) {
     });
 }
 
-function playFromPlaylist(plId, i, autoplay = false) {
-    const pl = communityPlaylists.find(p => p.id === plId);
-    if (!pl) return;
-    viewingPlaylistId = plId;
-    const tracks = (pl.tracks || []).filter(t => t && (t.id || t.urls));
-    if (tracks.length === 0) {
-        showToast("Esta playlist no tiene canciones para reproducir.", true);
+/**
+ * Abre el "sheet" para agregar una canción a una playlist.
+ * @param {object} track - La canción a agregar.
+ */
+export function openPlaylistSheet(track) {
+    if (!currentUser) {
+        showAuthModal('login');
+        showToast("Inicia sesión para usar playlists.", true);
         return;
     }
-    setQueue(tracks, "playlist", i);
-    playCurrent(autoplay);
-    renderPlaylists();
-}
-
-window.renderQueue = function(queueItems, title) {
-    const panel = document.getElementById("queuePanel");
-    window.currentQueueTitle = title;
-    if (!panel) return;
-    panel.classList.remove("hide");
-    panel.innerHTML = `<div class="section-head"><h3 id="queueTitle"></h3></div><ul id="queueList"></ul>`;
-    panel.querySelector('#queueTitle').textContent = title;
-    const ul = document.getElementById("queueList");
-    ul.innerHTML = "";
-    (queueItems || []).forEach((t, i) => {
-        const li = document.createElement("li");
-        li.className = "queue-item";
-        li.dataset.trackId = t.id;
-        const isResolved = !!(t.id || t.urls);
-        li.innerHTML = `
-          <div class="thumb-wrap">
-            <img class="thumb" src="${t.thumb}" alt="">
-            ${isResolved ? `<button class="card-play" title="Play"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>` : `<div class="pending-indicator">Pendiente</div>`}
-          </div>
-          <div class="meta">
-            <div class="title-line"><span class="title-text">${t.title}</span><span class="eq"><span></span><span></span><span></span></span></div>
-            <div class="subtitle">${cleanAuthor(t.author) || ""}</div>
-          </div>
-          <div class="actions">
-             <button class="icon-btn fav-btn" title="Agregar/Quitar Favorito">${favIconSvg(isFav(t.id))}</button>
-             <button class="icon-btn more" title="Opciones" ${!isResolved ? 'disabled' : ''}>${dotsSvg()}</button>
-          </div>`;
-        li.onclick = (e) => {
-            if (e.target.closest(".more,.fav-btn,.card-play") || !isResolved) return;
-            playFromPlaylist(viewingPlaylistId, i, true);
-        };
-        li.querySelector(".card-play")?.addEventListener("click", (e) => {
-            e.stopPropagation();
-            playFromPlaylist(viewingPlaylistId, i, true)
-        });
-        ul.appendChild(li);
+    trackToAdd = track;
+    const sheet = $("#playlistSheet");
+    const choices = $("#plChoices");
+    choices.innerHTML = "";
+    userPlaylists.forEach(p => {
+        choices.innerHTML += `<button class="sheet-item" data-id="${p.id}">${p.name}</button>`;
     });
-    refreshIndicators();
+    sheet.classList.add("show");
+}
+
+async function handleAddToPlaylist(playlistId) {
+    if (!trackToAdd || !playlistId) return;
+    const success = await addSongToPlaylist(playlistId, trackToAdd);
+    if (success) showToast(`Agregado a ${userPlaylists.find(p=>p.id===playlistId)?.name || 'playlist'}.`);
+    $("#playlistSheet").classList.remove("show");
+    trackToAdd = null;
+}
+
+async function handleCreateAndAdd() {
+    const name = $("#plNewNameFromSong").value.trim();
+    if (!name || !trackToAdd) return;
+    const creator = currentUser.displayName || currentUser.email.split('@')[0];
+    const newPlId = await createNewPlaylistFromSong(name, creator, trackToAdd);
+    if (newPlId) {
+        showToast(`Playlist "${name}" creada y canción agregada.`);
+        $("#plNewNameFromSong").value = "";
+        $("#playlistSheet").classList.remove("show");
+        trackToAdd = null;
+    }
 }
 
 
-async function showPlaylistInPlayer(plId) {
-    const pl = communityPlaylists.find(p => p.id === plId);
+// =======================================================
+// ACCIONES DE CANCIONES DENTRO DE UNA PLAYLIST
+// =======================================================
+export async function removeFromPlaylist(playlistId, trackId) {
+    if (!isMyPlaylist(playlistId)) return;
+    const pl = userPlaylists.find(p => p.id === playlistId);
     if (!pl) return;
-    viewingPlaylistId = pl.id;
-    switchView('view-player');
-    const tracksToShow = (pl.source === 'spotify' && pl.spotifyTracks) ? pl.spotifyTracks.map((st, i) => (pl.tracks && pl.tracks[i]) ? pl.tracks[i] : { ...st,
-        id: null,
-        thumb: st.thumb || pl.cover
-    }) : (pl.tracks || []);
-    renderQueue(tracksToShow, pl.name);
-    if (pl.source === 'spotify' && ['unresolved', 'partial'].includes(pl.status) && isMyPlaylist(pl.id)) {
-        startResolverJob(plId);
+
+    const updatedTracks = pl.tracks.filter(t => t && t.id !== trackId);
+
+    const { doc, updateDoc, serverTimestamp } = sy_services();
+    await updateDoc(doc(sy_services().getFirestore(), "playlists", playlistId), {
+        tracks: updatedTracks,
+        trackCount: updatedTracks.length,
+        updatedAt: serverTimestamp()
+    });
+    showToast("Canción eliminada de la playlist.");
+    // No es necesario llamar a renderQueue aquí, el listener de Firestore lo hará.
+}
+
+export async function renameTrackInPlaylist(playlistId, trackId) {
+    if (!isMyPlaylist(playlistId)) return;
+    const pl = userPlaylists.find(p => p.id === playlistId);
+    if (!pl) return;
+    
+    const trackIndex = pl.tracks.findIndex(t => t && t.id === trackId);
+    if(trackIndex === -1) return;
+    
+    const currentTitle = pl.tracks[trackIndex].title;
+    const newTitle = prompt("Nuevo nombre para la canción:", currentTitle);
+
+    if (newTitle && newTitle.trim() && newTitle.trim() !== currentTitle) {
+        const updatedTracks = [...pl.tracks];
+        updatedTracks[trackIndex].title = newTitle.trim();
+        const { doc, updateDoc, serverTimestamp } = sy_services();
+        await updateDoc(doc(sy_services().getFirestore(), "playlists", playlistId), {
+            tracks: updatedTracks,
+            updatedAt: serverTimestamp()
+        });
+        showToast("Canción renombrada.");
     }
 }
 
-function hideQueuePanel() {
-    const qp = document.getElementById("queuePanel");
-    if (qp) qp.classList.add("hide");
-    if (window.resolverJobUnsubscribe) {
-        window.resolverJobUnsubscribe();
-        window.resolverJobUnsubscribe = null;
-    }
-    viewingPlaylistId = null;
-    renderPlaylists();
+export async function reassignTrackSource(playlistId, trackId) {
+    showToast("Función no implementada aún.", true);
+    // Lógica futura:
+    // 1. Obtener la canción actual.
+    // 2. Pedir al usuario una nueva búsqueda (ej. "Artista - Título (Remix)").
+    // 3. Llamar a startSearch del buscador.
+    // 4. Mostrar resultados y permitir al usuario seleccionar uno.
+    // 5. Actualizar el ID de la canción en la playlist en Firestore.
 }
 
-function initPlaylistModals() {
-    document.getElementById("btnNewPlaylist")?.addEventListener("click", () => {
+// =======================================================
+// INICIALIZACIÓN DE UI
+// =======================================================
+export function initPlaylistModals() {
+    $("#btnNewPlaylist")?.addEventListener("click", () => {
         if (!currentUser) {
-            showToast("Inicia sesión para crear playlists.", true);
             showAuthModal('login');
+            showToast("Inicia sesión para crear playlists.", true);
             return;
         }
-        document.getElementById("createPlaylistSheet").classList.add("show");
+        $("#createPlaylistSheet").classList.add("show");
     });
-    document.getElementById("createPlCancel").onclick = () => document.getElementById("createPlaylistSheet").classList.remove("show");
-    document.getElementById("createPlaylistSheet").addEventListener("click", e => {
-        if (e.target.id === 'createPlaylistSheet') document.getElementById("createPlaylistSheet").classList.remove("show");
-    });
-    document.getElementById("createPlConfirm").onclick = async () => {
-        const name = document.getElementById("newPlName").value.trim();
-        const creator = document.getElementById("newPlCreator").value.trim();
+
+    $("#createPlCancel").onclick = () => $("#createPlaylistSheet").classList.remove("show");
+    $("#createPlaylistSheet").addEventListener("click", e => { if (e.target.id === 'createPlaylistSheet') $("#createPlaylistSheet").classList.remove("show"); });
+    $("#createPlConfirm").onclick = async () => {
+        const name = $("#newPlName").value.trim();
+        const creator = currentUser.displayName || currentUser.email.split('@')[0];
         if (await createNewPlaylist(name, creator)) {
-            document.getElementById("newPlName").value = "";
-            document.getElementById("newPlCreator").value = "";
-            document.getElementById("createPlaylistSheet").classList.remove("show");
+            $("#newPlName").value = "";
+            $("#createPlaylistSheet").classList.remove("show");
         }
     };
-}
-
-function initSpotifyImportUI() {
-    document.getElementById("syBtnImportSpotify")?.addEventListener('click', () => {
-        if (!currentUser) {
-            showToast("Inicia sesión para importar desde Spotify.", true);
-            showAuthModal('login');
+    
+    // Listeners para el sheet de "Agregar a playlist"
+    const plSheet = $("#playlistSheet");
+    plSheet?.addEventListener('click', e => {
+        if (e.target === plSheet || e.target.id === 'plCancel') {
+            plSheet.classList.remove("show");
             return;
         }
-        document.getElementById("sySpotifyModal").classList.add('show')
+        const choice = e.target.closest('.sheet-item');
+        if (choice) handleAddToPlaylist(choice.dataset.id);
     });
-    document.getElementById("sySmFetch")?.addEventListener('click', handleSpotifyImport);
-    document.getElementById("spotifyImportBackBtn")?.addEventListener('click', () => {
-        document.getElementById("sySmInputUrl").value = "";
+    $("#plCreateFromSong")?.addEventListener('click', handleCreateAndAdd);
+}
+
+
+// =======================================================
+// LÓGICA DE IMPORTACIÓN DE SPOTIFY
+// =======================================================
+export function initSpotifyImportUI() {
+    $("#syBtnImportSpotify")?.addEventListener('click', () => {
+        if (!currentUser) {
+            showAuthModal('login');
+            showToast("Inicia sesión para importar desde Spotify.", true);
+            return;
+        }
+        $("#sySpotifyModal").classList.add('show')
+    });
+    $("#sySmFetch")?.addEventListener('click', handleSpotifyImport);
+    $("#spotifyImportBackBtn")?.addEventListener('click', () => {
+        $("#sySmInputUrl").value = "";
         switchView('view-playlists');
     });
-    document.getElementById("spotifyImportConfirmBtn").onclick = async () => {
-        const grid = document.getElementById("spotifyUserPlaylistsGrid");
+    $("#spotifyImportConfirmBtn").onclick = async () => {
+        const grid = $("#spotifyUserPlaylistsGrid");
         const selectedPlaylists = Array.from(grid.querySelectorAll(".spotify-pl-card.selected")).map(card => card.playlistData);
         if (selectedPlaylists.length === 0) {
             showToast("Selecciona al menos una playlist.", true);
@@ -361,24 +347,17 @@ function initSpotifyImportUI() {
 }
 
 async function handleSpotifyImport() {
-    const input = document.getElementById("sySmInputUrl").value.trim();
+    const input = $("#sySmInputUrl").value.trim();
     if (!input) return;
-    const fetchBtn = document.getElementById("sySmFetch");
+    const fetchBtn = $("#sySmFetch");
     fetchBtn.disabled = true;
     fetchBtn.textContent = 'Buscando...';
     try {
-        const {
-            type,
-            id
-        } = parseSpotifyLink(input);
+        const { type, id } = parseSpotifyLink(input);
         let playlists = [];
         if (type === 'playlist') {
             const token = await getSpotifyToken();
-            const response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
+            const response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener la playlist.');
             playlists = [await response.json()];
         } else if (type === 'user') {
@@ -389,7 +368,7 @@ async function handleSpotifyImport() {
         }
         if (playlists.length > 0) {
             showUserPlaylistsSelectionView(playlists);
-            document.getElementById("sySpotifyModal").classList.remove('show');
+            $("#sySpotifyModal").classList.remove('show');
         } else {
             showToast("No se encontraron playlists públicas.", true);
         }
@@ -402,54 +381,36 @@ async function handleSpotifyImport() {
 }
 
 function parseSpotifyLink(input) {
-    const cleanedInput = input.trim().split('?')[0];
-    const playlistRegex = /open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
-    const userRegex = /open\.spotify\.com\/user\/([a-zA-Z0-9]+)/;
-    let match = cleanedInput.match(playlistRegex);
-    if (match && match[1]) return {
-        type: 'playlist',
-        id: match[1]
-    };
-    match = cleanedInput.match(userRegex);
-    if (match && match[1]) return {
-        type: 'user',
-        id: match[1]
-    };
-    if (!cleanedInput.includes(".") && !cleanedInput.includes("/")) return {
-        type: 'user',
-        id: cleanedInput
-    };
-    return {
-        type: null,
-        id: null
-    };
+    try {
+      const url = new URL(input);
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts[0] === 'playlist') return { type: 'playlist', id: pathParts[1] };
+      if (pathParts[0] === 'user') return { type: 'user', id: pathParts[1] };
+    } catch (e) {
+      // No es una URL, puede ser un ID de usuario
+      if (!input.includes(".") && !input.includes("/")) return { type: 'user', id: input };
+    }
+    return { type: null, id: null };
 }
 
 async function fetchUserPlaylists(userId) {
     const token = await getSpotifyToken();
     if (!token) return [];
-    let allPlaylists = [];
-    let url = `https://api.spotify.com/v1/users/${userId}/playlists?limit=50`;
+    let allPlaylists = [], url = `https://api.spotify.com/v1/users/${userId}/playlists?limit=50`;
     while (url) {
         try {
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('No se pudo obtener las playlists.');
             const data = await response.json();
             allPlaylists = allPlaylists.concat(data.items);
             url = data.next;
-        } catch (e) {
-            return [];
-        }
+        } catch (e) { return []; }
     }
     return allPlaylists;
 }
 
 function showUserPlaylistsSelectionView(playlists) {
-    const grid = document.getElementById("spotifyUserPlaylistsGrid");
+    const grid = $("#spotifyUserPlaylistsGrid");
     if (!grid) return;
     grid.innerHTML = "";
     playlists.forEach(pl => {
@@ -457,7 +418,7 @@ function showUserPlaylistsSelectionView(playlists) {
         card.className = "spotify-pl-card";
         card.dataset.playlistId = pl.id;
         card.playlistData = pl;
-        card.innerHTML = ` <img class="spotify-pl-card-thumb" src="${pl.images?.[0]?.url || 'https://i.imgur.com/gCa3j5g.png'}" alt="Cover de ${pl.name}"> <div class="spotify-pl-card-meta"> <div class="spotify-pl-card-title">${pl.name}</div> <div class="spotify-pl-card-count">${pl.tracks.total} canciones</div> </div> <div class="spotify-pl-card-checkbox"> <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> </div> `;
+        card.innerHTML = ` <img class="spotify-pl-card-thumb" src="${pl.images?.[0]?.url || 'logo78.png'}" alt="Cover de ${pl.name}"> <div class="spotify-pl-card-meta"> <div class="spotify-pl-card-title">${pl.name}</div> <div class="spotify-pl-card-count">${pl.tracks.total} canciones</div> </div> <div class="spotify-pl-card-checkbox"> <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> </div> `;
         card.addEventListener('click', () => card.classList.toggle('selected'));
         grid.appendChild(card);
     });
@@ -478,47 +439,32 @@ async function fetchAndImportSinglePlaylist(plData) {
         spotifyTracks: spotifyTracks,
     });
 }
+
 async function getSpotifyToken() {
-    if (spotifyToken.value && Date.now() < spotifyToken.expires) {
-        return spotifyToken.value;
-    }
+    if (spotifyToken.value && Date.now() < spotifyToken.expires) return spotifyToken.value;
     try {
         const response = await fetch("https://accounts.spotify.com/api/token", {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET)
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET) },
             body: 'grant_type=client_credentials'
         });
         if (!response.ok) throw new Error('Spotify auth failed');
         const data = await response.json();
-        spotifyToken = {
-            value: data.access_token,
-            expires: Date.now() + (data.expires_in * 1000) - 60000
-        };
+        spotifyToken = { value: data.access_token, expires: Date.now() + (data.expires_in * 1000) - 60000 };
         return spotifyToken.value;
-    } catch (e) {
-        return null;
-    }
+    } catch (e) { return null; }
 }
+
 async function fetchAllSpotifyPlaylistTracks(playlistId) {
     const token = await getSpotifyToken();
     if (!token) return [];
-    let allTracks = [];
-    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`;
+    let allTracks = [], url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,name,artists(name),album(images))),next`;
     while (url) {
         try {
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('Could not get songs');
             const data = await response.json();
-            const tracks = data.items.map(({
-                track
-            }) => track ? {
+            const tracks = data.items.map(({ track }) => track ? {
                 spotifyId: track.id,
                 title: track.name,
                 author: track.artists.map(a => a.name).join(', '),
@@ -526,9 +472,7 @@ async function fetchAllSpotifyPlaylistTracks(playlistId) {
             } : null).filter(Boolean);
             allTracks = allTracks.concat(tracks);
             url = data.next;
-        } catch (e) {
-            url = null;
-        }
+        } catch (e) { url = null; }
     }
     return allTracks;
 }
