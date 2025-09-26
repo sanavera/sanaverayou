@@ -18,7 +18,6 @@ function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); }
  * @returns {object} - Objeto con instancias de funciones de Firestore.
  */
 function sy_fs() {
-    // Las importaciones de Firestore ahora se manejan a nivel global
     const f = window.firebase ? window.firebase.firestore : {};
     return {
         db: db,
@@ -33,7 +32,7 @@ function sy_fs() {
         onSnapshot: f.onSnapshot,
         getDocs: f.getDocs,
         serverTimestamp: f.serverTimestamp,
-        getDoc: f.getDoc
+        getDoc: f.getDoc,
     };
 }
 
@@ -356,14 +355,23 @@ window.syAuth = {
 async function initFirebase() {
     const firebaseConfig = { apiKey: "AIzaSyBojG3XoEmxcxWhpiOkL8k8EvoxIeZdFrU", authDomain: "sanaverayou.firebaseapp.com", projectId: "sanaverayou", storageBucket: "sanaverayou.appspot.com", messagingSenderId: "275513302327", appId: "1:275513302327:web:3b26052bf02e657d450eb2" };
     
+    // Espera a que las librerías se carguen y se asignen a `window.firebase`
+    if (!window.firebase.app) {
+        window.firebase = {
+            app: window.firebase.app,
+            auth: window.firebase.auth,
+            firestore: window.firebase.firestore
+        };
+    }
+    
     const { initializeApp } = window.firebase.app;
-    const { getFirestore } = window.firebase.firestore;
+    const { getFirestore, collection, onSnapshot, query, orderBy, getDocs, where } = window.firebase.firestore;
+    const { getAuth, onAuthStateChanged, signInAnonymously } = window.firebase.auth;
     
     window.firebase.app = initializeApp(firebaseConfig);
     db = getFirestore(window.firebase.app);
-    auth = window.firebase.auth.getAuth(window.firebase.app);
 
-    onSnapshot(sy_fs().query(sy_fs().collection(db, "playlists"), sy_fs().orderBy("updatedAt", "desc")), (snapshot) => {
+    onSnapshot(query(collection(db, "playlists"), orderBy("updatedAt", "desc")), (snapshot) => {
         const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
         communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
