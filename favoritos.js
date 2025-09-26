@@ -1,65 +1,80 @@
-// Contiene la lógica para renderizar y reproducir desde la vista de favoritos.
-import {
-    userFavorites,
-    isFav
-} from './firebase.js';
-import {
-    cleanAuthor,
-    favIconSvg,
-    dotsSvg,
-    $
-} from './main.js';
-import {
-    setQueue,
-    playCurrent,
-    togglePlay,
-    refreshIndicators,
-    currentTrack
-} from './reproductor.js';
+// Contiene toda la lógica para gestionar las canciones favoritas.
 
+let favs = [];
+const LS_FAVS = "sanayera_favs_v1";
 
 /**
- * Actualiza el banner (hero) de la vista de favoritos.
- * @param {object|null} track - La canción actual para mostrar, o null.
+ * Carga las canciones favoritas desde el Local Storage.
  */
-function updateHero(track) {
-    const hero = $("#favHero");
-    const title = $("#favNowTitle");
-    if (!hero || !title) return;
-
-    if (track && userFavorites.some(f => f.id === track.id)) {
-        hero.style.backgroundImage = `url(${track.thumb})`;
-        title.textContent = track.title;
-    } else {
-        const firstFav = userFavorites[0];
-        hero.style.backgroundImage = firstFav ? `url(${firstFav.thumb})` : 'none';
-        title.textContent = firstFav ? firstFav.title : 'Tus Canciones Favoritas';
+function loadFavs() {
+    try {
+        favs = JSON.parse(localStorage.getItem(LS_FAVS) || "[]");
+    } catch {
+        favs = [];
     }
 }
 
+/**
+ * Guarda la lista actual de favoritos en el Local Storage.
+ */
+function saveFavs() {
+    localStorage.setItem(LS_FAVS, JSON.stringify(favs));
+}
+
+/**
+ * Comprueba si una canción ya está en favoritos, usando su ID único.
+ * @param {string} id - El ID de la canción (de YouTube o Archive.org).
+ * @returns {boolean} - True si es favorita, false si no.
+ */
+function isFav(id) {
+    if (!id) return false;
+    return favs.some(f => f.id === id);
+}
+
+/**
+ * Agrega o quita una canción de la lista de favoritos.
+ * Funciona tanto para canciones de YouTube como de Archive.org.
+ * @param {object} track - El objeto de la canción a agregar/quitar.
+ */
+function toggleFav(track) {
+    if (!track || !track.id) {
+        showToast("No se puede agregar a favoritos esta canción.", true);
+        return;
+    }
+    
+    if (isFav(track.id)) {
+        favs = favs.filter(f => f.id !== track.id);
+        showToast("Quitado de Favoritos");
+    } else {
+        favs.unshift(track);
+        showToast("Agregado a Favoritos");
+    }
+    saveFavs();
+    renderFavs();
+    refreshIndicators();
+}
 
 /**
  * Renderiza la lista de canciones favoritas en la vista "Favoritos".
- * Esta función es llamada por firebase.js cuando los datos de favoritos cambian.
  */
-export function renderFavs() {
+function renderFavs() {
     const ul = $("#favList");
     if (!ul) return;
     ul.innerHTML = "";
 
-    if (!userFavorites || userFavorites.length === 0) {
+    if (favs.length === 0) {
         ul.innerHTML = `<div class="empty muted">Aún no tienes favoritos. Agrega canciones con el ícono de corazón.</div>`;
         updateHero(null);
         return;
     }
 
-    userFavorites.forEach(it => {
+    favs.forEach(it => {
         const li = document.createElement("li");
         li.className = "fav-item";
         li.dataset.trackId = it.id;
         li.innerHTML = `
       <div class="thumb-wrap">
-        <img class="thumb" src="${it.thumb}" alt="Miniatura de ${it.title}" onerror="this.src='logo78.png'">
+        <img class="thumb" src="${it.thumb}" alt="">
         <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
           <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
@@ -78,24 +93,25 @@ export function renderFavs() {
         </button>
         <button class="icon-btn more" title="Opciones" aria-label="Opciones">${dotsSvg()}</button>
       </div>`;
-
+        
         li.addEventListener("click", e => {
-            if (e.target.closest(".more, .fav-btn, .card-play")) return;
+            if (e.target.closest(".more") || e.target.closest(".fav-btn") || e.target.closest(".card-play")) return;
             playFromFav(it, true);
         });
 
         const cardPlayBtn = li.querySelector(".card-play");
-        cardPlayBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (currentTrack?.id === it.id) {
-                togglePlay();
-            } else {
-                playFromFav(it, true);
-            }
-        };
+        if (cardPlayBtn) {
+            cardPlayBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (currentTrack?.id === it.id) {
+                    togglePlay();
+                } else {
+                    playFromFav(it, true);
+                }
+            };
+        }
         ul.appendChild(li);
     });
-
     updateHero(currentTrack);
     refreshIndicators();
 }
@@ -105,10 +121,9 @@ export function renderFavs() {
  * @param {object} track - La canción seleccionada para empezar a reproducir.
  * @param {boolean} autoplay - Si debe empezar a reproducir automáticamente.
  */
-export function playFromFav(track, autoplay = false) {
-    const i = userFavorites.findIndex(f => f.id === track.id);
-    if (i === -1) return;
-
-    setQueue(userFavorites, "favs", i);
+function playFromFav(track, autoplay = false) {
+    const i = favs.findIndex(f => f.id === track.id);
+    setQueue(favs, "favs", Math.max(i, 0));
+    viewingPlaylistId = null;
     playCurrent(autoplay);
 }
