@@ -198,7 +198,7 @@ function playCurrent(autoplay = false) {
         archivePlayer.pause();
         archivePlayer.src = "";
         if (!YT_READY || !currentTrack.id) {
-            console.warn("Canción de YT inválida o YT no está lista, saltando...", currentTrack);
+            console.warn("Canción de YT inválida o YT no está listo, saltando...", currentTrack);
             next();
             return;
         }
@@ -350,11 +350,15 @@ function stopTimer(){
 
 function updateMediaSession(track){
   if(!('mediaSession' in navigator) || !track) return;
+  
+  const allPlaylists = [...userPlaylists, ...communityPlaylists];
+  const currentPlaylistName = queueType === 'playlist' ? (allPlaylists.find(p => p.id === viewingPlaylistId)?.name || '') : currentQueueTitle;
+
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Reproduciendo',
       artist: cleanAuthor(track.author) || '—',
-      album: queueType === 'playlist' ? (communityPlaylists.find(p => p.id === viewingPlaylistId)?.name || '') : currentQueueTitle,
+      album: currentPlaylistName,
       artwork: [{ src: track.thumb, sizes: '512x512', type: 'image/jpeg' }]
     });
   } catch(e) { console.error("Media Session Error:", e) }
@@ -402,9 +406,9 @@ function initPlayer() {
     $("#seek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     $("#miniSeek")?.addEventListener("input", e => seekToFrac(parseInt(e.target.value, 10) / 1000));
     
-    // --- LÓGICA AGREGADA: Evento para el botón de guardar álbum ---
     $("#btnSaveAlbum")?.addEventListener('click', () => {
         if (queueType === 'archive_album' && queue && queue.length > 0) {
+            // Esta función ahora vive en playlists.js y maneja la lógica de usuario/invitado
             saveCurrentArchiveAlbumAsPlaylist(); 
         }
     });
