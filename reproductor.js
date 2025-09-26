@@ -1,13 +1,13 @@
 // Contiene la lógica del reproductor de YouTube, la cola de reproducción y los controles.
 import {
-  //  currentUser,
-  //  sy_services,
-    // createLiveSession,
-   // updateLiveSession,
- //   deleteLiveSession,
-  //  listenToSessionChanges,
-  //  addSongToPlaylist,
-   // createNewPlaylist
+    currentUser,
+   sy_services,
+    createLiveSession,
+   updateLiveSession,
+   deleteLiveSession,
+   listenToSessionChanges,
+    addSongToPlaylist,
+    createNewPlaylist
 } from './firebase.js';
 
 export let ytPlayer = null;
