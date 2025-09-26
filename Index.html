@@ -18,23 +18,39 @@
     src="logo78.png"
     alt="Logo"
   />
-
-  <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
-    <span class="ico sun" aria-hidden="true"></span>
-    <span class="ico moon" aria-hidden="true"></span>
-  </button>
-
-  <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-      <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
-    </svg>
-  </button>
   
-  <button id="userFab" class="search-fab user-fab" aria-label="Menú de usuario">
-      <div id="userAvatar" class="user-avatar">
-          <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.81 4 2.09C11.46 4.81 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+  <!-- Contenedor para los iconos de la esquina superior derecha -->
+  <div class="header-actions">
+    <div class="user-menu-container">
+      <button id="userMenuBtn" class="user-menu-btn" aria-label="Menú de usuario">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+      </button>
+      <!-- Mini modal de usuario, oculto por defecto -->
+      <div id="userModal" class="user-modal hide">
+        <div id="user-info" class="user-info-panel hide">
+            <span id="user-email"></span>
+        </div>
+        <a href="#" class="user-modal-item" data-action="register">Registrarse</a>
+        <a href="#" class="user-modal-item" data-action="login">Iniciar sesión</a>
+        <a href="#" class="user-modal-item hide" data-action="logout">Cerrar sesión</a>
+        <a href="#" class="user-modal-item" data-action="toggle-theme">
+          <span>Cambiar tema</span>
+          <div class="theme-toggle-visual">
+            <span class="ico sun" aria-hidden="true"></span>
+            <span class="ico moon" aria-hidden="true"></span>
+          </div>
+        </a>
       </div>
-  </button>
+    </div>
+    <button id="searchFab" class="search-fab" aria-label="Buscar">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
+      </svg>
+    </button>
+  </div>
+
 
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
@@ -43,22 +59,6 @@
           <button class="switch-btn active" data-type="youtube">Canciones</button>
           <button class="switch-btn" data-type="archive">Álbumes</button>
       </div>
-    </div>
-  </div>
-  
-  <div id="authModal" class="sheet">
-    <div class="sheet-content">
-        <div class="sheet-title" id="authTitle"></div>
-        <div class="sheet-form">
-            <input id="usernameInput" type="text" placeholder="Nombre de usuario" autocomplete="off" class="hide" />
-            <input id="authEmail" type="email" placeholder="Correo electrónico" autocomplete="email" />
-            <input id="authPassword" type="password" placeholder="Contraseña" autocomplete="current-password" />
-        </div>
-        <div class="sheet-actions">
-            <button id="authCancel" class="sheet-item ghost">Cancelar</button>
-            <button id="authButton" class="sheet-item pill"></button>
-        </div>
-        <button id="switchAuthMode" class="sheet-item ghost" style="margin-top: 16px;"></button>
     </div>
   </div>
 
@@ -243,6 +243,26 @@
           <button id="closeSessions" class="sheet-item ghost">Cerrar</button>
       </div>
   </div>
+  
+  <!-- Modal de Autenticación -->
+  <div id="authSheet" class="sheet">
+      <div class="sheet-content">
+          <div id="authTitle" class="sheet-title">Iniciar Sesión</div>
+          <div id="authError" class="auth-error hide"></div>
+          <div class="sheet-form">
+              <input id="authEmail" type="email" placeholder="Correo electrónico" autocomplete="email" />
+              <input id="authPassword" type="password" placeholder="Contraseña" autocomplete="current-password" />
+          </div>
+          <div class="sheet-actions">
+              <button id="authCancel" class="sheet-item ghost">Cancelar</button>
+              <button id="authConfirm" class="sheet-item pill">Confirmar</button>
+          </div>
+          <div class="auth-switch">
+              <a href="#" id="authSwitchLink">¿No tienes cuenta? Regístrate</a>
+          </div>
+      </div>
+  </div>
+
 
   <div id="startStreamSheet" class="sheet">
       <div class="sheet-content">
