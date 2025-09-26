@@ -1,24 +1,77 @@
-// Contiene toda la lógica para gestionar las canciones favoritas.
+// Contiene toda la lógica para gestionar las canciones favoritas,
+// adaptándose si el usuario está registrado (Firestore) o es invitado (LocalStorage).
 
 let favs = [];
+const LS_GUEST_FAVS = "sy_favorites_v2"; // Nueva clave para evitar conflictos
+
+// --- Funciones para Invitados (LocalStorage) ---
 
 /**
- * Carga las canciones favoritas desde Firestore a través de un listener.
- * Esta función es llamada una sola vez para inicializar el listener.
- * Los datos se actualizarán automáticamente.
+ * Carga las canciones favoritas del invitado desde el Local Storage.
+ * Esta función es llamada por firebase.js cuando se detecta que no hay usuario.
  */
-function initFavorites() {
-    window.syAuth.onFavoritesChange(newFavs => {
-        favs = newFavs;
+function loadGuestFavorites() {
+    try {
+        favs = JSON.parse(localStorage.getItem(LS_GUEST_FAVS) || "[]");
+    } catch {
+        favs = [];
+    }
+    renderFavs();
+}
+
+/**
+ * Guarda la lista actual de favoritos del invitado en el Local Storage.
+ */
+function saveGuestFavorites() {
+    localStorage.setItem(LS_GUEST_FAVS, JSON.stringify(favs));
+}
+
+// --- Funciones para Usuarios Registrados (Firestore) ---
+
+let favsUnsubscribe = null; // Para detener el listener al cerrar sesión
+
+/**
+ * Escucha en tiempo real los favoritos del usuario desde Firestore.
+ * Esta función es llamada por firebase.js cuando un usuario inicia sesión.
+ */
+function loadUserFavorites() {
+    const { currentUser, db, collection, query, onSnapshot, orderBy } = sy_fs();
+    if (!currentUser) return;
+
+    // Si hay un listener activo de un usuario anterior, lo detenemos
+    if (favsUnsubscribe) favsUnsubscribe();
+
+    const q = query(collection(db, "users", currentUser.uid, "favorites"), orderBy("addedAt", "desc"));
+
+    favsUnsubscribe = onSnapshot(q, (snapshot) => {
+        favs = snapshot.docs.map(doc => doc.data());
         renderFavs();
-        updateUIOnTrackChange(); // Asegura que los indicadores de favorito se actualicen
+        refreshIndicators();
     });
 }
 
 /**
- * Comprueba si una canción ya está en favoritos, usando su ID único.
- * @param {string} id - El ID de la canción (de YouTube o Archive.org).
- * @returns {boolean} - True si es favorita, false si no.
+ * Guarda todos los favoritos en Firestore (usado al sincronizar).
+ * @param {Array} favoritesArray - El array de favoritos a guardar.
+ */
+async function saveFavorites(favoritesArray) {
+    const { currentUser, db, doc, setDoc, serverTimestamp } = sy_fs();
+    if (!currentUser || !favoritesArray || favoritesArray.length === 0) return;
+
+    const favCollectionRef = collection(db, "users", currentUser.uid, "favorites");
+    for (const track of favoritesArray) {
+        const trackWithTimestamp = { ...track, addedAt: serverTimestamp() };
+        await setDoc(doc(favCollectionRef, track.id), trackWithTimestamp);
+    }
+}
+
+
+// --- Lógica Unificada (Común para ambos tipos de usuario) ---
+
+/**
+ * Comprueba si una canción ya está en la lista de favoritos en memoria.
+ * @param {string} id - El ID de la canción.
+ * @returns {boolean}
  */
 function isFav(id) {
     if (!id) return false;
@@ -27,53 +80,80 @@ function isFav(id) {
 
 /**
  * Agrega o quita una canción de la lista de favoritos.
- * Funciona tanto para canciones de YouTube como de Archive.org.
+ * Automáticamente decide si usar Firestore o LocalStorage.
  * @param {object} track - El objeto de la canción a agregar/quitar.
  */
 async function toggleFav(track) {
     if (!track || !track.id) {
-        showToast("No se puede agregar a favoritos esta canción.", true);
+        showToast("No se puede agregar esta canción a favoritos.", true);
         return;
     }
     
-    if (isFav(track.id)) {
-        await window.syAuth.removeFavorite(track);
-        showToast("Quitado de Favoritos");
+    const { currentUser, db, doc, setDoc, deleteDoc, serverTimestamp } = sy_fs();
+    const isCurrentlyFav = isFav(track.id);
+
+    if (currentUser) {
+        // Lógica para usuario registrado (Firestore)
+        const favDocRef = doc(db, "users", currentUser.uid, "favorites", track.id);
+        try {
+            if (isCurrentlyFav) {
+                await deleteDoc(favDocRef);
+                showToast("Quitado de Favoritos");
+            } else {
+                const trackWithTimestamp = { ...track, addedAt: serverTimestamp() };
+                await setDoc(favDocRef, trackWithTimestamp);
+                showToast("Agregado a Favoritos");
+            }
+        } catch (e) {
+            console.error("Error al actualizar favoritos en Firestore:", e);
+            showToast("No se pudo actualizar favoritos.", true);
+        }
     } else {
-        await window.syAuth.addFavorite(track);
-        showToast("Agregado a Favoritos");
+        // Lógica para invitado (LocalStorage)
+        if (isCurrentlyFav) {
+            favs = favs.filter(f => f.id !== track.id);
+            showToast("Quitado de Favoritos");
+        } else {
+            favs.unshift(track);
+            showToast("Agregado a Favoritos");
+        }
+        saveGuestFavorites();
+        renderFavs();
+        refreshIndicators();
     }
 }
 
 /**
- * Renderiza la lista de canciones favoritas en la vista de favoritos.
+ * Renderiza la lista de canciones favoritas en la vista "Favoritos".
  */
 function renderFavs() {
-    const ul = $("#favsList");
+    const ul = $("#favList");
     if (!ul) return;
     ul.innerHTML = "";
 
     if (favs.length === 0) {
-        ul.innerHTML = `<div class="empty muted" style="margin-top: 24px;">
-            Aún no tienes canciones favoritas.<br/>
-            Puedes agregarlas desde los resultados de búsqueda o playlists.
-        </div>`;
+        ul.innerHTML = `<div class="empty muted">Aún no tienes favoritos. Agrega canciones con el ícono de corazón.</div>`;
+        updateHero(null);
         return;
     }
 
     favs.forEach(it => {
         const li = document.createElement("li");
-        li.className = "result-item fav-item";
+        li.className = "fav-item";
         li.dataset.trackId = it.id;
         li.innerHTML = `
-      <button class="card-play" aria-label="Reproducir">
-        <svg viewBox="0 0 24 24" width="24" height="24">
-          <path d="M8 5v14l11-7z" fill="currentColor" />
-        </svg>
-      </button>
-      <img src="${it.thumb}" alt="Cover art">
+      <div class="thumb-wrap">
+        <img class="thumb" src="${it.thumb}" alt="">
+        <button class="card-play" title="Play/Pause" aria-label="Play/Pause">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        </button>
+      </div>
       <div class="meta">
-        <div class="title">${it.title}</div>
+        <div class="title-line">
+          <span class="title-text">${it.title}</span>
+          <span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
         <div class="subtitle">${cleanAuthor(it.author) || ""}</div>
       </div>
       <div class="actions">
@@ -112,7 +192,7 @@ function renderFavs() {
  */
 function playFromFav(track, autoplay = false) {
     const i = favs.findIndex(f => f.id === track.id);
-    setQueue(favs, "favorites", i);
-    switchView("view-player");
-    if (autoplay) playCurrent(true);
+    setQueue(favs, "favs", Math.max(i, 0));
+    viewingPlaylistId = null;
+    playCurrent(autoplay);
 }
