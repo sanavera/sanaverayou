@@ -4,7 +4,7 @@
 // Estos archivos también serán corregidos para exportar estas funciones.
 import { renderPlaylists } from './playlists.js';
 import { renderFavs } from './favoritos.js';
-import { renderAllHomePlaylists, showToast, showResolverModal, hideResolverModal, updateResolverModal, updateUIAfterAuthStateChange } from './main.js';
+// import { renderAllHomePlaylists, showToast, showResolverModal, hideResolverModal, updateResolverModal, updateUIAfterAuthStateChange } from './main.js';
 import { refreshIndicators } from './reproductor.js';
 import { resolveTrack } from './buscador.js';
 
