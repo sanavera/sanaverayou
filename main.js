@@ -416,10 +416,25 @@ function initLiveStreamsUI() {
 // --- Menú de usuario ---
 function initUserMenu() {
     const userFab = $("#userFab");
-    if (!userFab) {
-        console.error("No se encontró el botón de usuario.");
+    const authModal = $("#authModal");
+    const switchAuthModeBtn = $("#switchAuthMode");
+    
+    if (!userFab || !authModal || !switchAuthModeBtn) {
+        console.error("Faltan elementos del DOM para el menú de usuario.");
         return;
     }
+    
+    let isSignInMode = true;
+
+    function showAuthModal(mode) {
+        isSignInMode = mode === "signIn";
+        $("#authTitle").textContent = isSignInMode ? "Iniciar Sesión" : "Registrarse";
+        $("#authButton").textContent = isSignInMode ? "Iniciar Sesión" : "Registrarse";
+        switchAuthModeBtn.textContent = isSignInMode ? "¿No tienes una cuenta? Regístrate" : "¿Ya tienes una cuenta? Inicia Sesión";
+        $("#usernameInput").classList.toggle("hide", isSignInMode);
+        authModal.classList.add("show");
+    }
+
     userFab.addEventListener("click", () => {
         const session = syAuth.getSession();
         const actions = [];
@@ -445,7 +460,47 @@ function initUserMenu() {
             }
         });
     });
+
+    switchAuthModeBtn.addEventListener("click", () => {
+        isSignInMode = !isSignInMode;
+        showAuthModal(isSignInMode ? "signIn" : "signUp");
+    });
+    
+    $("#authCancel").addEventListener("click", () => {
+        authModal.classList.remove("show");
+    });
+    
+    $("#authModal").addEventListener("click", (e) => {
+        if (e.target.id === "authModal") {
+            authModal.classList.remove("show");
+        }
+    });
+
+    $("#authButton").addEventListener("click", async () => {
+        const email = $("#authEmail").value;
+        const password = $("#authPassword").value;
+        const username = $("#usernameInput").value;
+        
+        let result;
+        if (isSignInMode) {
+            result = await syAuth.signIn(email, password);
+        } else {
+            if (!username) {
+                showToast("Por favor, ingresa un nombre de usuario.", true);
+                return;
+            }
+            result = await syAuth.signUp(email, password, username);
+        }
+        
+        if (result.success) {
+            authModal.classList.remove("show");
+            showToast(isSignInMode ? "Sesión iniciada." : "Registro exitoso.");
+        } else {
+            showToast("Error: " + result.error, true);
+        }
+    });
 }
+
 
 function updateSessionUI(session) {
     const userFab = $("#userFab");
@@ -461,45 +516,12 @@ function updateSessionUI(session) {
     renderPlaylists();
 }
 
-function showAuthModal(mode = "signIn") {
-    const modal = $("#authModal");
-    if (!modal) return;
-    const isSignIn = mode === "signIn";
-    $("#authTitle").textContent = isSignIn ? "Iniciar Sesión" : "Registrarse";
-    $("#authButton").textContent = isSignIn ? "Iniciar Sesión" : "Registrarse";
-    $("#switchAuthMode").textContent = isSignIn ? "¿No tienes una cuenta? Regístrate" : "¿Ya tienes una cuenta? Inicia Sesión";
-    $("#usernameInput").classList.toggle("hide", isSignIn);
-    modal.classList.add("show");
-    
-    $("#authButton").onclick = async () => {
-        const email = $("#authEmail").value;
-        const password = $("#authPassword").value;
-        const username = $("#usernameInput").value;
-        let result;
-        if (isSignIn) {
-            result = await syAuth.signIn(email, password);
-        } else {
-            if (!username) {
-                showToast("Por favor, ingresa un nombre de usuario.", true);
-                return;
-            }
-            result = await syAuth.signUp(email, password, username);
-        }
-        if (result.success) {
-            modal.classList.remove("show");
-            showToast(isSignIn ? "Sesión iniciada." : "Registro exitoso.");
-        } else {
-            showToast("Error: " + result.error, true);
-        }
-    };
-}
-
 
 // --- Arranque de la App ---
 async function boot(){
   initTheme();
   initUserMenu();
-  await initFirebase();
+  await window.syAuth.initFirebase();
   
   // Estas funciones se llamarán después de la inicialización completa de Firebase
   // No hay necesidad de promesas o listeners adicionales
