@@ -26,7 +26,7 @@ import {
     currentTrack,
     queue,
     queueType,
-    viewingPlaylistId,
+   // viewingPlaylistId,
     liveState,
     startBroadcasting,
     stopBroadcasting,
