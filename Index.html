@@ -12,45 +12,29 @@
 </head>
 <body>
 
-  <img
-    id="logoFloat"
-    class="logo-float"
-    src="logo78.png"
-    alt="Logo"
-  />
-  
-  <!-- Contenedor para los iconos de la esquina superior derecha -->
-  <div class="header-actions">
-    <div class="user-menu-container">
-      <button id="userMenuBtn" class="user-menu-btn" aria-label="Menú de usuario">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-        </svg>
+  <!-- NAVEGACIÓN SUPERIOR Y MODALES -->
+  <header class="top-bar">
+    <img id="logoFloat" class="logo-float" src="logo78.png" alt="Logo" />
+    
+    <div class="top-right-controls">
+      <button id="searchFab" class="search-fab search-fab-global" aria-label="Buscar">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/></svg>
       </button>
-      <!-- Mini modal de usuario, oculto por defecto -->
-      <div id="userModal" class="user-modal hide">
-        <div id="user-info" class="user-info-panel hide">
-            <span id="user-email"></span>
+
+      <div class="user-menu-container">
+        <button id="userBtn" class="user-btn" aria-label="Menú de usuario">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        </button>
+        <div id="userModal" class="user-modal">
+          <a href="#" class="user-modal-item" data-action="login">Iniciar sesión</a>
+          <a href="#" class="user-modal-item" data-action="register">Registrarse</a>
+          <a href="#" class="user-modal-item" data-action="logout" style="display: none;">Cerrar sesión</a>
+          <div class="user-modal-separator"></div>
+          <a href="#" class="user-modal-item" data-action="theme">Cambiar tema</a>
         </div>
-        <a href="#" class="user-modal-item" data-action="register">Registrarse</a>
-        <a href="#" class="user-modal-item" data-action="login">Iniciar sesión</a>
-        <a href="#" class="user-modal-item hide" data-action="logout">Cerrar sesión</a>
-        <a href="#" class="user-modal-item" data-action="toggle-theme">
-          <span>Cambiar tema</span>
-          <div class="theme-toggle-visual">
-            <span class="ico sun" aria-hidden="true"></span>
-            <span class="ico moon" aria-hidden="true"></span>
-          </div>
-        </a>
       </div>
     </div>
-    <button id="searchFab" class="search-fab" aria-label="Buscar">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path d="M15.5 14h-.79l-.28-.27A6.48 6.48 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.27v.8L20 21.5 21.5 20l-6-6zM9.5 14A4.5 4.5 0 1114 9.5 4.51 4.51 0 019.5 14z"/>
-      </svg>
-    </button>
-  </div>
-
+  </header>
 
   <div id="searchOverlay" class="search-overlay">
     <div class="search-card">
@@ -62,6 +46,7 @@
     </div>
   </div>
 
+  <!-- VISTAS PRINCIPALES -->
   <main id="views">
     <section id="view-search" class="view active">
       <section id="homeSection" class="home-section">
@@ -75,7 +60,7 @@
             </button>
         </header>
         <div id="allPlaylistsContainer" class="home-grid">
-            <!-- Todas las playlists (recomendadas y de usuarios) se insertarán aquí -->
+            <!-- Playlists públicas se insertarán aquí -->
         </div>
       </section>
 
@@ -162,6 +147,7 @@
 
   </main>
 
+  <!-- DOCK DE REPRODUCCIÓN Y NAVEGACIÓN INFERIOR -->
   <section id="seekDock" class="seek-dock">
     <div id="miniNow" class="mini-now">
         <img id="miniThumb" class="mini-thumb" alt="" />
@@ -208,6 +194,7 @@
     </button>
   </nav>
 
+  <!-- MODALES Y SHEETS -->
   <div id="menuSheet" class="sheet"></div>
   <div id="playlistSheet" class="sheet">
     <div class="sheet-content">
@@ -234,6 +221,24 @@
       </div>
     </div>
   </div>
+  
+  <div id="authSheet" class="sheet">
+    <div class="sheet-content">
+      <div id="authTitle" class="sheet-title">Iniciar Sesión</div>
+      <div id="authError" class="auth-error"></div>
+      <form id="authForm" class="sheet-form">
+        <input id="authEmail" type="email" placeholder="Correo electrónico" autocomplete="email" required>
+        <input id="authPassword" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+      </form>
+      <div class="sheet-actions">
+        <button id="authCancel" class="sheet-item ghost">Cancelar</button>
+        <button id="authConfirm" class="sheet-item pill">Confirmar</button>
+      </div>
+       <div id="authToggle" class="auth-toggle">
+        ¿No tienes cuenta? <a href="#" data-action="register">Regístrate</a>
+      </div>
+    </div>
+  </div>
 
   <div id="sessionsSheet" class="sheet">
       <div class="sheet-content">
@@ -243,26 +248,6 @@
           <button id="closeSessions" class="sheet-item ghost">Cerrar</button>
       </div>
   </div>
-  
-  <!-- Modal de Autenticación -->
-  <div id="authSheet" class="sheet">
-      <div class="sheet-content">
-          <div id="authTitle" class="sheet-title">Iniciar Sesión</div>
-          <div id="authError" class="auth-error hide"></div>
-          <div class="sheet-form">
-              <input id="authEmail" type="email" placeholder="Correo electrónico" autocomplete="email" />
-              <input id="authPassword" type="password" placeholder="Contraseña" autocomplete="current-password" />
-          </div>
-          <div class="sheet-actions">
-              <button id="authCancel" class="sheet-item ghost">Cancelar</button>
-              <button id="authConfirm" class="sheet-item pill">Confirmar</button>
-          </div>
-          <div class="auth-switch">
-              <a href="#" id="authSwitchLink">¿No tienes cuenta? Regístrate</a>
-          </div>
-      </div>
-  </div>
-
 
   <div id="startStreamSheet" class="sheet">
       <div class="sheet-content">
@@ -313,14 +298,31 @@
     <button id="resolver-cancel" class="resolver-cancel">Cancelar</button>
   </div>
 
+  <!-- Contenedor del reproductor de YouTube (oculto) -->
   <div id="yt-holder"><div id="player"></div></div>
 
-  <script src="firebase.js" defer></script>
-  <script src="reproductor.js" defer></script>
-  <script src="buscador.js" defer></script>
-  <script src="playlists.js" defer></script>
-  <script src="favoritos.js" defer></script>
-  <script src="main.js" defer></script>
+  <!-- SCRIPTS -->
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    window.initializeApp = initializeApp;
+  </script>
+  <script type="module">
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+    window.firebaseAuth = { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };
+  </script>
+  <script type="module">
+     import { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+     window.firebaseFirestore = { getFirestore, collection, onSnapshot, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDoc, setDoc, writeBatch };
+  </script>
+  
+  <!-- App Scripts -->
+  <script src="firebase.js" type="module"></script>
+  <script src="reproductor.js" type="module"></script>
+  <script src="buscador.js" type="module"></script>
+  <script src="playlists.js" type="module"></script>
+  <script src="favoritos.js" type="module"></script>
+  <script src="main.js" type="module"></script>
 
 </body>
 </html>
