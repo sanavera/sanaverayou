@@ -18,21 +18,22 @@ function isMyPlaylist(id) { return getMyPlaylistIds().includes(id); }
  * @returns {object} - Objeto con instancias de funciones de Firestore.
  */
 function sy_fs() {
-    const f = (window.firebase || {});
+    // Las importaciones de Firestore ahora se manejan a nivel global
+    const f = window.firebase ? window.firebase.firestore : {};
     return {
-        db: (typeof db !== 'undefined' ? db : window.db),
-        doc: f.doc || window.doc,
-        updateDoc: f.updateDoc || window.updateDoc,
-        setDoc: f.setDoc || window.setDoc,
-        deleteDoc: f.deleteDoc || window.deleteDoc,
-        addDoc: f.addDoc || window.addDoc,
-        collection: f.collection || window.collection,
-        query: f.query || window.query,
-        where: f.where || window.where,
-        onSnapshot: f.onSnapshot || window.onSnapshot,
-        getDocs: f.getDocs || window.getDocs,
-        serverTimestamp: f.serverTimestamp || window.serverTimestamp,
-        getDoc: f.getDoc || window.getDoc
+        db: db,
+        doc: f.doc,
+        updateDoc: f.updateDoc,
+        setDoc: f.setDoc,
+        deleteDoc: f.deleteDoc,
+        addDoc: f.addDoc,
+        collection: f.collection,
+        query: f.query,
+        where: f.where,
+        onSnapshot: f.onSnapshot,
+        getDocs: f.getDocs,
+        serverTimestamp: f.serverTimestamp,
+        getDoc: f.getDoc
     };
 }
 
@@ -86,39 +87,16 @@ function setSession(newSession) {
     }
 }
 
-function saveLocalFavsToFirestore(uid) {
+async function saveLocalFavsToFirestore(uid) {
     const { collection, setDoc, doc } = sy_fs();
     const localFavs = JSON.parse(localStorage.getItem(LS_FAVS) || "[]");
     if (localFavs.length > 0) {
-        localFavs.forEach(fav => {
-            setDoc(doc(db, "users", uid, FAVS_COLLECTION, fav.id), fav, { merge: true });
-        });
+        // Usa un bucle simple para evitar errores de Promise.all
+        for (const fav of localFavs) {
+            await setDoc(doc(db, "users", uid, FAVS_COLLECTION, fav.id), fav, { merge: true });
+        }
         localStorage.removeItem(LS_FAVS);
         console.log("Favoritos de invitado guardados en Firestore.");
-    }
-}
-
-function syncFavorites() {
-    const { collection, onSnapshot, getDocs, doc, setDoc } = sy_fs();
-    if (session.status === "logged") {
-        saveLocalFavsToFirestore(session.uid);
-        if (favsUnsubscribe) {
-            favsUnsubscribe();
-        }
-        favsUnsubscribe = onSnapshot(collection(db, "users", session.uid, FAVS_COLLECTION), (snapshot) => {
-            favs = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            if (typeof renderFavs === 'function') {
-                renderFavs();
-            }
-        });
-    } else {
-        if (favsUnsubscribe) {
-            favsUnsubscribe();
-        }
-        loadFavs();
-        if (typeof renderFavs === 'function') {
-            renderFavs();
-        }
     }
 }
 
@@ -383,6 +361,24 @@ async function initFirebase() {
     
     window.firebase.app = initializeApp(firebaseConfig);
     db = getFirestore(window.firebase.app);
+    auth = window.firebase.auth.getAuth(window.firebase.app);
+
+    onSnapshot(sy_fs().query(sy_fs().collection(db, "playlists"), sy_fs().orderBy("updatedAt", "desc")), (snapshot) => {
+        const oldPlaylists = new Map(communityPlaylists.map(p => [p.id, p]));
+        communityPlaylists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        communityPlaylists.forEach(newPl => {
+            const oldPl = oldPlaylists.get(newPl.id);
+            const playlistWasUpdated = oldPl && newPl.updatedAt && oldPl.updatedAt && newPl.updatedAt.seconds > oldPl.updatedAt.seconds;
+            
+            if (playlistWasUpdated && viewingPlaylistId === newPl.id && queueType === 'playlist') {
+                handleRealtimeUpdate(newPl);
+            }
+        });
+
+        if (typeof renderPlaylists === 'function') renderPlaylists();
+        if (typeof renderAllHomePlaylists === 'function') renderAllHomePlaylists();
+    });
 
     checkForActiveImportJob();
 }
@@ -394,7 +390,7 @@ async function initFirebase() {
  */
 async function handlePrivacyToggle(playlistId, isPublic) {
     try {
-        const { doc, updateDoc } = window.firebase.firestore;
+        const { doc, updateDoc } = sy_fs();
         await updateDoc(doc(db, "playlists", playlistId), { isPublic });
     } catch(e) {
         console.error("Error updating privacy:", e);
@@ -776,18 +772,3 @@ function listenForLiveSessions(callback) {
         callback([]);
     });
 }
-
-// Inicialización de Firebase
-document.addEventListener('DOMContentLoaded', async () => {
-    // Importamos las librerías de Firebase de forma no-modular para que funcione en cualquier navegador
-    await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js");
-    await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js");
-    await import("https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js");
-
-    window.firebase = {
-        app: window.firebase.app,
-        auth: window.firebase.auth,
-        firestore: window.firebase.firestore
-    };
-    initFirebase();
-});
