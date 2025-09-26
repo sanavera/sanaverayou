@@ -83,12 +83,12 @@ export async function initFirebase() {
                 currentUser = { uid: user.uid, email: user.email, displayName: user.displayName };
                 console.log("Usuario logueado:", currentUser.uid);
                 loadUserData(user.uid);
-                updateUIAfterAuthStateChange(user);
+                updateUIAfterAuthStateChange(true);
             } else {
                 currentUser = null;
                 console.log("Usuario es invitado.");
                 loadGuestData();
-                updateUIAfterAuthStateChange(null);
+                updateUIAfterAuthStateChange(false);
             }
         });
 
@@ -98,6 +98,25 @@ export async function initFirebase() {
         console.error("Error inicializando Firebase:", e);
         showToast("No se pudo conectar con el servidor.", true);
     }
+}
+
+// =======================================================
+// FUNCIONES DE AUTENTICACIÓN
+// =======================================================
+
+export async function registerUser(email, password) {
+    const { createUserWithEmailAndPassword } = sy_services();
+    await createUserWithEmailAndPassword(auth, email, password);
+}
+
+export async function loginUser(email, password) {
+    const { signInWithEmailAndPassword } = sy_services();
+    await signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function logoutUser() {
+    const { signOut } = sy_services();
+    await signOut(auth);
 }
 
 // =======================================================
@@ -290,7 +309,7 @@ export async function addSongToPlaylist(playlistId, track) {
     const { doc, updateDoc, serverTimestamp } = sy_services();
     const plRef = doc(db, PLAYLISTS_COLLECTION, playlistId);
     
-    const updatedTracks = [...pl.tracks];
+    const updatedTracks = [...(pl.tracks || [])];
     if (!updatedTracks.some(t => t && t.id === track.id)) {
         updatedTracks.unshift(track);
     }
@@ -375,10 +394,6 @@ export async function startResolverJob(playlistId) {
     resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
         if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
             hideResolverModal();
-            if (resolverJobUnsubscribe) {
-                resolverJobUnsubscribe();
-                resolverJobUnsubscribe = null;
-            }
             return;
         }
         const job = { id: docSnap.id, ...docSnap.data() };
@@ -496,10 +511,6 @@ async function checkForActiveImportJob() {
         resolverJobUnsubscribe = onSnapshot(jobRef, (docSnap) => {
             if (!docSnap.exists() || ['canceled', 'done', 'error'].includes(docSnap.data().status)) {
                 hideResolverModal();
-                 if (resolverJobUnsubscribe) {
-                    resolverJobUnsubscribe();
-                    resolverJobUnsubscribe = null;
-                }
                 return;
             }
             const job = { id: docSnap.id, ...docSnap.data() };
@@ -515,7 +526,7 @@ async function checkForActiveImportJob() {
 // UI DEL MODAL DE RESOLVER
 // =======================================================
 
-export function showResolverModal(job, title, thumb) {
+function showResolverModal(job, title, thumb) {
     const modal = document.getElementById('resolver-modal');
     if (!modal) return;
     modal.classList.remove('hide');
@@ -524,7 +535,7 @@ export function showResolverModal(job, title, thumb) {
     updateResolverModal(job);
 }
 
-export function hideResolverModal() {
+function hideResolverModal() {
     const modal = document.getElementById('resolver-modal');
     if (modal) modal.classList.add('hide');
     localStorage.removeItem('sy_active_import_job');
@@ -534,7 +545,7 @@ export function hideResolverModal() {
     }
 }
 
-export function updateResolverModal(job) {
+function updateResolverModal(job) {
     const progress = document.getElementById('resolver-progress');
     const progressText = document.getElementById('resolver-progress-text');
     if (!progress || !progressText) return;
