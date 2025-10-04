@@ -1,5 +1,5 @@
 // --- Constantes del Scraper (Editables) ---
-const SCRAPER_HOST = "http://191-85-59-216.nip.io:5000";
+const SCRAPER_HOST = "http://191-85-25-182.nip.io:5000";
 
 // Endpoints del servidor
 const scraperYTM = (q) => `${SCRAPER_HOST}/?ytm=${encodeURIComponent(q)}`;
